@@ -369,7 +369,7 @@ nav{
 .how-step-title{font-family:'Outfit',sans-serif;font-size:16px;font-weight:700;color:var(--white);margin-bottom:8px}
 .how-step-text{font-size:13px;color:var(--muted);line-height:1.6}
 
-/* ─── HOLDER PERKS (Nitro section) ──────────────────────── */
+/* ─── HOLDER PERKS ──────────────────────────────────────── */
 .nitro-section{
   position:relative;overflow:hidden;
   background:linear-gradient(180deg,var(--bg) 0%,#0a100a 50%,var(--bg) 100%);
@@ -399,7 +399,6 @@ nav{
   gap:60px;align-items:start;margin-top:60px;
 }
 
-/* free vs premium comparison */
 .tier-card{
   background:var(--card);border:1px solid var(--border2);
   border-radius:20px;overflow:hidden;
@@ -430,7 +429,6 @@ nav{
 .tier-feat-icon.soon-icon{background:#f59e0b18;border:1px solid #f59e0b35;color:var(--gold)}
 .tier-feat.soon{color:var(--text)}
 
-/* Perks showcase */
 .perks-preview{
   display:flex;flex-direction:column;gap:16px;
 }
@@ -456,18 +454,6 @@ nav{
   padding:3px 9px;border-radius:20px;
 }
 .perk-badge.soon{background:transparent;border:1px solid var(--gold);color:var(--gold)}
-
-/* Profile border demo */
-.profile-borders{display:flex;gap:12px;margin-top:20px;align-items:flex-end}
-.pb-demo{display:flex;flex-direction:column;align-items:center;gap:6px}
-.pb-avatar{
-  width:52px;height:52px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;
-  font-size:20px;font-weight:700;color:#fff;
-  position:relative;
-}
-.pb-avatar::before{content:'';position:absolute;inset:-3px;border-radius:50%;z-index:-1}
-.pb-label{font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase}
 
 /* ─── ROADMAP ─────────────────────────────────────────────── */
 .roadmap-section{padding:120px 0;background:var(--bg2)}
@@ -542,7 +528,6 @@ nav{
 .wp-block ul li::before{content:'▸';color:var(--g);font-size:12px;margin-top:4px;flex-shrink:0}
 .wp-block ul li strong{color:var(--text)}
 
-/* tokenomics chart */
 .tok-chart{display:flex;flex-direction:column;gap:10px;margin-top:20px}
 .tok-row{display:flex;align-items:center;gap:14px}
 .tok-label{font-size:13px;color:var(--text);font-weight:600;min-width:160px}
@@ -596,15 +581,12 @@ footer{
 .footer-links a:hover{color:var(--g)}
 .footer-copy{font-size:12px;color:var(--muted2);font-family:'IBM Plex Mono',monospace}
 
-/* ─── DIVIDER ────────────────────────────────────────────── */
-.divider{border:none;height:1px;background:var(--border);margin:0}
-
 /* ─── ANIMATIONS ─────────────────────────────────────────── */
 @keyframes fadeInUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
 .animate{opacity:0;transform:translateY(30px);transition:opacity .6s ease,transform .6s ease}
 .animate.visible{opacity:1;transform:translateY(0)}
 
-/* ─── RESPONSIVE (basic) ─────────────────────────────────── */
+/* ─── RESPONSIVE ─────────────────────────────────────────── */
 @media(max-width:900px){
   .hero-inner,.what-grid,.nitro-split,.features-grid{grid-template-columns:1fr}
   .how-steps{grid-template-columns:1fr 1fr;gap:40px}
@@ -639,7 +621,7 @@ footer{
       <a href="#roadmap">Roadmap</a>
       <a href="#whitepaper">Whitepaper</a>
     </div>
-    <a href="#" class="nav-cta">Add to Chrome</a>
+    <a href="https://chromewebstore.google.com/detail/pumpvc/lofmacfjojkeekbjjcmeilhelclipgno" target="_blank" rel="noopener" class="nav-cta">Add to Chrome</a>
   </div>
 </nav>
 
@@ -659,7 +641,7 @@ footer{
           PumpVC brings <strong>real-time voice & text chat</strong> to every token on Solana — directly inside your trading terminal. Never miss a whale move, a dev rug, or a 10x call again.
         </p>
         <div class="hero-btns">
-          <a href="#" class="btn-primary">Add to Chrome</a>
+          <a href="https://chromewebstore.google.com/detail/pumpvc/lofmacfjojkeekbjjcmeilhelclipgno" target="_blank" rel="noopener" class="btn-primary">Add to Chrome</a>
           <a href="#how" class="btn-secondary">↓ See How It Works</a>
         </div>
         <div class="hero-stats">
@@ -679,7 +661,6 @@ footer{
       </div>
 
       <div class="hero-mockup">
-        <!-- floating reactions -->
         <div class="float-rxn" style="left:30px;top:200px;animation-delay:0s">🚀</div>
         <div class="float-rxn" style="left:20px;top:280px;animation-delay:1.2s">🔥</div>
         <div class="float-rxn" style="right:25px;top:180px;animation-delay:2.1s">🚀</div>
@@ -829,7 +810,6 @@ footer{
         </div>
       </div>
       <div>
-        <!-- Inline chat UI demo -->
         <div class="mini-ui">
           <div class="mini-ui-bar">
             <div class="mini-ui-dot"></div>
@@ -837,7 +817,6 @@ footer{
           </div>
           <div class="mini-ui-body">
             <div style="display:flex;flex-direction:column;gap:14px">
-              <!-- msg 1 -->
               <div style="display:flex;gap:10px">
                 <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#a855f7);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0">C</div>
                 <div>
@@ -849,7 +828,6 @@ footer{
                   </div>
                 </div>
               </div>
-              <!-- msg 2 -->
               <div style="display:flex;gap:10px">
                 <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#e11d48,#f43f5e);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0">W</div>
                 <div>
@@ -857,7 +835,6 @@ footer{
                   <div style="font-size:13px;color:#99a999;line-height:1.5">just aped another <span style="color:var(--g);font-weight:600">50 SOL</span> — dev wallet hasn't moved in 48h, we're good</div>
                 </div>
               </div>
-              <!-- gif msg -->
               <div style="display:flex;gap:10px">
                 <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#065f46,#10b981);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0">R</div>
                 <div>
@@ -868,7 +845,6 @@ footer{
                   </div>
                 </div>
               </div>
-              <!-- typing -->
               <div style="display:flex;gap:10px;align-items:center">
                 <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#00a855,#00d479);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0">M</div>
                 <div style="background:#1a221a;border:1px solid var(--border2);border-radius:10px;padding:9px 14px;flex:1;display:flex;align-items:center;gap:6px">
@@ -896,7 +872,6 @@ footer{
         <div class="feat-card-icon">🎙</div>
         <h3 class="feat-card-title">WebRTC Voice Chat — Zero Latency</h3>
         <p class="feat-card-text">Peer-to-peer WebRTC audio means your voice travels directly between traders — no servers adding delay. Push-to-talk (V key) keeps rooms clean. Per-user volume sliders let you manage a noisy room. Mic permission is requested once and remembered.</p>
-        <!-- mini voice bar demo -->
         <div style="margin-top:18px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px">
           <div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--muted2);font-family:'IBM Plex Mono',monospace;letter-spacing:1px;margin-bottom:4px">VOLUME MIXER</div>
           <div style="display:flex;align-items:center;gap:12px">
@@ -990,7 +965,7 @@ footer{
   </div>
 </section>
 
-<!-- ─── HOLDER PERKS / NITRO ────────────────────────────────── -->
+<!-- ─── HOLDER PERKS ────────────────────────────────────────── -->
 <section class="nitro-section section" id="holders">
   <div class="nitro-glow"></div>
   <div class="container">
@@ -1001,7 +976,6 @@ footer{
     </div>
 
     <div class="nitro-split animate">
-      <!-- FREE TIER -->
       <div class="tier-card">
         <div class="tier-header">
           <div class="tier-tag free-tag">● FREE — EVERYONE</div>
@@ -1024,7 +998,6 @@ footer{
         </div>
       </div>
 
-      <!-- PREMIUM TIER -->
       <div class="tier-card premium">
         <div class="tier-header premium-hdr">
           <div class="tier-tag premium-tag">⚡ HOLD 1M+ $PumpVC</div>
@@ -1045,7 +1018,6 @@ footer{
       </div>
     </div>
 
-    <!-- Perks showcase -->
     <div style="margin-top:70px" class="animate">
       <div style="text-align:center;margin-bottom:40px">
         <h3 style="font-family:'Outfit',sans-serif;font-size:30px;font-weight:800;color:var(--white);margin-bottom:10px">A sneak peek at what's coming.</h3>
@@ -1054,7 +1026,6 @@ footer{
       <div class="perks-preview">
         <div class="perk-card">
           <div class="perk-preview-img">
-            <!-- profile border demo -->
             <div style="position:relative;width:54px;height:54px">
               <div style="position:absolute;inset:-4px;border-radius:50%;background:conic-gradient(var(--g),var(--g2),#7c3aed,var(--g));animation:spin 3s linear infinite"></div>
               <div style="position:absolute;inset:-2px;border-radius:50%;background:var(--bg3)"></div>
@@ -1067,7 +1038,6 @@ footer{
           </div>
           <div class="perk-badge soon">COMING SOON</div>
         </div>
-
         <div class="perk-card">
           <div class="perk-preview-img" style="font-size:28px;flex-direction:column;gap:4px">
             <span style="font-size:22px">Aa</span>
@@ -1079,7 +1049,6 @@ footer{
           </div>
           <div class="perk-badge soon">COMING SOON</div>
         </div>
-
         <div class="perk-card">
           <div class="perk-preview-img" style="font-size:24px;gap:4px;flex-direction:column">
             <span>🎞</span>
@@ -1091,22 +1060,16 @@ footer{
           </div>
           <div class="perk-badge soon">COMING SOON</div>
         </div>
-
         <div class="perk-card">
-          <div class="perk-preview-img">
-            <span style="font-size:22px">⚡</span>
-          </div>
+          <div class="perk-preview-img"><span style="font-size:22px">⚡</span></div>
           <div>
             <div class="perk-title">⚡ PumpVC Holder Badge</div>
             <div class="perk-desc">A verified ⚡ badge next to your name in every room — signals you're a real part of the PumpVC community. Like a blue tick, but for degens.</div>
           </div>
           <div class="perk-badge soon">COMING SOON</div>
         </div>
-
         <div class="perk-card">
-          <div class="perk-preview-img" style="font-size:22px">
-            🎭
-          </div>
+          <div class="perk-preview-img" style="font-size:22px">🎭</div>
           <div>
             <div class="perk-title">🎭 Exclusive Reaction Emotes</div>
             <div class="perk-desc">Premium holder-only animated reaction sets that regular users can't send. Exclusive emote packs drop with each major PumpVC release.</div>
@@ -1126,9 +1089,7 @@ footer{
       <h2 class="section-title">Where we're going.</h2>
       <p class="section-sub" style="margin:0 auto">From zero to the voice layer of every memecoin trade on Solana — here's the plan.</p>
     </div>
-
     <div class="roadmap-timeline animate">
-
       <div class="rm-row">
         <div class="rm-left">
           <div class="rm-phase done-phase">✓ Phase 1 — Q4 2024</div>
@@ -1144,7 +1105,6 @@ footer{
         <div class="rm-center"><div class="rm-dot done"></div></div>
         <div class="rm-right"></div>
       </div>
-
       <div class="rm-row">
         <div class="rm-left"></div>
         <div class="rm-center"><div class="rm-dot done"></div></div>
@@ -1160,7 +1120,6 @@ footer{
           </div>
         </div>
       </div>
-
       <div class="rm-row">
         <div class="rm-left">
           <div class="rm-phase done-phase">✓ Phase 3 — Q2 2025</div>
@@ -1176,7 +1135,6 @@ footer{
         <div class="rm-center"><div class="rm-dot done"></div></div>
         <div class="rm-right"></div>
       </div>
-
       <div class="rm-row">
         <div class="rm-left"></div>
         <div class="rm-center"><div class="rm-dot current"></div></div>
@@ -1192,7 +1150,6 @@ footer{
           </div>
         </div>
       </div>
-
       <div class="rm-row">
         <div class="rm-left">
           <div class="rm-phase future-phase">○ Phase 5 — Q4 2025</div>
@@ -1207,7 +1164,6 @@ footer{
         <div class="rm-center"><div class="rm-dot future"></div></div>
         <div class="rm-right"></div>
       </div>
-
       <div class="rm-row">
         <div class="rm-left"></div>
         <div class="rm-center"><div class="rm-dot future"></div></div>
@@ -1223,7 +1179,6 @@ footer{
           </div>
         </div>
       </div>
-
     </div>
   </div>
 </section>
@@ -1248,14 +1203,12 @@ footer{
         <a href="#wp-vision" class="wp-nav-item">7. Vision</a>
       </div>
       <div class="wp-content">
-
         <div class="wp-block" id="wp-overview">
           <h3 class="wp-block-title"><span>📄</span> 1. Overview</h3>
           <p>PumpVC is a Chrome browser extension that provides real-time voice and text communication infrastructure for Solana memecoin traders. It operates as a decentralised social layer on top of existing trading terminals including pump.fun, DexScreener, Axiom, GMGN, and BullX.</p>
           <p>The core premise: <strong>traders watching the same chart should be able to talk to each other instantly</strong>, without leaving their terminal. PumpVC solves the coordination problem that has historically forced traders into fragmented Telegram groups, Discord servers, and private DMs.</p>
           <p>Every token on Solana has a unique contract address (CA). PumpVC uses this CA as a room key — all users viewing the same token's chart are joined into the same voice and chat room, regardless of which supported platform they're on.</p>
         </div>
-
         <div class="wp-block" id="wp-tech">
           <h3 class="wp-block-title"><span>⚙️</span> 2. Technical Architecture</h3>
           <p>PumpVC is built on three interconnected layers:</p>
@@ -1266,7 +1219,6 @@ footer{
           </ul>
           <p>Audio is transmitted peer-to-peer via WebRTC after initial signalling. The server never handles audio data — only the handshake. This ensures <strong>minimal latency and maximum privacy</strong>.</p>
         </div>
-
         <div class="wp-block" id="wp-rooms">
           <h3 class="wp-block-title"><span>🚪</span> 3. Room System</h3>
           <p>Rooms are identified by a composite key: <code style="background:var(--bg3);border:1px solid var(--border);padding:2px 6px;border-radius:5px;color:var(--g);font-size:13px">{token_ca}:{room_type}</code> where room_type is either <code style="background:var(--bg3);border:1px solid var(--border);padding:2px 6px;border-radius:5px;color:var(--g);font-size:13px">public</code> or <code style="background:var(--bg3);border:1px solid var(--border);padding:2px 6px;border-radius:5px;color:var(--g);font-size:13px">holders</code>.</p>
@@ -1276,7 +1228,6 @@ footer{
             <li><strong>Room Persistence:</strong> Rooms exist as long as at least one participant is connected. Chat history is stored server-side and loaded on join. Voice connections are ephemeral (peer-to-peer).</li>
           </ul>
         </div>
-
         <div class="wp-block" id="wp-token">
           <h3 class="wp-block-title"><span>🪙</span> 4. $PumpVC Token</h3>
           <p>$PumpVC is the native utility token of the PumpVC ecosystem, deployed on Solana. It functions as a <strong>gating mechanism for premium features</strong> — not a speculative instrument. Holding $PumpVC unlocks functionality within the extension itself.</p>
@@ -1288,7 +1239,6 @@ footer{
             <li><strong>Community:</strong> Aligns token holders with the product's growth — the better PumpVC does, the more demand for $PumpVC.</li>
           </ul>
         </div>
-
         <div class="wp-block" id="wp-tokenomics">
           <h3 class="wp-block-title"><span>📊</span> 5. Tokenomics</h3>
           <p>$PumpVC launched as a fair-launch token on pump.fun. No pre-sale, no VC allocation, no team vesting cliff. The team holds a public wallet that is disclosed in the extension's source code.</p>
@@ -1316,7 +1266,6 @@ footer{
           </div>
           <p style="margin-top:20px">The team allocation vests linearly over 12 months with no cliff, preventing any single dump event. All on-chain, all verifiable. Ecosystem rewards are distributed to active community contributors, room creators, and future governance participants.</p>
         </div>
-
         <div class="wp-block" id="wp-security">
           <h3 class="wp-block-title"><span>🔐</span> 6. Security</h3>
           <ul>
@@ -1327,7 +1276,6 @@ footer{
             <li><strong>MV3 compliance:</strong> Built on Manifest V3, Chrome's latest security-hardened extension architecture. No background scripts with persistent execution.</li>
           </ul>
         </div>
-
         <div class="wp-block" id="wp-vision">
           <h3 class="wp-block-title"><span>🔭</span> 7. Vision</h3>
           <p>The long-term vision for PumpVC is to become <strong>the voice layer of on-chain trading</strong> — not just for Solana memecoins, but for every token on every chain. Just as Discord became the voice layer for gaming, PumpVC aims to become the voice layer for DeFi.</p>
@@ -1335,7 +1283,6 @@ footer{
           <p>Future expansion includes: <strong>Ethereum and Base chain support</strong>, a standalone trading terminal with PumpVC natively embedded, institutional API access for platforms wanting to integrate voice natively, and a reputation system built around on-chain trading history and community participation.</p>
           <p>PumpVC is not just a tool — it's infrastructure for the new wave of on-chain social trading.</p>
         </div>
-
       </div>
     </div>
   </div>
@@ -1349,38 +1296,14 @@ footer{
       <h2 class="section-title">Common questions.</h2>
     </div>
     <div class="faq-grid animate">
-      <div class="faq-item">
-        <div class="faq-q">Is PumpVC free to use? <span class="faq-q-icon">+</span></div>
-        <div class="faq-a">Yes — completely free. Install the Chrome extension, open any supported trading terminal, and you're in. No signup, no wallet required for public rooms. Holders-only rooms just need a Phantom connection to verify your balance.</div>
-      </div>
-      <div class="faq-item">
-        <div class="faq-q">Does PumpVC access my wallet or funds? <span class="faq-q-icon">+</span></div>
-        <div class="faq-a">No. PumpVC only reads your public wallet address and token balance. We never request transaction signing permissions and cannot initiate transfers of any kind. Your funds are completely safe.</div>
-      </div>
-      <div class="faq-item">
-        <div class="faq-q">What is $PumpVC and do I need it? <span class="faq-q-icon">+</span></div>
-        <div class="faq-a">$PumpVC is the extension's utility token. You don't need it for basic use — all voice rooms and chat are free. Holding $PumpVC unlocks premium cosmetics like GIF sending, profile borders, custom fonts, and the holder badge.</div>
-      </div>
-      <div class="faq-item">
-        <div class="faq-q">How does voice quality compare to Discord? <span class="faq-q-icon">+</span></div>
-        <div class="faq-a">PumpVC uses WebRTC peer-to-peer audio, the same technology Discord uses. Voice data travels directly between participants — our servers only handle the initial connection handshake, keeping latency minimal.</div>
-      </div>
-      <div class="faq-item">
-        <div class="faq-q">Why doesn't it work on [site X]? <span class="faq-q-icon">+</span></div>
-        <div class="faq-a">PumpVC currently supports pump.fun, DexScreener, Axiom, GMGN, and BullX. We're actively adding new platforms. If your preferred terminal isn't supported, let us know and we'll prioritise it.</div>
-      </div>
-      <div class="faq-item">
-        <div class="faq-q">How does pair address resolution work? <span class="faq-q-icon">+</span></div>
-        <div class="faq-a">Some platforms (Axiom, DexScreener) display Raydium pool addresses in URLs rather than token mints. PumpVC automatically resolves these via a multi-layer fallback: DexScreener API → Solana RPC on-chain decode → pump.fun API. This ensures everyone sees the same room.</div>
-      </div>
-      <div class="faq-item">
-        <div class="faq-q">Can I use PumpVC on mobile? <span class="faq-q-icon">+</span></div>
-        <div class="faq-a">Not yet — Chrome extensions don't run on mobile. A dedicated iOS and Android companion app is on the roadmap for Q4 2025, with push notifications for whale entries and room activity.</div>
-      </div>
-      <div class="faq-item">
-        <div class="faq-q">When are the holder cosmetics shipping? <span class="faq-q-icon">+</span></div>
-        <div class="faq-a">GIF chat and the PumpVC holder badge are live now for $PumpVC holders. Animated profile borders, custom fonts/colors, and exclusive emote packs are actively in development and shipping in Q3 2025.</div>
-      </div>
+      <div class="faq-item"><div class="faq-q">Is PumpVC free to use? <span class="faq-q-icon">+</span></div><div class="faq-a">Yes — completely free. Install the Chrome extension, open any supported trading terminal, and you're in. No signup, no wallet required for public rooms. Holders-only rooms just need a Phantom connection to verify your balance.</div></div>
+      <div class="faq-item"><div class="faq-q">Does PumpVC access my wallet or funds? <span class="faq-q-icon">+</span></div><div class="faq-a">No. PumpVC only reads your public wallet address and token balance. We never request transaction signing permissions and cannot initiate transfers of any kind. Your funds are completely safe.</div></div>
+      <div class="faq-item"><div class="faq-q">What is $PumpVC and do I need it? <span class="faq-q-icon">+</span></div><div class="faq-a">$PumpVC is the extension's utility token. You don't need it for basic use — all voice rooms and chat are free. Holding $PumpVC unlocks premium cosmetics like GIF sending, profile borders, custom fonts, and the holder badge.</div></div>
+      <div class="faq-item"><div class="faq-q">How does voice quality compare to Discord? <span class="faq-q-icon">+</span></div><div class="faq-a">PumpVC uses WebRTC peer-to-peer audio, the same technology Discord uses. Voice data travels directly between participants — our servers only handle the initial connection handshake, keeping latency minimal.</div></div>
+      <div class="faq-item"><div class="faq-q">Why doesn't it work on [site X]? <span class="faq-q-icon">+</span></div><div class="faq-a">PumpVC currently supports pump.fun, DexScreener, Axiom, GMGN, and BullX. We're actively adding new platforms. If your preferred terminal isn't supported, let us know and we'll prioritise it.</div></div>
+      <div class="faq-item"><div class="faq-q">How does pair address resolution work? <span class="faq-q-icon">+</span></div><div class="faq-a">Some platforms (Axiom, DexScreener) display Raydium pool addresses in URLs rather than token mints. PumpVC automatically resolves these via a multi-layer fallback: DexScreener API → Solana RPC on-chain decode → pump.fun API. This ensures everyone sees the same room.</div></div>
+      <div class="faq-item"><div class="faq-q">Can I use PumpVC on mobile? <span class="faq-q-icon">+</span></div><div class="faq-a">Not yet — Chrome extensions don't run on mobile. A dedicated iOS and Android companion app is on the roadmap for Q4 2025, with push notifications for whale entries and room activity.</div></div>
+      <div class="faq-item"><div class="faq-q">When are the holder cosmetics shipping? <span class="faq-q-icon">+</span></div><div class="faq-a">GIF chat and the PumpVC holder badge are live now for $PumpVC holders. Animated profile borders, custom fonts/colors, and exclusive emote packs are actively in development and shipping in Q3 2025.</div></div>
     </div>
   </div>
 </section>
@@ -1394,7 +1317,7 @@ footer{
       <h2 class="section-title">Start trading with voice.</h2>
       <p class="section-sub">Join 1,200+ traders already using PumpVC. Free to install. Takes 30 seconds. Works on every Solana token, across 5 trading platforms.</p>
       <div class="cta-final-btns">
-        <a href="#" class="btn-primary" style="font-size:16px;padding:16px 32px">⚡ Add to Chrome — Free</a>
+        <a href="https://chromewebstore.google.com/detail/pumpvc/lofmacfjojkeekbjjcmeilhelclipgno" target="_blank" rel="noopener" class="btn-primary" style="font-size:16px;padding:16px 32px">⚡ Add to Chrome — Free</a>
         <a href="#whitepaper" class="btn-secondary" style="font-size:15px">Read Whitepaper</a>
       </div>
       <div style="margin-top:40px;display:flex;align-items:center;justify-content:center;gap:32px;flex-wrap:wrap">
@@ -1424,41 +1347,7 @@ footer{
   </div>
 </footer>
 
-<!-- ─── JS ────────────────────────────────────────────────────── -->
-<script>
-// Scroll animations
-const observer = new IntersectionObserver((entries) => {
-  entries.forEach(el => {
-    if (el.isIntersecting) {
-      el.target.classList.add('visible');
-    }
-  });
-}, { threshold: 0.1, rootMargin: '0px 0px -60px 0px' });
-
-document.querySelectorAll('.animate').forEach(el => observer.observe(el));
-
-// Active wp nav
-const wpBlocks = document.querySelectorAll('.wp-block');
-const wpNavItems = document.querySelectorAll('.wp-nav-item');
-const wpObserver = new IntersectionObserver((entries) => {
-  entries.forEach(entry => {
-    if (entry.isIntersecting) {
-      wpNavItems.forEach(n => n.classList.remove('active'));
-      const activeNav = document.querySelector(`.wp-nav-item[href="#${entry.target.id}"]`);
-      if (activeNav) activeNav.classList.add('active');
-    }
-  });
-}, { threshold: 0.5 });
-wpBlocks.forEach(b => wpObserver.observe(b));
-
-// Stagger feature cards
-document.querySelectorAll('.feat-card').forEach((card, i) => {
-  card.style.transitionDelay = `${i * 0.06}s`;
-});
-</script>
-
-<style>
-@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-</style>
+<script src="website.js"></script>
+<style>@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>
 </body>
 </html>
