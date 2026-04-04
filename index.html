@@ -96,6 +96,21 @@ nav{
   text-decoration:none;transition:color .2s;
 }
 .nav-links a:hover{color:var(--text)}
+
+/* ─── X / TWITTER NAV ICON ─────────────────────────────── */
+.nav-x-btn{
+  display:flex;align-items:center;justify-content:center;
+  width:34px;height:34px;border-radius:9px;flex-shrink:0;
+  border:1px solid var(--border2);color:var(--muted);
+  text-decoration:none;
+  transition:border-color .2s,color .2s,background .2s;
+}
+.nav-x-btn:hover{
+  border-color:var(--g-dim);
+  color:var(--text);
+  background:var(--g-muted);
+}
+
 .nav-cta{
   background:var(--g);color:#000;
   font-family:'Outfit',sans-serif;font-size:13px;font-weight:700;
@@ -576,9 +591,24 @@ footer{
 }
 .footer-logo{font-family:'Outfit',sans-serif;font-size:18px;font-weight:800;color:var(--white);display:flex;align-items:center;gap:8px}
 .footer-logo span{color:var(--g)}
-.footer-links{display:flex;gap:24px}
+.footer-links{display:flex;align-items:center;gap:24px}
 .footer-links a{font-size:13px;color:var(--muted);text-decoration:none;transition:color .2s}
 .footer-links a:hover{color:var(--g)}
+
+/* ─── FOOTER X BUTTON ───────────────────────────────────── */
+.footer-x-btn{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:7px 14px;border-radius:8px;
+  border:1px solid var(--border2);
+  font-size:13px;color:var(--muted);text-decoration:none;
+  transition:border-color .2s,color .2s,background .2s;
+}
+.footer-x-btn:hover{
+  border-color:var(--g-dim);
+  color:var(--text);
+  background:var(--g-muted);
+}
+
 .footer-copy{font-size:12px;color:var(--muted2);font-family:'IBM Plex Mono',monospace}
 
 /* ─── ANIMATIONS ─────────────────────────────────────────── */
@@ -620,6 +650,11 @@ footer{
       <a href="#holders">Holder Perks</a>
       <a href="#roadmap">Roadmap</a>
       <a href="#whitepaper">Whitepaper</a>
+      <a href="https://x.com/PumpVC_SOL" target="_blank" rel="noopener" class="nav-x-btn" title="Follow @PumpVC_SOL on X">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 7.184zm-1.291 19.49h2.039L6.486 3.24H4.298z"/>
+        </svg>
+      </a>
     </div>
     <a href="https://chromewebstore.google.com/detail/pumpvc/lofmacfjojkeekbjjcmeilhelclipgno" target="_blank" rel="noopener" class="nav-cta">Add to Chrome</a>
   </div>
@@ -638,7 +673,7 @@ footer{
           <span class="green">Talk live.</span>
         </h1>
         <p class="hero-sub">
-          PumpVC brings <strong>real-time voice & text chat</strong> to every token on Solana — directly inside your trading terminal. Never miss a whale move, a dev rug, or a 10x call again.
+          PumpVC brings <strong>real-time voice &amp; text chat</strong> to every token on Solana — directly inside your trading terminal. Never miss a whale move, a dev rug, or a 10x call again.
         </p>
         <div class="hero-btns">
           <a href="https://chromewebstore.google.com/detail/pumpvc/lofmacfjojkeekbjjcmeilhelclipgno" target="_blank" rel="noopener" class="btn-primary">Add to Chrome</a>
@@ -783,7 +818,7 @@ footer{
     <div class="animate">
       <div class="section-label">What is PumpVC?</div>
       <h2 class="section-title">Your trading terminal,<br><span style="color:var(--g)">now with a voice.</span></h2>
-      <p class="section-sub">PumpVC is a Chrome extension that attaches a voice & text room to every Solana token — so you can coordinate, share alpha, and react in real time with other degens.</p>
+      <p class="section-sub">PumpVC is a Chrome extension that attaches a voice &amp; text room to every Solana token — so you can coordinate, share alpha, and react in real time with other degens.</p>
     </div>
     <div class="what-grid animate">
       <div class="what-text">
@@ -958,7 +993,7 @@ footer{
       <div class="how-step">
         <div class="how-step-num">4</div>
         <div class="how-step-icon">🗣️</div>
-        <h3 class="how-step-title">Talk & Trade</h3>
+        <h3 class="how-step-title">Talk &amp; Trade</h3>
         <p class="how-step-text">Hold V to push-to-talk. Drop reactions. Chat with other traders watching the same chart in real time.</p>
       </div>
     </div>
@@ -992,7 +1027,7 @@ footer{
           <div class="tier-feat yes"><div class="tier-feat-icon">✓</div>Popular VC homepage</div>
           <div class="tier-feat no"><div class="tier-feat-icon" style="color:#2a2a2a">✗</div><span style="color:var(--muted2)">GIF sending in chat</span></div>
           <div class="tier-feat no"><div class="tier-feat-icon" style="color:#2a2a2a">✗</div><span style="color:var(--muted2)">Custom profile border</span></div>
-          <div class="tier-feat no"><div class="tier-feat-icon" style="color:#2a2a2a">✗</div><span style="color:var(--muted2)">Custom fonts & chat colors</span></div>
+          <div class="tier-feat no"><div class="tier-feat-icon" style="color:#2a2a2a">✗</div><span style="color:var(--muted2)">Custom fonts &amp; chat colors</span></div>
           <div class="tier-feat no"><div class="tier-feat-icon" style="color:#2a2a2a">✗</div><span style="color:var(--muted2)">Animated avatar border</span></div>
           <div class="tier-feat no"><div class="tier-feat-icon" style="color:#2a2a2a">✗</div><span style="color:var(--muted2)">PumpVC holder badge</span></div>
         </div>
@@ -1006,7 +1041,7 @@ footer{
         </div>
         <div class="tier-features">
           <div class="tier-feat yes"><div class="tier-feat-icon">✓</div>Everything in Base Access</div>
-          <div class="tier-feat yes"><div class="tier-feat-icon">✓</div><strong>GIF sending in chat</strong> — search & drop any Giphy GIF</div>
+          <div class="tier-feat yes"><div class="tier-feat-icon">✓</div><strong>GIF sending in chat</strong> — search &amp; drop any Giphy GIF</div>
           <div class="tier-feat soon"><div class="tier-feat-icon soon-icon">⏳</div><strong>PumpVC holder badge</strong> next to your name everywhere <span style="background:var(--gold);color:#000;font-size:9px;font-weight:800;padding:1px 6px;border-radius:10px;margin-left:6px">COMING SOON</span></div>
           <div class="tier-feat soon"><div class="tier-feat-icon soon-icon">⏳</div><strong>Custom profile borders</strong> — animated gradient rings <span style="background:var(--gold);color:#000;font-size:9px;font-weight:800;padding:1px 6px;border-radius:10px;margin-left:6px">COMING SOON</span></div>
           <div class="tier-feat soon"><div class="tier-feat-icon soon-icon">⏳</div><strong>Custom chat fonts</strong> — set your own font in chat <span style="background:var(--gold);color:#000;font-size:9px;font-weight:800;padding:1px 6px;border-radius:10px;margin-left:6px">COMING SOON</span></div>
@@ -1044,7 +1079,7 @@ footer{
             <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--g)">0x..ff</span>
           </div>
           <div>
-            <div class="perk-title">🎨 Custom Fonts & Chat Colors</div>
+            <div class="perk-title">🎨 Custom Fonts &amp; Chat Colors</div>
             <div class="perk-desc">Pick your own font and text color for the chat room. Go monospace, serif, bold — your messages look unique. Make your alpha calls impossible to miss.</div>
           </div>
           <div class="perk-badge soon">COMING SOON</div>
@@ -1097,9 +1132,9 @@ footer{
           <div class="rm-items">
             <div class="rm-item done-item">Chrome MV3 extension architecture</div>
             <div class="rm-item done-item">WebRTC peer-to-peer voice chat</div>
-            <div class="rm-item done-item">Public & holders-only rooms</div>
+            <div class="rm-item done-item">Public &amp; holders-only rooms</div>
             <div class="rm-item done-item">Phantom wallet verification</div>
-            <div class="rm-item done-item">pump.fun & DexScreener support</div>
+            <div class="rm-item done-item">pump.fun &amp; DexScreener support</div>
           </div>
         </div>
         <div class="rm-center"><div class="rm-dot done"></div></div>
@@ -1125,7 +1160,7 @@ footer{
           <div class="rm-phase done-phase">✓ Phase 3 — Q2 2025</div>
           <h3 class="rm-title">Multi-Terminal Expansion</h3>
           <div class="rm-items">
-            <div class="rm-item done-item">Axiom, GMGN & BullX support</div>
+            <div class="rm-item done-item">Axiom, GMGN &amp; BullX support</div>
             <div class="rm-item done-item">Pair address → CA resolution engine</div>
             <div class="rm-item done-item">Token ticker/image/marketcap display</div>
             <div class="rm-item done-item">GIF chat (Giphy integration)</div>
@@ -1143,10 +1178,10 @@ footer{
           <h3 class="rm-title">Premium Cosmetics</h3>
           <div class="rm-items">
             <div class="rm-item current-item">Animated profile borders for holders</div>
-            <div class="rm-item current-item">Custom chat fonts & text colors</div>
+            <div class="rm-item current-item">Custom chat fonts &amp; text colors</div>
             <div class="rm-item current-item">Exclusive holder reaction emote packs</div>
             <div class="rm-item current-item">Priority listing in Popular VC</div>
-            <div class="rm-item current-item">Server-side chat history & search</div>
+            <div class="rm-item current-item">Server-side chat history &amp; search</div>
           </div>
         </div>
       </div>
@@ -1171,8 +1206,8 @@ footer{
           <div class="rm-phase future-phase">○ Phase 6 — 2026</div>
           <h3 class="rm-title" style="color:var(--muted)">The Full Voice Layer</h3>
           <div class="rm-items">
-            <div class="rm-item future-item">Persistent room history & replays</div>
-            <div class="rm-item future-item">Token-specific leaderboards & rep scores</div>
+            <div class="rm-item future-item">Persistent room history &amp; replays</div>
+            <div class="rm-item future-item">Token-specific leaderboards &amp; rep scores</div>
             <div class="rm-item future-item">DAO governance for $PumpVC holders</div>
             <div class="rm-item future-item">API access for platforms to integrate natively</div>
             <div class="rm-item future-item">Cross-chain expansion (ETH, Base)</div>
@@ -1254,7 +1289,7 @@ footer{
               <div class="tok-pct">35%</div>
             </div>
             <div class="tok-row">
-              <div class="tok-label">🛠 Team & Development</div>
+              <div class="tok-label">🛠 Team &amp; Development</div>
               <div class="tok-bar-wrap"><div class="tok-bar" style="width:15%"></div></div>
               <div class="tok-pct">15%</div>
             </div>
@@ -1318,6 +1353,10 @@ footer{
       <p class="section-sub">Join 120+ traders already using PumpVC. Free to install. Takes 30 seconds. Works on every Solana token, across 5 trading platforms.</p>
       <div class="cta-final-btns">
         <a href="https://chromewebstore.google.com/detail/pumpvc/lofmacfjojkeekbjjcmeilhelclipgno" target="_blank" rel="noopener" class="btn-primary" style="font-size:16px;padding:16px 32px">⚡ Add to Chrome — Free</a>
+        <a href="https://x.com/PumpVC_SOL" target="_blank" rel="noopener" class="btn-secondary" style="font-size:15px">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0"><path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 7.184zm-1.291 19.49h2.039L6.486 3.24H4.298z"/></svg>
+          Follow on X
+        </a>
         <a href="#whitepaper" class="btn-secondary" style="font-size:15px">Read Whitepaper</a>
       </div>
       <div style="margin-top:40px;display:flex;align-items:center;justify-content:center;gap:32px;flex-wrap:wrap">
@@ -1342,6 +1381,10 @@ footer{
       <a href="#roadmap">Roadmap</a>
       <a href="#whitepaper">Whitepaper</a>
       <a href="#holders">Holder Perks</a>
+      <a href="https://x.com/PumpVC_SOL" target="_blank" rel="noopener" class="footer-x-btn">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 7.184zm-1.291 19.49h2.039L6.486 3.24H4.298z"/></svg>
+        @PumpVC_SOL
+      </a>
     </div>
     <div class="footer-copy">© 2025 PumpVC · Built on Solana</div>
   </div>
