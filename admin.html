@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Panel — Ultimate Dev Tools</title>
+  <link rel="stylesheet" href="shared.css">
+  <style>
+    .admin-layout { display: flex; height: 100vh; }
+
+    .admin-sidebar {
+      width: 200px;
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .admin-sidebar-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .admin-sidebar-nav {
+      flex: 1;
+      padding: 10px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .admin-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .admin-topbar {
+      height: var(--topbar-height);
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      flex-shrink: 0;
+    }
+
+    .admin-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+    }
+
+    .admin-panel {
+      display: none;
+      animation: fadeIn 0.15s ease;
+    }
+    .admin-panel.active { display: block; }
+
+    .code-chip {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      background: var(--accent-dim);
+      padding: 2px 8px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+    .code-chip:hover { opacity: 0.8; }
+
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .stat-mini {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+    }
+
+    .stat-mini .stat-value { font-size: 1.6rem; }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-muted);
+      font-size: 0.82rem;
+    }
+
+    @media (max-width: 768px) {
+      .admin-sidebar { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="admin-layout">
+
+  <!-- Sidebar -->
+  <aside class="admin-sidebar">
+    <div class="admin-sidebar-header">
+      <div class="logo" style="font-size:0.8rem;">
+        <div class="logo-mark" style="width:24px;height:24px;font-size:0.7rem;">U</div>
+        <div class="logo-text" style="font-size:0.78rem;">
+          Admin Panel
+          <div class="logo-sub">Essor Studios</div>
+        </div>
+      </div>
+    </div>
+
+    <nav class="admin-sidebar-nav">
+      <button class="nav-item active" onclick="switchPanel('overview', this)">
+        <span class="nav-icon">📊</span> Overview
+      </button>
+      <button class="nav-item" onclick="switchPanel('promo-codes', this)">
+        <span class="nav-icon">🎟️</span> Promo Codes
+      </button>
+      <button class="nav-item" onclick="switchPanel('users', this)">
+        <span class="nav-icon">👥</span> Users
+      </button>
+      <button class="nav-item" onclick="switchPanel('whitelist', this)">
+        <span class="nav-icon">✅</span> Whitelist
+      </button>
+      <button class="nav-item" onclick="switchPanel('admins', this)">
+        <span class="nav-icon">🛡️</span> Admins
+      </button>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <div class="admin-main">
+
+    <div class="admin-topbar">
+      <div class="flex items-center gap-12">
+        <div class="page-title">Admin Panel</div>
+        <span class="badge badge-danger">RESTRICTED</span>
+      </div>
+      <div class="flex gap-8 items-center">
+        <span class="text-xs text-muted font-mono" id="admin-email">loading...</span>
+        <a href="/dashboard.html" class="btn btn-ghost btn-sm">← Dashboard</a>
+        <button class="btn btn-ghost btn-sm" onclick="doLogout()">Sign out</button>
+      </div>
+    </div>
+
+    <div class="admin-content">
+
+      <!-- ── Overview ── -->
+      <div class="admin-panel active" id="panel-overview">
+        <div class="stats-row" id="overview-stats">
+          <div class="stat-mini stat-card skeleton" style="height:80px;"></div>
+          <div class="stat-mini stat-card skeleton" style="height:80px;"></div>
+          <div class="stat-mini stat-card skeleton" style="height:80px;"></div>
+          <div class="stat-mini stat-card skeleton" style="height:80px;"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Recent Activity</div></div>
+          <div id="overview-activity" class="text-muted text-sm" style="padding:20px 0;">Loading...</div>
+        </div>
+      </div>
+
+      <!-- ── Promo Codes ── -->
+      <div class="admin-panel" id="panel-promo-codes">
+        <div class="flex justify-between items-center mb-16">
+          <h2 style="font-size:1rem;">Promo Codes</h2>
+          <button class="btn btn-primary btn-sm" onclick="openGenCodeModal()">+ Generate Code</button>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">All Codes</div>
+            <button class="btn btn-ghost btn-sm" onclick="loadPromoCodes()">↻ Refresh</button>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Days</th>
+                  <th>Label</th>
+                  <th>Status</th>
+                  <th>Redeemed By</th>
+                  <th>Redeemed At</th>
+                  <th>Created</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="promo-table-body">
+                <tr><td colspan="8" class="text-center text-muted" style="padding:24px;">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Users ── -->
+      <div class="admin-panel" id="panel-users">
+        <div class="flex justify-between items-center mb-16">
+          <h2 style="font-size:1rem;">Users</h2>
+          <input type="text" id="user-search" placeholder="Search email..." style="width:200px;" oninput="searchUsers(this.value)">
+        </div>
+
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Email</th>
+                  <th>Name</th>
+                  <th>Joined</th>
+                  <th>Sub Status</th>
+                  <th>Sub Expires</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="users-table-body">
+                <tr><td colspan="6" class="text-center text-muted" style="padding:24px;">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="flex justify-between items-center mt-12" id="users-pagination"></div>
+        </div>
+      </div>
+
+      <!-- ── Whitelist ── -->
+      <div class="admin-panel" id="panel-whitelist">
+        <div class="flex justify-between items-center mb-16">
+          <h2 style="font-size:1rem;">Email Whitelist</h2>
+        </div>
+
+        <div class="card mb-16">
+          <div class="card-header"><div class="card-title">Add to Whitelist</div></div>
+          <p class="text-sm text-muted mb-12">Whitelisted emails get free access without a subscription.</p>
+          <div class="input-group">
+            <input type="email" id="whitelist-email" placeholder="user@example.com">
+            <button class="btn btn-primary" onclick="addWhitelist()">Add</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">Whitelisted Emails</div></div>
+          <div id="whitelist-list"><div class="text-muted text-sm" style="padding:16px 0;">Loading...</div></div>
+        </div>
+      </div>
+
+      <!-- ── Admins ── -->
+      <div class="admin-panel" id="panel-admins">
+        <div class="flex justify-between items-center mb-16">
+          <h2 style="font-size:1rem;">Admin Accounts</h2>
+        </div>
+
+        <div class="card mb-16">
+          <div class="card-header"><div class="card-title">Add Admin</div></div>
+          <div class="alert alert-warning mb-12">
+            <span class="alert-icon">⚠</span>
+            <div>Admins have full access to this panel. Only add trusted accounts.</div>
+          </div>
+          <div class="input-group">
+            <input type="email" id="admin-add-email" placeholder="admin@example.com">
+            <button class="btn btn-danger" onclick="addAdmin()">Add Admin</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">Current Admins</div></div>
+          <div id="admins-list"><div class="text-muted text-sm" style="padding:16px 0;">Loading...</div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Generate Code Modal -->
+<div class="modal-overlay hidden" id="gen-code-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">🎟️ Generate Promo Code</div>
+      <button class="modal-close" onclick="closeGenCodeModal()">✕</button>
+    </div>
+
+    <div class="form-group">
+      <label>Trial Duration (days)</label>
+      <input type="number" id="new-code-days" value="5" min="1" max="90">
+    </div>
+
+    <div class="form-group">
+      <label>Label (optional)</label>
+      <input type="text" id="new-code-label" placeholder="e.g. Twitter giveaway #1">
+    </div>
+
+    <div id="generated-code-result" style="display:none;" class="mb-16">
+      <label class="mb-8" style="display:block;">Generated Code</label>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="code-chip" id="new-code-display" onclick="copyNewCode()" style="font-size:1rem;padding:8px 14px;"></div>
+        <button class="btn btn-ghost btn-sm" onclick="copyNewCode()">Copy</button>
+      </div>
+      <p class="text-xs text-muted mt-8">Single-use. Valid for <span id="new-code-days-display"></span> days. Share with one user.</p>
+    </div>
+
+    <button class="btn btn-primary btn-full" id="btn-gen-code" onclick="generateCode()">Generate Code</button>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="api.js"></script>
+<script>
+  let usersPage = 1;
+  let usersSearch = '';
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  (async () => {
+    // Auth + admin gate
+    if (!(await Auth.isLoggedIn())) {
+      window.location.href = '/auth.html';
+      return;
+    }
+
+    try {
+      const user = await Auth.getUser() || await AuthAPI.me();
+      if (!user?.is_admin) {
+        window.location.href = '/dashboard.html';
+        return;
+      }
+      document.getElementById('admin-email').textContent = user.email;
+    } catch {
+      window.location.href = '/dashboard.html';
+      return;
+    }
+
+    // Load initial data
+    loadOverview();
+  })();
+
+  // ── Panel Switching ───────────────────────────────────────────────────────
+  function switchPanel(id, btn) {
+    document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.admin-sidebar-nav .nav-item').forEach(b => b.classList.remove('active'));
+    document.getElementById(`panel-${id}`)?.classList.add('active');
+    btn?.classList.add('active');
+
+    // Lazy load
+    if (id === 'promo-codes') loadPromoCodes();
+    if (id === 'users')       loadUsers();
+    if (id === 'whitelist')   loadWhitelist();
+    if (id === 'admins')      loadAdmins();
+  }
+
+  // ── Overview ──────────────────────────────────────────────────────────────
+  async function loadOverview() {
+    try {
+      const [codes, users, wl, admins] = await Promise.allSettled([
+        AdminAPI.listPromoCodes(),
+        AdminAPI.listUsers(1, ''),
+        AdminAPI.listWhitelist(),
+        AdminAPI.listAdmins()
+      ]);
+
+      const c = codes.value || { codes: [] };
+      const u = users.value || { users: [], total: 0 };
+      const w = wl.value    || { emails: [] };
+      const a = admins.value || { admins: [] };
+
+      const usedCodes   = (c.codes || []).filter(x => x.redeemed_by).length;
+      const activeSubs  = (u.users || []).filter(x => x.sub_active).length;
+
+      document.getElementById('overview-stats').innerHTML = `
+        <div class="stat-mini">
+          <div class="stat-label">Total Users</div>
+          <div class="stat-value">${u.total || 0}</div>
+        </div>
+        <div class="stat-mini">
+          <div class="stat-label">Active Subs</div>
+          <div class="stat-value text-green">${activeSubs}</div>
+        </div>
+        <div class="stat-mini">
+          <div class="stat-label">Promo Codes</div>
+          <div class="stat-value">${(c.codes || []).length}</div>
+        </div>
+        <div class="stat-mini">
+          <div class="stat-label">Codes Used</div>
+          <div class="stat-value text-amber">${usedCodes}</div>
+        </div>
+      `;
+
+      document.getElementById('overview-activity').innerHTML =
+        `<span class="text-muted text-xs">Loaded ${new Date().toLocaleTimeString()}</span>`;
+
+    } catch (err) {
+      document.getElementById('overview-stats').innerHTML =
+        `<div class="alert alert-error"><span class="alert-icon">✕</span> ${err.message}</div>`;
+    }
+  }
+
+  // ── Promo Codes ──────────────────────────────────────────────────────────
+  async function loadPromoCodes() {
+    const tbody = document.getElementById('promo-table-body');
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding:24px;">Loading...</td></tr>`;
+
+    try {
+      const { codes } = await AdminAPI.listPromoCodes();
+
+      if (!codes?.length) {
+        tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state">No codes generated yet.</div></td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = codes.map(c => `
+        <tr>
+          <td>
+            <span class="code-chip" onclick="navigator.clipboard.writeText('${c.code}');showToast('Copied!','success')">${c.code}</span>
+          </td>
+          <td class="mono">${c.days}</td>
+          <td class="text-muted">${c.label || '—'}</td>
+          <td>
+            ${c.disabled
+              ? `<span class="badge badge-muted">Disabled</span>`
+              : c.redeemed_by
+                ? `<span class="badge badge-warning">Used</span>`
+                : `<span class="badge badge-success">Available</span>`
+            }
+          </td>
+          <td class="mono text-muted">${c.redeemed_by || '—'}</td>
+          <td class="text-muted text-xs">${c.redeemed_at ? formatDate(c.redeemed_at) : '—'}</td>
+          <td class="text-muted text-xs">${formatDate(c.created_at)}</td>
+          <td>
+            ${!c.redeemed_by && !c.disabled
+              ? `<button class="btn btn-danger btn-sm" onclick="disableCode('${c.code}')">Disable</button>`
+              : '<span class="text-muted text-xs">—</span>'
+            }
+          </td>
+        </tr>
+      `).join('');
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="8"><div class="alert alert-error">${err.message}</div></td></tr>`;
+    }
+  }
+
+  function openGenCodeModal() {
+    document.getElementById('gen-code-modal').classList.remove('hidden');
+    document.getElementById('generated-code-result').style.display = 'none';
+    document.getElementById('btn-gen-code').textContent = 'Generate Code';
+    document.getElementById('btn-gen-code').disabled = false;
+  }
+
+  function closeGenCodeModal() {
+    document.getElementById('gen-code-modal').classList.add('hidden');
+  }
+
+  async function generateCode() {
+    const days  = parseInt(document.getElementById('new-code-days').value) || 5;
+    const label = document.getElementById('new-code-label').value.trim();
+    const btn   = document.getElementById('btn-gen-code');
+
+    setButtonLoading(btn, true);
+
+    try {
+      const { code } = await AdminAPI.generatePromoCode({ days, label });
+      document.getElementById('new-code-display').textContent = code;
+      document.getElementById('new-code-days-display').textContent = days;
+      document.getElementById('generated-code-result').style.display = 'block';
+      btn.textContent = '+ Generate Another';
+      btn.disabled = false;
+      showToast('Code generated!', 'success');
+      loadPromoCodes();
+    } catch (err) {
+      showToast(err.message, 'error');
+      setButtonLoading(btn, false);
+    }
+  }
+
+  function copyNewCode() {
+    const code = document.getElementById('new-code-display').textContent;
+    navigator.clipboard.writeText(code);
+    showToast('Code copied!', 'success');
+  }
+
+  async function disableCode(code) {
+    if (!confirm(`Disable code ${code}? This cannot be undone.`)) return;
+    try {
+      await AdminAPI.disablePromoCode(code);
+      showToast('Code disabled.', 'success');
+      loadPromoCodes();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
+
+  // ── Users ─────────────────────────────────────────────────────────────────
+  async function loadUsers(page = 1, search = '') {
+    usersPage   = page;
+    usersSearch = search;
+    const tbody = document.getElementById('users-table-body');
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding:24px;">Loading...</td></tr>`;
+
+    try {
+      const { users, total, pages } = await AdminAPI.listUsers(page, search);
+
+      if (!users?.length) {
+        tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">No users found.</div></td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = users.map(u => `
+        <tr>
+          <td class="mono">${u.email}</td>
+          <td>${u.name || '—'}</td>
+          <td class="text-muted text-xs">${formatDate(u.created_at)}</td>
+          <td>
+            ${u.sub_active
+              ? `<span class="badge badge-success">${u.sub_trial ? 'Trial' : 'Active'}</span>`
+              : `<span class="badge badge-muted">None</span>`
+            }
+          </td>
+          <td class="text-muted text-xs">${u.sub_expires_at ? formatDate(u.sub_expires_at) : '—'}</td>
+          <td>
+            ${u.sub_active
+              ? `<button class="btn btn-danger btn-sm" onclick="revokeUserSub('${u.id}','${u.email}')">Revoke</button>`
+              : '<span class="text-muted text-xs">—</span>'
+            }
+          </td>
+        </tr>
+      `).join('');
+
+      // Pagination
+      const pag = document.getElementById('users-pagination');
+      pag.innerHTML = `
+        <span class="text-xs text-muted font-mono">${total} users · Page ${page}/${pages || 1}</span>
+        <div class="flex gap-8">
+          ${page > 1 ? `<button class="btn btn-secondary btn-sm" onclick="loadUsers(${page-1},'${search}')">← Prev</button>` : ''}
+          ${page < (pages||1) ? `<button class="btn btn-secondary btn-sm" onclick="loadUsers(${page+1},'${search}')">Next →</button>` : ''}
+        </div>
+      `;
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="6"><div class="alert alert-error">${err.message}</div></td></tr>`;
+    }
+  }
+
+  function searchUsers(val) {
+    clearTimeout(window._searchTimeout);
+    window._searchTimeout = setTimeout(() => loadUsers(1, val), 400);
+  }
+
+  async function revokeUserSub(userId, email) {
+    if (!confirm(`Revoke subscription for ${email}?`)) return;
+    try {
+      await AdminAPI.revokeUserSub(userId);
+      showToast(`Subscription revoked for ${email}`, 'success');
+      loadUsers(usersPage, usersSearch);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
+
+  // ── Whitelist ─────────────────────────────────────────────────────────────
+  async function loadWhitelist() {
+    try {
+      const { emails } = await AdminAPI.listWhitelist();
+      const el = document.getElementById('whitelist-list');
+
+      if (!emails?.length) {
+        el.innerHTML = `<div class="empty-state">No emails whitelisted.</div>`;
+        return;
+      }
+
+      el.innerHTML = emails.map(e => `
+        <div class="flex justify-between items-center" style="padding:8px 0;border-bottom:1px solid var(--border-subtle);">
+          <span class="font-mono text-sm">${e.email}</span>
+          <div class="flex gap-8 items-center">
+            <span class="text-xs text-muted">${formatDate(e.added_at)}</span>
+            <button class="btn btn-danger btn-sm" onclick="removeWhitelist('${e.email}')">Remove</button>
+          </div>
+        </div>
+      `).join('');
+    } catch (err) {
+      document.getElementById('whitelist-list').innerHTML = `<div class="alert alert-error">${err.message}</div>`;
+    }
+  }
+
+  async function addWhitelist() {
+    const email = document.getElementById('whitelist-email').value.trim();
+    if (!email) return;
+    try {
+      await AdminAPI.whitelistEmail(email);
+      document.getElementById('whitelist-email').value = '';
+      showToast(`${email} whitelisted.`, 'success');
+      loadWhitelist();
+    } catch (err) { showToast(err.message, 'error'); }
+  }
+
+  async function removeWhitelist(email) {
+    if (!confirm(`Remove ${email} from whitelist?`)) return;
+    try {
+      await AdminAPI.removeWhitelist(email);
+      showToast(`${email} removed from whitelist.`, 'success');
+      loadWhitelist();
+    } catch (err) { showToast(err.message, 'error'); }
+  }
+
+  // ── Admins ────────────────────────────────────────────────────────────────
+  async function loadAdmins() {
+    try {
+      const { admins } = await AdminAPI.listAdmins();
+      const el = document.getElementById('admins-list');
+
+      el.innerHTML = admins.map(a => `
+        <div class="flex justify-between items-center" style="padding:8px 0;border-bottom:1px solid var(--border-subtle);">
+          <div class="flex items-center gap-8">
+            <div class="user-avatar" style="background:rgba(252,129,129,0.1);color:var(--accent-red);">A</div>
+            <span class="font-mono text-sm">${a.email}</span>
+          </div>
+          <div class="flex gap-8 items-center">
+            ${a.is_superadmin
+              ? `<span class="badge badge-danger">Superadmin</span>`
+              : `<button class="btn btn-danger btn-sm" onclick="removeAdmin('${a.email}')">Remove</button>`
+            }
+          </div>
+        </div>
+      `).join('');
+    } catch (err) {
+      document.getElementById('admins-list').innerHTML = `<div class="alert alert-error">${err.message}</div>`;
+    }
+  }
+
+  async function addAdmin() {
+    const email = document.getElementById('admin-add-email').value.trim();
+    if (!email) return;
+    if (!confirm(`Grant admin access to ${email}?`)) return;
+    try {
+      await AdminAPI.addAdmin(email);
+      document.getElementById('admin-add-email').value = '';
+      showToast(`${email} is now an admin.`, 'success');
+      loadAdmins();
+    } catch (err) { showToast(err.message, 'error'); }
+  }
+
+  async function removeAdmin(email) {
+    if (!confirm(`Remove admin access from ${email}?`)) return;
+    try {
+      await AdminAPI.removeAdmin(email);
+      showToast(`${email} removed from admins.`, 'success');
+      loadAdmins();
+    } catch (err) { showToast(err.message, 'error'); }
+  }
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  async function doLogout() {
+    await AuthAPI.logout();
+    window.location.href = '/auth.html';
+  }
+</script>
+</body>
+</html>

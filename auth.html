@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign In — Ultimate Dev Tools</title>
+  <link rel="stylesheet" href="shared.css">
+  <style>
+    body {
+      display: flex;
+      min-height: 100vh;
+      background: var(--bg-base);
+    }
+
+    /* Left panel */
+    .auth-left {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .auth-left-bg {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 60% 60% at 30% 40%, rgba(99,179,237,0.06) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 40% at 80% 80%, rgba(183,148,244,0.04) 0%, transparent 60%);
+    }
+
+    .auth-left-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--border-subtle) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
+      background-size: 40px 40px;
+      opacity: 0.6;
+    }
+
+    .auth-branding {
+      position: relative;
+      max-width: 380px;
+    }
+
+    .auth-branding .logo { margin-bottom: 32px; }
+
+    .auth-branding h2 {
+      font-size: 1.6rem;
+      margin-bottom: 14px;
+      line-height: 1.3;
+    }
+
+    .auth-branding h2 span { color: var(--accent); }
+
+    .auth-branding p {
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      line-height: 1.7;
+      margin-bottom: 28px;
+    }
+
+    .auth-feature-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .auth-feature {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+    }
+
+    .auth-feature-icon {
+      width: 28px; height: 28px;
+      background: var(--accent-dim);
+      border: 1px solid var(--border-active);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      flex-shrink: 0;
+    }
+
+    /* Right panel */
+    .auth-right {
+      width: 440px;
+      background: var(--bg-surface);
+      border-left: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 36px;
+      flex-shrink: 0;
+    }
+
+    .auth-form-wrap {
+      width: 100%;
+      max-width: 360px;
+    }
+
+    .auth-header {
+      margin-bottom: 28px;
+    }
+
+    .auth-header h1 {
+      font-size: 1.25rem;
+      margin-bottom: 6px;
+    }
+
+    .auth-header p {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin: 0;
+    }
+
+    .google-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 10px 16px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-muted);
+      border-radius: var(--radius-md);
+      font-family: var(--font-sans);
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: all 0.15s;
+      margin-bottom: 20px;
+    }
+
+    .google-btn:hover {
+      background: var(--bg-hover);
+      border-color: var(--border-active);
+    }
+
+    .google-icon {
+      width: 18px; height: 18px;
+      background: #4285f4;
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    .auth-form { display: none; }
+    .auth-form.active { display: block; }
+
+    .auth-switch {
+      margin-top: 20px;
+      text-align: center;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .auth-switch a {
+      color: var(--accent);
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    .promo-section {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .promo-label {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 8px;
+    }
+
+    .error-msg {
+      padding: 10px 12px;
+      background: rgba(252,129,129,0.08);
+      border: 1px solid rgba(252,129,129,0.2);
+      border-radius: var(--radius-md);
+      font-size: 0.78rem;
+      color: var(--accent-red);
+      margin-bottom: 14px;
+      display: none;
+    }
+
+    .error-msg.show { display: block; }
+
+    /* Mobile */
+    @media (max-width: 900px) {
+      .auth-left { display: none; }
+      .auth-right {
+        width: 100%;
+        border-left: none;
+        padding: 32px 24px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .auth-right { padding: 24px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Left branding panel -->
+<div class="auth-left">
+  <div class="auth-left-bg"></div>
+  <div class="auth-left-grid"></div>
+
+  <div class="auth-branding animate-fade-in">
+    <a href="/" class="logo">
+      <div class="logo-mark">U</div>
+      <div class="logo-text">
+        Ultimate Dev Tools
+        <div class="logo-sub">by Essor Studios</div>
+      </div>
+    </a>
+
+    <h2>Your complete<br><span>Solana dev toolkit</span></h2>
+
+    <p>
+      Professional tools for Solana developers and traders. From volume bots to market makers — all in one place, all encrypted, all server-verified.
+    </p>
+
+    <div class="auth-feature-list">
+      <div class="auth-feature">
+        <div class="auth-feature-icon">📈</div>
+        AI Volume Bot with smart randomisation
+      </div>
+      <div class="auth-feature">
+        <div class="auth-feature-icon">💹</div>
+        AI Market Maker with auto-rebalancing
+      </div>
+      <div class="auth-feature">
+        <div class="auth-feature-icon">🔀</div>
+        Advanced Token Splitter with auto-split
+      </div>
+      <div class="auth-feature">
+        <div class="auth-feature-icon">🔍</div>
+        Bundle Checker & sniper detection
+      </div>
+      <div class="auth-feature">
+        <div class="auth-feature-icon">🔐</div>
+        AES-256-GCM encrypted wallet storage
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Right form panel -->
+<div class="auth-right">
+  <div class="auth-form-wrap animate-scale-in">
+
+    <!-- Tabs -->
+    <div class="tabs" style="margin-bottom: 24px;">
+      <button class="tab-btn active" id="tab-login" onclick="switchTab('login')">Sign In</button>
+      <button class="tab-btn" id="tab-register" onclick="switchTab('register')">Register</button>
+    </div>
+
+    <div id="error-banner" class="error-msg"></div>
+
+    <!-- Login Form -->
+    <div class="auth-form active" id="form-login">
+      <div class="auth-header">
+        <h1>Welcome back</h1>
+        <p>Sign in to access your tools</p>
+      </div>
+
+      <button class="google-btn" onclick="googleSignIn()">
+        <div class="google-icon">G</div>
+        Continue with Google
+      </button>
+
+      <div class="divider-label">or email</div>
+
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email">
+      </div>
+
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+
+      <button class="btn btn-primary btn-full mt-8" id="btn-login" onclick="doLogin()">
+        Sign In
+      </button>
+
+      <div class="promo-section">
+        <div class="promo-label">Have a promo code?</div>
+        <div class="input-group">
+          <input type="text" id="promo-login" placeholder="ENTER CODE" style="text-transform: uppercase; font-family: var(--font-mono); font-size: 0.8rem; letter-spacing: 0.08em;">
+          <button class="btn btn-secondary btn-sm" onclick="redeemPromo('login')" style="white-space:nowrap;">Redeem</button>
+        </div>
+      </div>
+
+      <div class="auth-switch">
+        Don't have an account? <a onclick="switchTab('register')">Create one</a>
+      </div>
+    </div>
+
+    <!-- Register Form -->
+    <div class="auth-form" id="form-register">
+      <div class="auth-header">
+        <h1>Create account</h1>
+        <p>Get access to all pro tools</p>
+      </div>
+
+      <button class="google-btn" onclick="googleSignIn()">
+        <div class="google-icon">G</div>
+        Continue with Google
+      </button>
+
+      <div class="divider-label">or email</div>
+
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" id="reg-name" placeholder="Your name" autocomplete="name">
+      </div>
+
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="reg-email" placeholder="you@example.com" autocomplete="email">
+      </div>
+
+      <div class="form-group">
+        <label>Password <span class="text-muted">(min 8 chars)</span></label>
+        <input type="password" id="reg-password" placeholder="••••••••" autocomplete="new-password">
+      </div>
+
+      <div class="form-group">
+        <label>Confirm Password</label>
+        <input type="password" id="reg-password2" placeholder="••••••••" autocomplete="new-password">
+      </div>
+
+      <button class="btn btn-primary btn-full mt-8" id="btn-register" onclick="doRegister()">
+        Create Account
+      </button>
+
+      <div class="promo-section">
+        <div class="promo-label">Promo code (optional)</div>
+        <div class="input-group">
+          <input type="text" id="promo-register" placeholder="ENTER CODE" style="text-transform: uppercase; font-family: var(--font-mono); font-size: 0.8rem; letter-spacing: 0.08em;">
+        </div>
+        <p class="text-xs text-muted mt-8">Applied automatically after registration.</p>
+      </div>
+
+      <div class="auth-switch">
+        Already have an account? <a onclick="switchTab('login')">Sign in</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="api.js"></script>
+<script>
+  // ── Init ──────────────────────────────────────────────────────────────────
+  (async () => {
+    // If already logged in, go to dashboard
+    if (await Auth.isLoggedIn()) {
+      window.location.href = '/dashboard.html';
+      return;
+    }
+
+    // Check URL tab param
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tab') === 'register') switchTab('register');
+  })();
+
+  // ── Tab Switching ─────────────────────────────────────────────────────────
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+    document.getElementById(`tab-${tab}`).classList.add('active');
+    document.getElementById(`form-${tab}`).classList.add('active');
+    clearError();
+  }
+
+  // ── Error Handling ─────────────────────────────────────────────────────────
+  function showError(msg) {
+    const el = document.getElementById('error-banner');
+    el.textContent = msg;
+    el.classList.add('show');
+  }
+
+  function clearError() {
+    const el = document.getElementById('error-banner');
+    el.classList.remove('show');
+    el.textContent = '';
+  }
+
+  // ── Login ─────────────────────────────────────────────────────────────────
+  async function doLogin() {
+    clearError();
+    const email    = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+
+    if (!email || !password) { showError('Please enter your email and password.'); return; }
+
+    const btn = document.getElementById('btn-login');
+    setButtonLoading(btn, true);
+
+    try {
+      await AuthAPI.login({ email, password });
+      showToast('Signed in!', 'success');
+      setTimeout(() => { window.location.href = '/dashboard.html'; }, 500);
+    } catch (err) {
+      showError(err.message || 'Sign-in failed. Check your credentials.');
+      setButtonLoading(btn, false);
+    }
+  }
+
+  // ── Register ──────────────────────────────────────────────────────────────
+  async function doRegister() {
+    clearError();
+    const name  = document.getElementById('reg-name').value.trim();
+    const email = document.getElementById('reg-email').value.trim();
+    const pass  = document.getElementById('reg-password').value;
+    const pass2 = document.getElementById('reg-password2').value;
+    const promo = document.getElementById('promo-register').value.trim().toUpperCase();
+
+    if (!name)  { showError('Please enter your name.'); return; }
+    if (!email) { showError('Please enter your email.'); return; }
+    if (pass.length < 8) { showError('Password must be at least 8 characters.'); return; }
+    if (pass !== pass2) { showError('Passwords do not match.'); return; }
+
+    const btn = document.getElementById('btn-register');
+    setButtonLoading(btn, true);
+
+    try {
+      const res = await AuthAPI.register({ email, password: pass, name });
+      // Set token from register response
+      if (res.token) {
+        await Auth.setToken(res.token);
+        await Auth.setUser(res.user);
+      }
+
+      // If promo code was entered, redeem it
+      if (promo) {
+        try {
+          await SubAPI.redeemPromo(promo);
+          showToast('Promo code applied!', 'success');
+        } catch (promoErr) {
+          showToast(`Account created but promo failed: ${promoErr.message}`, 'warning');
+        }
+      } else {
+        showToast('Account created!', 'success');
+      }
+
+      setTimeout(() => { window.location.href = '/dashboard.html'; }, 800);
+    } catch (err) {
+      showError(err.message || 'Registration failed. Please try again.');
+      setButtonLoading(btn, false);
+    }
+  }
+
+  // ── Google Sign-In ────────────────────────────────────────────────────────
+  function googleSignIn() {
+    // This uses Google Identity Services
+    // Make sure to load the Google SDK on this page in production
+    // and initialise with your Google Client ID
+    showToast('Google sign-in coming soon. Use email for now.', 'info');
+    /*
+    google.accounts.id.initialize({
+      client_id: 'YOUR_GOOGLE_CLIENT_ID',
+      callback: async (response) => {
+        try {
+          await AuthAPI.googleAuth(response.credential);
+          window.location.href = '/dashboard.html';
+        } catch (err) {
+          showError(err.message);
+        }
+      }
+    });
+    google.accounts.id.prompt();
+    */
+  }
+
+  // ── Promo Redemption (for logged-in users via login tab) ──────────────────
+  async function redeemPromo(context) {
+    const code = document.getElementById(`promo-${context}`).value.trim().toUpperCase();
+    if (!code) { showToast('Enter a promo code first.', 'warning'); return; }
+
+    // Must be logged in to redeem
+    if (!(await Auth.isLoggedIn())) {
+      showToast('Sign in first, then redeem your code.', 'warning');
+      return;
+    }
+
+    try {
+      await SubAPI.redeemPromo(code);
+      showToast('Promo code applied! Redirecting...', 'success');
+      setTimeout(() => { window.location.href = '/dashboard.html'; }, 1000);
+    } catch (err) {
+      showToast(err.message || 'Invalid or already-used code.', 'error');
+    }
+  }
+
+  // ── Enter key shortcuts ───────────────────────────────────────────────────
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const activeForm = document.querySelector('.auth-form.active');
+    if (activeForm?.id === 'form-login') doLogin();
+    else if (activeForm?.id === 'form-register') doRegister();
+  });
+</script>
+</body>
+</html>
