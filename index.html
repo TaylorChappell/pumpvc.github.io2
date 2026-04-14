@@ -4,651 +4,786 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ultimate Dev Tools — Essor Studios</title>
-  <meta name="description" content="Professional Chrome extension for Solana & Web3 developers. AI Volume Bot, Market Maker, Token Splitter and more.">
+  <meta name="description" content="Professional Chrome extension for Solana developers. AI Volume Bot, Market Maker, Token Splitter, Bundle Checker and Wallet Analysis.">
+  <link rel="icon" type="image/png" href="icon128.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --navy:        #0d1b3e;
-      --navy-deep:   #07112a;
-      --navy-mid:    #162555;
-      --text-dark:   #0d1b3e;
-      --text-body:   #4a5568;
-      --text-light:  #718096;
-      --bg:          #f4f4f2;
-      --bg-white:    #ffffff;
-      --border:      rgba(13,27,62,0.08);
-      --border-med:  rgba(13,27,62,0.14);
-      --green:       #22c55e;
-      --radius:      14px;
-      --radius-lg:   22px;
+      --navy:      #0f1f45;
+      --navy-dark: #0a1530;
+      --navy-mid:  #172550;
+      --text-dark: #0f1f45;
+      --text-body: #4a5c7a;
+      --text-muted:#7a8fa8;
+      --bg:        #eef0f5;
+      --bg-white:  #ffffff;
+      --border:    rgba(15,31,69,0.1);
+      --border-mid:rgba(15,31,69,0.14);
+      --green:     #22c55e;
+      --font-display: 'Plus Jakarta Sans', 'Inter', sans-serif;
+      --font-body:    'Inter', sans-serif;
       --radius-pill: 100px;
+      --radius-lg: 14px;
+      --radius-xl: 20px;
     }
     html { font-size: 16px; -webkit-font-smoothing: antialiased; scroll-behavior: smooth; }
-    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text-dark); overflow-x: hidden; }
+    body { font-family: var(--font-body); background: var(--bg); color: var(--text-dark); overflow-x: hidden; }
     a { text-decoration: none; color: inherit; }
+    button { font-family: inherit; cursor: pointer; }
 
-    /* NAV */
+    /* ── NAV ── */
     .nav {
       position: fixed; top: 0; left: 0; right: 0; z-index: 200;
-      height: 64px; display: flex; align-items: center;
+      height: 60px; display: flex; align-items: center;
       justify-content: space-between; padding: 0 48px;
-      background: rgba(244,244,242,0.92); backdrop-filter: blur(16px);
+      background: rgba(238,240,245,0.9); backdrop-filter: blur(16px);
       border-bottom: 1px solid var(--border);
-      transition: background 0.25s, box-shadow 0.25s;
+      transition: background 0.2s, box-shadow 0.2s;
     }
-    .nav.scrolled { background: rgba(244,244,242,0.98); box-shadow: 0 1px 20px rgba(13,27,62,0.08); }
-    .nav-logo { display: flex; align-items: center; gap: 10px; }
-    .nav-logo img { width: 32px; height: 32px; border-radius: 8px; }
-    .nav-logo-fallback {
-      width: 32px; height: 32px; background: var(--navy); border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      font-family: 'Syne', sans-serif; font-weight: 800; font-size: 14px; color: #fff;
+    .nav.scrolled { background: rgba(238,240,245,0.97); box-shadow: 0 1px 16px rgba(15,31,69,0.08); }
+    .nav-brand { display: flex; align-items: center; gap: 9px; }
+    .nav-brand img { width: 28px; height: 28px; border-radius: 7px; }
+    .nav-brand-fallback {
+      width: 28px; height: 28px; border-radius: 7px;
+      background: var(--navy); display: flex; align-items: center; justify-content: center;
     }
-    .nav-logo-name { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px; color: var(--navy); }
-    .nav-links { display: flex; align-items: center; gap: 32px; }
-    .nav-links a { font-size: 14px; font-weight: 500; color: var(--text-body); transition: color 0.15s; }
+    .nav-brand-fallback svg { width: 16px; height: 16px; color: #fff; }
+    .nav-brand-name { font-family: var(--font-display); font-weight: 700; font-size: 14px; color: var(--navy); }
+    .nav-links { display: flex; align-items: center; gap: 30px; }
+    .nav-links a { font-size: 13.5px; font-weight: 500; color: var(--text-body); transition: color 0.15s; }
     .nav-links a:hover { color: var(--navy); }
-    .nav-right { display: flex; align-items: center; gap: 12px; }
-    .btn-nav-ghost {
-      font-size: 14px; font-weight: 500; color: var(--navy); padding: 8px 16px;
-      border-radius: var(--radius-pill); border: 1.5px solid var(--border-med);
-      transition: all 0.15s; cursor: pointer; background: transparent; font-family: inherit;
+    .nav-right { display: flex; align-items: center; gap: 10px; }
+    .btn-nav-outline {
+      font-size: 13px; font-weight: 500; color: var(--navy); padding: 7px 16px;
+      border-radius: var(--radius-pill); border: 1px solid var(--border-mid);
+      background: transparent; transition: all 0.15s; cursor: pointer; font-family: inherit;
     }
-    .btn-nav-ghost:hover { background: var(--navy); color: #fff; border-color: var(--navy); }
-    .btn-nav-primary {
-      font-size: 14px; font-weight: 600; color: #fff; padding: 9px 20px;
+    .btn-nav-outline:hover { background: var(--navy); color: #fff; border-color: var(--navy); }
+    .btn-nav-solid {
+      font-size: 13px; font-weight: 600; color: #fff; padding: 8px 18px;
       border-radius: var(--radius-pill); background: var(--navy); border: none;
       cursor: pointer; transition: all 0.15s; font-family: inherit;
     }
-    .btn-nav-primary:hover { background: var(--navy-mid); transform: translateY(-1px); }
+    .btn-nav-solid:hover { background: var(--navy-mid); transform: translateY(-1px); }
 
-    /* HERO */
+    /* ── HERO ── */
     .hero {
       min-height: 100vh; display: flex; flex-direction: column;
       align-items: center; justify-content: center; text-align: center;
-      padding: 120px 40px 80px; position: relative; overflow: hidden;
+      padding: 110px 40px 70px; position: relative; overflow: hidden;
     }
-    .hero-dotgrid {
+    .hero-dots {
       position: absolute; inset: 0;
-      background-image: radial-gradient(circle, rgba(13,27,62,0.12) 1px, transparent 1px);
-      background-size: 28px 28px; pointer-events: none; z-index: 0;
+      background-image: radial-gradient(circle, rgba(15,31,69,0.11) 1px, transparent 1px);
+      background-size: 22px 22px;
+      mask-image: radial-gradient(ellipse 90% 80% at 50% 50%, black 30%, transparent 100%);
+      pointer-events: none;
     }
-    .hero-vignette {
-      position: absolute; inset: 0;
-      background: radial-gradient(ellipse 80% 70% at 50% 50%, rgba(244,244,242,0.6) 0%, transparent 80%);
-      pointer-events: none; z-index: 1;
-    }
-    .hero-inner { position: relative; z-index: 2; max-width: 800px; }
-    .hero-eyebrow {
+    .hero-inner { position: relative; z-index: 1; max-width: 780px; }
+
+    /* Eyebrow */
+    .eyebrow-row {
       display: flex; align-items: center; justify-content: center;
-      gap: 12px; margin-bottom: 28px;
+      gap: 14px; margin-bottom: 28px;
       opacity: 0; animation: fadeUp 0.6s 0.1s ease forwards;
     }
-    .eyebrow-line { width: 40px; height: 1px; background: var(--text-light); }
-    .eyebrow-text { font-size: 11px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-light); }
+    .eyebrow-line { width: 36px; height: 1px; background: var(--text-muted); }
+    .eyebrow-text { font-family: var(--font-body); font-size: 11px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-muted); }
+
     .hero h1 {
-      font-family: 'Syne', sans-serif;
-      font-size: clamp(3rem, 7vw, 5.8rem); font-weight: 800;
-      line-height: 1.0; color: var(--navy); margin-bottom: 22px;
-      letter-spacing: -0.03em;
+      font-family: var(--font-display); font-size: clamp(3rem, 7vw, 5.6rem);
+      font-weight: 800; line-height: 1.0; color: var(--navy);
+      letter-spacing: -0.025em; margin-bottom: 22px;
       opacity: 0; animation: fadeUp 0.7s 0.2s ease forwards;
     }
     .cursor-blink {
-      display: inline-block; width: 3px; height: 0.9em;
-      background: var(--navy); margin-left: 4px; vertical-align: middle;
+      display: inline-block; width: 3px; height: 0.85em;
+      background: var(--navy); margin-left: 3px; vertical-align: middle;
       animation: blink 1s step-end infinite;
     }
-    @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0; } }
+    @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0;} }
+
     .hero-desc {
-      font-size: 18px; font-weight: 400; color: var(--text-body);
-      line-height: 1.65; max-width: 480px; margin: 0 auto 36px;
-      opacity: 0; animation: fadeUp 0.7s 0.35s ease forwards;
+      font-size: 17px; font-weight: 400; color: var(--text-body);
+      line-height: 1.7; max-width: 480px; margin: 0 auto 34px;
+      opacity: 0; animation: fadeUp 0.7s 0.32s ease forwards;
     }
-    .hero-pills {
+
+    /* Social proof pills */
+    .hero-social {
       display: flex; align-items: center; justify-content: center;
-      gap: 10px; flex-wrap: wrap; margin-bottom: 40px;
-      opacity: 0; animation: fadeUp 0.7s 0.45s ease forwards;
+      gap: 10px; flex-wrap: wrap; margin-bottom: 38px;
+      opacity: 0; animation: fadeUp 0.7s 0.44s ease forwards;
     }
-    .hero-pill {
+    .social-pill {
       display: flex; align-items: center; gap: 8px; padding: 8px 18px;
-      background: var(--bg-white); border: 1px solid var(--border-med);
+      background: var(--bg-white); border: 1px solid var(--border-mid);
       border-radius: var(--radius-pill); font-size: 13px; font-weight: 500;
-      color: var(--text-dark); box-shadow: 0 2px 8px rgba(13,27,62,0.05);
+      color: var(--text-dark); box-shadow: 0 2px 8px rgba(15,31,69,0.05);
     }
-    .dot-green {
+    .social-pill svg { width: 14px; height: 14px; }
+    .dot-live {
       width: 7px; height: 7px; background: var(--green); border-radius: 50%;
-      animation: pulse-green 2s ease-in-out infinite;
+      animation: pulse-live 2s ease-in-out infinite;
     }
-    .pill-price { font-weight: 700; color: var(--navy); }
-    @keyframes pulse-green {
-      0%,100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
-      50% { box-shadow: 0 0 0 4px rgba(34,197,94,0); }
+    @keyframes pulse-live { 0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,0.45);} 50%{box-shadow:0 0 0 4px rgba(34,197,94,0);} }
+
+    /* CTA row */
+    .hero-cta {
+      display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap;
+      opacity: 0; animation: fadeUp 0.7s 0.54s ease forwards;
     }
-    .hero-actions {
-      display: flex; align-items: center; justify-content: center;
-      gap: 14px; flex-wrap: wrap;
-      opacity: 0; animation: fadeUp 0.7s 0.55s ease forwards;
-    }
-    .btn-primary {
-      display: inline-flex; align-items: center; gap: 8px; padding: 14px 28px;
+    .btn-hero-primary {
+      display: inline-flex; align-items: center; gap: 8px; padding: 13px 26px;
       background: var(--navy); color: #fff; border-radius: var(--radius-pill);
-      font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 600;
+      font-family: var(--font-body); font-size: 14px; font-weight: 600;
       border: none; cursor: pointer; transition: all 0.2s;
     }
-    .btn-primary:hover { background: var(--navy-mid); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(13,27,62,0.25); }
-    .btn-ghost {
-      display: inline-flex; align-items: center; gap: 8px; padding: 14px 28px;
-      background: transparent; color: var(--navy); border-radius: var(--radius-pill);
-      font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 600;
+    .btn-hero-primary:hover { background: var(--navy-mid); transform: translateY(-2px); box-shadow: 0 8px 22px rgba(15,31,69,0.22); }
+    .btn-hero-ghost {
+      display: inline-flex; align-items: center; gap: 8px; padding: 13px 26px;
+      background: transparent; color: var(--text-body); border-radius: var(--radius-pill);
+      font-family: var(--font-body); font-size: 14px; font-weight: 500;
       border: none; cursor: pointer; transition: color 0.2s;
     }
-    .btn-ghost:hover { color: var(--text-body); }
+    .btn-hero-ghost:hover { color: var(--navy); }
 
-    @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(18px);} to{opacity:1;transform:translateY(0);} }
 
-    /* MOCKUP */
-    .mockup-section {
-      padding: 0 40px 110px; display: flex; justify-content: center;
+    /* ── EXTENSION SCREENSHOT AREA ── */
+    .screenshot-section {
+      padding: 0 40px 100px; display: flex; justify-content: center;
       position: relative; overflow: visible;
     }
-    .mockup-wrap {
+    .screenshot-wrap {
       position: relative;
-      opacity: 0; animation: fadeUp 0.8s 0.7s ease forwards;
+      opacity: 0; animation: fadeUp 0.8s 0.65s ease forwards;
     }
-    .mockup-glow {
-      position: absolute; inset: -60px;
-      background: radial-gradient(ellipse 70% 60% at 50% 50%, rgba(13,27,62,0.07) 0%, transparent 70%);
+    .screenshot-glow {
+      position: absolute; inset: -40px;
+      background: radial-gradient(ellipse 70% 50% at 50% 50%, rgba(15,31,69,0.07) 0%, transparent 70%);
       pointer-events: none;
     }
-    .extension-frame {
-      width: 390px; background: var(--bg-white); border-radius: 20px;
-      box-shadow: 0 0 0 1px rgba(13,27,62,0.1), 0 4px 8px rgba(13,27,62,0.04),
-                  0 24px 60px rgba(13,27,62,0.14), 0 48px 100px rgba(13,27,62,0.08);
-      overflow: hidden; position: relative;
+    .ext-window {
+      width: 560px;
+      background: var(--bg-white);
+      border-radius: 16px;
+      box-shadow: 0 0 0 1px rgba(15,31,69,0.1), 0 2px 4px rgba(15,31,69,0.04), 0 20px 60px rgba(15,31,69,0.14), 0 48px 100px rgba(15,31,69,0.08);
+      overflow: hidden;
     }
-    .ext-topbar {
-      background: var(--navy-deep); padding: 14px 16px;
+    /* Window chrome */
+    .window-chrome {
+      background: #f3f4f6; border-bottom: 1px solid rgba(15,31,69,0.1);
+      padding: 10px 14px; display: flex; align-items: center; gap: 8px;
+    }
+    .chrome-dots { display: flex; gap: 6px; }
+    .chrome-dot  { width: 11px; height: 11px; border-radius: 50%; }
+    .chrome-dot.r { background: #ff5f57; }
+    .chrome-dot.y { background: #ffbd2e; }
+    .chrome-dot.g { background: #27c93f; }
+    .chrome-bar {
+      flex: 1; background: #fff; border: 1px solid rgba(15,31,69,0.12);
+      border-radius: 6px; padding: 4px 10px;
+      font-size: 11px; color: var(--text-muted); font-family: var(--font-body);
+    }
+    /* Extension body */
+    .ext-body { display: flex; height: 400px; }
+    .ext-side {
+      width: 150px; background: var(--navy); flex-shrink: 0; position: relative; overflow: hidden;
+      display: flex; flex-direction: column;
+    }
+    .ext-side::before {
+      content: ''; position: absolute; inset: 0;
+      background-image: radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px);
+      background-size: 16px 16px; pointer-events: none;
+    }
+    .ext-side > * { position: relative; z-index: 1; }
+    .ext-side-header { padding: 12px 10px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .ext-side-brand { display: flex; align-items: center; gap: 7px; }
+    .ext-side-brand img { width: 20px; height: 20px; border-radius: 5px; }
+    .ext-side-brand-fb { width:20px;height:20px;border-radius:5px;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center; }
+    .ext-side-name { font-family: var(--font-display); font-size: 10px; font-weight: 700; color: #fff; line-height: 1.2; }
+    .ext-side-sub  { font-size: 8px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,0.35); }
+    .ext-nav { flex: 1; padding: 10px 6px; display: flex; flex-direction: column; gap: 1px; }
+    .ext-nav-label { font-size: 8px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.3); padding: 7px 6px 3px; margin-top: 6px; }
+    .ext-nav-item {
+      display: flex; align-items: center; gap: 7px; padding: 7px 8px;
+      border-radius: 6px; font-size: 11px; font-weight: 500;
+      color: rgba(255,255,255,0.5); cursor: pointer;
+    }
+    .ext-nav-item svg { width: 13px; height: 13px; flex-shrink: 0; opacity: 0.7; }
+    .ext-nav-item.active { background: rgba(255,255,255,0.12); color: #fff; font-weight: 600; }
+    .ext-nav-item.active svg { opacity: 1; }
+    .ext-side-footer { padding: 8px 6px; border-top: 1px solid rgba(255,255,255,0.08); }
+    .ext-rpc {
+      display: flex; align-items: center; gap: 5px; padding: 5px 8px;
+      font-size: 10px; color: rgba(255,255,255,0.4);
+    }
+    .rpc-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
+    /* Main panel */
+    .ext-main {
+      flex: 1; background: #eef0f5; padding: 16px; overflow: hidden;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .ext-panel-title { font-family: var(--font-display); font-size: 13px; font-weight: 700; color: var(--text-dark); flex-shrink: 0; }
+    .ext-tabs { display: flex; gap: 2px; background: rgba(15,31,69,0.06); border-radius: 7px; padding: 3px; flex-shrink: 0; }
+    .ext-tab {
+      flex: 1; padding: 5px 8px; border-radius: 5px; font-size: 10px; font-weight: 500;
+      color: var(--text-muted); background: transparent; border: none; cursor: pointer; text-align: center;
+    }
+    .ext-tab.active { background: #fff; color: var(--navy); font-weight: 600; box-shadow: 0 1px 3px rgba(15,31,69,0.08); }
+    .ext-field-label {
+      font-size: 9px; font-weight: 600; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px;
+    }
+    .ext-input {
+      background: #fff; border: 1px solid rgba(15,31,69,0.12); border-radius: 6px;
+      padding: 7px 10px; font-size: 10.5px; color: var(--text-dark); width: 100%;
       display: flex; align-items: center; justify-content: space-between;
     }
-    .ext-logo-row { display: flex; align-items: center; gap: 8px; }
-    .ext-logo-row img { width: 22px; height: 22px; border-radius: 5px; }
-    .ext-logo-fallback {
-      width: 22px; height: 22px; background: rgba(255,255,255,0.15); border-radius: 5px;
-      display: flex; align-items: center; justify-content: center;
-      font-family: 'Syne', sans-serif; font-weight: 800; font-size: 9px; color: #fff;
-    }
-    .ext-logo-name { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 12px; color: rgba(255,255,255,0.9); }
-    .ext-sub-badge {
-      display: flex; align-items: center; gap: 5px; padding: 3px 10px;
-      background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3);
-      border-radius: 100px; font-size: 10px; font-weight: 600; color: #4ade80;
-    }
-    .ext-body { display: flex; height: 390px; }
-    .ext-sidebar { width: 116px; background: #0f1e42; padding: 12px 6px; display: flex; flex-direction: column; gap: 2px; }
-    .ext-nav-item {
-      display: flex; align-items: center; gap: 7px; padding: 8px;
-      border-radius: 7px; font-size: 10px; font-weight: 500;
-      color: rgba(255,255,255,0.4); cursor: pointer; transition: all 0.15s;
-      white-space: nowrap;
-    }
-    .ext-nav-item.active { background: rgba(99,179,237,0.15); color: #93c5fd; }
-    .ext-nav-icon { font-size: 11px; flex-shrink: 0; }
-    .ext-main { flex: 1; background: #0a0c14; padding: 14px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
-    .ext-tool-title {
-      font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700; color: #e2e8f0;
-      display: flex; align-items: center; gap: 6px; flex-shrink: 0;
-    }
-    .ext-field-label { font-size: 9px; font-weight: 600; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
-    .ext-input {
-      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 6px; padding: 7px 10px; font-size: 10px;
-      color: rgba(255,255,255,0.7); font-family: monospace; width: 100%;
-    }
+    .ext-input-mono { font-family: monospace; font-size: 10px; color: var(--text-muted); }
     .ext-row { display: flex; gap: 8px; }
-    .ext-row .ext-field { flex: 1; }
-    .ext-field { margin-bottom: 8px; flex-shrink: 0; }
-    .ext-btn-run {
-      background: #1d4ed8; border: none; border-radius: 7px; padding: 9px;
-      font-size: 10px; font-weight: 700; color: #fff; cursor: pointer;
-      width: 100%; font-family: 'Syne', sans-serif; letter-spacing: 0.04em; flex-shrink: 0;
+    .ext-row .ext-col { flex: 1; }
+    .ext-field { flex-shrink: 0; }
+    .ext-tab-row { display: flex; gap: 6px; flex-shrink: 0; }
+    .ext-tab-btn {
+      flex: 1; padding: 7px; background: #fff; border: 1px solid rgba(15,31,69,0.12);
+      border-radius: 6px; font-size: 10px; font-weight: 600; color: var(--text-dark); cursor: pointer; text-align: center;
     }
-    .ext-status-bar {
-      display: flex; align-items: center; gap: 6px; padding: 6px 10px;
-      background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2);
+    .ext-tab-btn.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+    .ext-btn-exec {
+      background: var(--navy); border: none; border-radius: 7px; padding: 9px 12px;
+      font-size: 10.5px; font-weight: 700; color: #fff; cursor: pointer; width: 100%;
+      font-family: var(--font-display); display: flex; align-items: center; justify-content: center; gap: 5px;
+      flex-shrink: 0;
+    }
+    .ext-slider-row { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .ext-slider { flex: 1; height: 3px; background: rgba(15,31,69,0.15); border-radius: 2px; appearance: none; outline: none; }
+    .ext-slider::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--navy); cursor: pointer; }
+    .ext-slider-val { font-size: 10px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+    .ext-wallet-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 7px 10px; background: #fff; border: 1px solid rgba(15,31,69,0.1);
       border-radius: 6px; flex-shrink: 0;
     }
-    .ext-status-dot { width: 6px; height: 6px; background: #4ade80; border-radius: 50%; animation: pulse-green 1.5s ease-in-out infinite; }
-    .ext-status-text { font-size: 9px; font-weight: 600; color: #4ade80; font-family: monospace; }
+    .ext-wallet-icon { width: 20px; height: 20px; border-radius: 4px; background: linear-gradient(135deg,#f59e0b,#ef4444); }
+    .ext-wallet-name { font-size: 10.5px; font-weight: 600; color: var(--text-dark); }
+    .ext-wallet-addr { font-size: 9px; font-family: monospace; color: var(--text-muted); }
+    .ext-toggle-row { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .ext-toggle-label { font-size: 10px; font-weight: 500; color: var(--text-dark); }
+    .ext-toggle-sub   { font-size: 9px; color: var(--text-muted); }
+    .mini-toggle { width: 28px; height: 16px; background: rgba(15,31,69,0.15); border-radius: 8px; position: relative; }
+    .mini-toggle::after { content:''; position:absolute; width:10px;height:10px;background:#fff;border-radius:50%;top:3px;left:3px; box-shadow:0 1px 2px rgba(0,0,0,0.2); }
 
-    /* Floating badges */
-    .badge-float {
-      position: absolute; background: var(--bg-white); border-radius: var(--radius);
-      box-shadow: 0 4px 20px rgba(13,27,62,0.12), 0 0 0 1px var(--border);
-      padding: 10px 14px; display: flex; align-items: center; gap: 10px;
+    /* Floating info cards */
+    .info-float {
+      position: absolute; background: var(--bg-white);
+      border: 1px solid var(--border-mid); border-radius: 10px;
+      padding: 10px 14px; box-shadow: 0 4px 16px rgba(15,31,69,0.1);
+      display: flex; align-items: center; gap: 10px;
     }
-    .b1 { top: 30px; left: -150px; animation: floatA 3.5s ease-in-out infinite; }
-    .b2 { bottom: 70px; left: -140px; animation: floatB 4s ease-in-out infinite; }
-    .b3 { top: 70px; right: -140px; animation: floatA 3.8s 0.5s ease-in-out infinite; }
-    .b4 { bottom: 30px; right: -130px; animation: floatB 3.2s 1s ease-in-out infinite; }
-    @keyframes floatA { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-7px); } }
-    @keyframes floatB { 0%,100% { transform:translateY(0); } 50% { transform:translateY(6px); } }
-    .badge-float-icon {
-      width: 34px; height: 34px; border-radius: 9px;
-      display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;
+    .float-a { right: -130px; top: 60px; animation: floatA 3.5s ease-in-out infinite; }
+    .float-b { right: -140px; bottom: 80px; animation: floatB 4s 0.5s ease-in-out infinite; }
+    .float-c { left: -130px; top: 60px; animation: floatA 3.8s 1s ease-in-out infinite; }
+    .float-d { left: -130px; bottom: 80px; animation: floatB 3.2s 0.2s ease-in-out infinite; }
+    @keyframes floatA { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-6px);} }
+    @keyframes floatB { 0%,100%{transform:translateY(0);} 50%{transform:translateY(5px);} }
+    .float-icon {
+      width: 32px; height: 32px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     }
-    .badge-float-label { font-size: 10px; color: var(--text-light); line-height: 1; margin-bottom: 2px; }
-    .badge-float-value { font-size: 13px; font-weight: 700; color: var(--navy); }
+    .float-icon svg { width: 16px; height: 16px; }
+    .float-label { font-size: 10px; color: var(--text-muted); margin-bottom: 1px; }
+    .float-value { font-size: 13px; font-weight: 700; color: var(--navy); font-family: var(--font-display); }
 
-    /* STATS STRIP */
-    .stats-strip { background: var(--navy); padding: 36px 40px; }
-    .stats-row { display: flex; justify-content: space-around; max-width: 900px; margin: 0 auto; gap: 20px; flex-wrap: wrap; }
-    .stat-item { text-align: center; }
-    .stat-num {
-      font-family: 'Syne', sans-serif; font-size: 38px; font-weight: 800;
-      color: #fff; line-height: 1; margin-bottom: 4px;
+    /* ── SECTIONS ── */
+    section { padding: 96px 48px; }
+    .section-inner { max-width: 1080px; margin: 0 auto; }
+    .section-eyebrow {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.18em;
+      text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px;
     }
-    .stat-label { font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.45); text-transform: uppercase; letter-spacing: 0.1em; }
-
-    /* SECTIONS */
-    section { padding: 100px 40px; }
-    .section-inner { max-width: 1100px; margin: 0 auto; }
-    .section-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-light); margin-bottom: 14px; }
     .section-title {
-      font-family: 'Syne', sans-serif; font-size: clamp(2rem, 4vw, 3rem); font-weight: 800;
-      color: var(--navy); line-height: 1.1; letter-spacing: -0.02em; margin-bottom: 16px;
+      font-family: var(--font-display); font-size: clamp(1.8rem, 3.5vw, 2.8rem);
+      font-weight: 800; color: var(--navy); line-height: 1.1;
+      letter-spacing: -0.02em; margin-bottom: 14px;
     }
-    .section-desc { font-size: 16px; color: var(--text-body); line-height: 1.7; max-width: 500px; margin-bottom: 56px; }
+    .section-desc { font-size: 15.5px; color: var(--text-body); line-height: 1.7; max-width: 480px; margin-bottom: 52px; }
 
-    /* TOOLS */
-    .tools-bg { background: var(--bg-white); }
-    .tools-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+    /* ── TOOLS GRID ── */
+    .tools-section { background: var(--bg-white); }
+    .tools-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 18px; }
     .tool-card {
-      background: var(--bg); border: 1px solid var(--border-med);
-      border-radius: var(--radius-lg); padding: 28px;
-      transition: all 0.25s; position: relative; overflow: hidden;
+      background: var(--bg); border: 1px solid var(--border-mid);
+      border-radius: var(--radius-lg); padding: 26px;
+      transition: all 0.22s; position: relative; overflow: hidden;
     }
     .tool-card::before {
-      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-      background: var(--tc, var(--navy)); border-radius: 3px 3px 0 0;
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: var(--tc, var(--navy));
       transform: scaleX(0); transform-origin: left; transition: transform 0.3s ease;
     }
-    .tool-card:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(13,27,62,0.1); border-color: rgba(13,27,62,0.2); }
+    .tool-card:hover { transform: translateY(-3px); box-shadow: 0 10px 32px rgba(15,31,69,0.09); border-color: rgba(15,31,69,0.18); }
     .tool-card:hover::before { transform: scaleX(1); }
-    .tool-icon {
-      width: 48px; height: 48px; border-radius: var(--radius);
-      background: var(--ti, rgba(13,27,62,0.06)); display: flex; align-items: center;
-      justify-content: center; font-size: 22px; margin-bottom: 18px;
+    .tool-icon-wrap {
+      width: 44px; height: 44px; border-radius: 10px;
+      background: var(--ti, rgba(15,31,69,0.06)); display: flex; align-items: center;
+      justify-content: center; margin-bottom: 16px;
     }
-    .tool-card h3 { font-family: 'Syne', sans-serif; font-size: 17px; font-weight: 700; color: var(--navy); margin-bottom: 10px; }
-    .tool-card p { font-size: 14px; line-height: 1.65; color: var(--text-body); margin-bottom: 16px; }
-    .tool-tags { display: flex; gap: 6px; flex-wrap: wrap; }
-    .tag { padding: 3px 10px; background: rgba(13,27,62,0.06); border-radius: 100px; font-size: 11px; font-weight: 600; color: var(--navy); }
+    .tool-icon-wrap svg { width: 22px; height: 22px; color: var(--tic, var(--navy)); }
+    .tool-card h3 { font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+    .tool-card p { font-size: 13.5px; line-height: 1.65; color: var(--text-body); margin-bottom: 14px; }
+    .tool-tags { display: flex; gap: 5px; flex-wrap: wrap; }
+    .tool-tag { padding: 3px 9px; background: rgba(15,31,69,0.06); border-radius: 100px; font-size: 11px; font-weight: 600; color: var(--navy); }
 
-    /* HOW IT WORKS */
-    .steps-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 28px; }
-    .step-card { display: flex; flex-direction: column; gap: 14px; opacity: 0; transform: translateY(24px); transition: opacity 0.5s ease, transform 0.5s ease; }
-    .step-card.visible { opacity: 1; transform: translateY(0); }
-    .step-num { font-family: 'Syne', sans-serif; font-size: 52px; font-weight: 800; color: rgba(13,27,62,0.06); line-height: 1; }
-    .step-title { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; color: var(--navy); }
-    .step-desc { font-size: 14px; line-height: 1.65; color: var(--text-body); }
+    /* ── PROCESS ── */
+    .process-section { background: var(--bg); }
+    .steps-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 24px; }
+    .step-item { opacity: 0; transform: translateY(20px); transition: opacity 0.5s ease, transform 0.5s ease; }
+    .step-item.visible { opacity: 1; transform: translateY(0); }
+    .step-number { font-family: var(--font-display); font-size: 48px; font-weight: 800; color: rgba(15,31,69,0.07); line-height: 1; margin-bottom: 10px; }
+    .step-title { font-family: var(--font-display); font-size: 17px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+    .step-desc { font-size: 13.5px; line-height: 1.65; color: var(--text-body); }
 
-    /* PRICING */
-    .pricing-bg { background: var(--bg-white); }
-    .pricing-card-wrap { max-width: 860px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1.2fr; gap: 20px; align-items: start; }
-    .pricing-card { background: var(--bg); border: 1px solid var(--border-med); border-radius: var(--radius-lg); padding: 32px; }
-    .pricing-card.featured {
-      background: var(--navy); border-color: var(--navy);
-      transform: scale(1.03); box-shadow: 0 20px 60px rgba(13,27,62,0.25);
-    }
-    .pricing-badge {
-      display: inline-flex; align-items: center; gap: 5px; padding: 4px 12px;
-      background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
-      border-radius: 100px; font-size: 11px; font-weight: 600;
-      color: rgba(255,255,255,0.9); margin-bottom: 20px;
-    }
-    .pricing-badge.light { background: rgba(13,27,62,0.06); border-color: var(--border-med); color: var(--navy); }
-    .pricing-name { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.55); margin-bottom: 6px; }
-    .pricing-name.dark { color: var(--text-light); }
-    .pricing-price { font-family: 'Syne', sans-serif; font-size: 52px; font-weight: 800; line-height: 1; margin-bottom: 4px; letter-spacing: -0.03em; }
+    /* ── PRICING ── */
+    .pricing-section { background: var(--bg-white); }
+    .pricing-wrap { max-width: 820px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1.2fr; gap: 18px; }
+    .pricing-card { background: var(--bg); border: 1px solid var(--border-mid); border-radius: var(--radius-xl); padding: 30px; }
+    .pricing-card.featured { background: var(--navy); border-color: var(--navy); transform: scale(1.03); box-shadow: 0 20px 50px rgba(15,31,69,0.22); }
+    .pricing-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 16px; }
+    .pricing-eyebrow.dark { color: var(--text-muted); }
+    .pricing-eyebrow.light { color: rgba(255,255,255,0.5); }
+    .pricing-price { font-family: var(--font-display); font-size: 48px; font-weight: 800; line-height: 1; margin-bottom: 4px; letter-spacing: -0.03em; }
     .pricing-price.dark { color: var(--navy); }
     .pricing-price.light { color: #fff; }
-    .pricing-price span { font-size: 18px; font-weight: 500; }
-    .pricing-price.dark span { color: var(--text-body); }
-    .pricing-price.light span { color: rgba(255,255,255,0.6); }
-    .pricing-desc { font-size: 13px; line-height: 1.5; margin-bottom: 24px; }
-    .pricing-desc.dark { color: var(--text-light); }
-    .pricing-desc.light { color: rgba(255,255,255,0.6); }
-    .pricing-features { list-style: none; margin-bottom: 28px; display: flex; flex-direction: column; gap: 10px; }
-    .pricing-features li { display: flex; align-items: center; gap: 10px; font-size: 14px; }
-    .feature-check.dark { color: var(--navy); font-weight: 700; font-size: 13px; flex-shrink: 0; }
-    .feature-check.green { color: #4ade80; font-weight: 700; font-size: 13px; flex-shrink: 0; }
-    .feature-text.dark { color: var(--text-body); }
-    .feature-text.light { color: rgba(255,255,255,0.85); }
-    .payment-label { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 10px; }
-    .payment-label.dark { color: var(--text-light); }
-    .payment-label.light { color: rgba(255,255,255,0.5); }
-    .payment-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
-    .payment-chip {
-      display: flex; align-items: center; gap: 5px; padding: 5px 12px;
+    .pricing-period { font-size: 16px; font-weight: 500; }
+    .pricing-period.dark { color: var(--text-body); }
+    .pricing-period.light { color: rgba(255,255,255,0.55); }
+    .pricing-desc { font-size: 13px; line-height: 1.55; margin-bottom: 22px; }
+    .pricing-desc.dark { color: var(--text-muted); }
+    .pricing-desc.light { color: rgba(255,255,255,0.55); }
+    .pricing-features { list-style: none; margin-bottom: 24px; display: flex; flex-direction: column; gap: 9px; }
+    .pricing-features li { display: flex; align-items: center; gap: 9px; font-size: 13.5px; }
+    .check-icon { width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .check-icon svg { width: 9px; height: 9px; }
+    .check-icon.dark { background: rgba(15,31,69,0.08); color: var(--navy); }
+    .check-icon.light { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.9); }
+    .feat-text.dark { color: var(--text-body); }
+    .feat-text.light { color: rgba(255,255,255,0.8); }
+    .payment-methods-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+    .payment-methods-label.dark { color: var(--text-muted); }
+    .payment-methods-label.light { color: rgba(255,255,255,0.4); }
+    .payment-chips { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 22px; }
+    .pchip {
+      display: flex; align-items: center; gap: 5px; padding: 5px 11px;
       border-radius: 100px; font-size: 12px; font-weight: 500;
     }
-    .payment-chip.dark { background: rgba(13,27,62,0.06); border: 1px solid var(--border-med); color: var(--navy); }
-    .payment-chip.light { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.8); }
-    .btn-pricing {
-      width: 100%; padding: 14px; border-radius: var(--radius-pill);
-      font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 600;
-      cursor: pointer; border: none; transition: all 0.2s; display: block; text-align: center;
+    .pchip svg { width: 13px; height: 13px; }
+    .pchip.dark { background: rgba(15,31,69,0.06); border: 1px solid var(--border-mid); color: var(--navy); }
+    .pchip.light { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14); color: rgba(255,255,255,0.75); }
+    .btn-price {
+      width: 100%; padding: 13px; border-radius: 100px;
+      font-family: var(--font-body); font-size: 14px; font-weight: 600;
+      cursor: pointer; border: none; transition: all 0.18s; display: block; text-align: center;
     }
-    .btn-pricing.dark-btn { background: var(--navy); color: #fff; }
-    .btn-pricing.dark-btn:hover { background: var(--navy-mid); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(13,27,62,0.2); }
-    .btn-pricing.light-btn { background: #fff; color: var(--navy); }
-    .btn-pricing.light-btn:hover { background: rgba(255,255,255,0.9); transform: translateY(-1px); }
-    .renewal-note { text-align: center; margin-top: 24px; font-size: 13px; color: var(--text-light); display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .btn-price.dark { background: var(--navy); color: #fff; }
+    .btn-price.dark:hover { background: var(--navy-mid); transform: translateY(-1px); }
+    .btn-price.light { background: #fff; color: var(--navy); }
+    .btn-price.light:hover { opacity: 0.92; transform: translateY(-1px); }
+    .pricing-note { text-align: center; margin-top: 22px; font-size: 13px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .pricing-note svg { width: 13px; height: 13px; }
 
-    /* SECURITY */
-    .features-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
-    .feature-item {
-      background: var(--bg-white); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px;
-      display: flex; gap: 14px; align-items: flex-start; transition: box-shadow 0.2s, transform 0.2s;
+    /* ── SECURITY ── */
+    .security-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+    .sec-item {
+      background: var(--bg-white); border: 1px solid var(--border); border-radius: 10px;
+      padding: 20px; display: flex; gap: 13px; align-items: flex-start;
+      transition: box-shadow 0.2s, transform 0.2s;
     }
-    .feature-item:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(13,27,62,0.07); }
-    .feature-icon-wrap { width: 38px; height: 38px; border-radius: 10px; background: rgba(13,27,62,0.06); display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
-    .feature-title { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
-    .feature-desc { font-size: 13px; line-height: 1.55; color: var(--text-body); }
+    .sec-item:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(15,31,69,0.07); }
+    .sec-icon { width: 36px; height: 36px; border-radius: 9px; background: rgba(15,31,69,0.06); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .sec-icon svg { width: 18px; height: 18px; color: var(--navy); }
+    .sec-title { font-family: var(--font-display); font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 3px; }
+    .sec-desc { font-size: 12.5px; line-height: 1.55; color: var(--text-body); }
 
-    /* CTA */
-    .cta-band { padding: 100px 40px; background: var(--navy); text-align: center; position: relative; overflow: hidden; }
-    .cta-band::before { content: ''; position: absolute; inset: 0; background-image: radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px); background-size: 28px 28px; }
-    .cta-band-inner { position: relative; max-width: 600px; margin: 0 auto; }
-    .cta-band h2 { font-family: 'Syne', sans-serif; font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 800; color: #fff; line-height: 1.1; letter-spacing: -0.02em; margin-bottom: 14px; }
-    .cta-band p { font-size: 17px; color: rgba(255,255,255,0.6); margin-bottom: 36px; line-height: 1.6; }
-    .cta-actions { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
-    .btn-cta-white {
-      display: inline-flex; align-items: center; gap: 8px; padding: 14px 28px;
-      background: #fff; color: var(--navy); border-radius: var(--radius-pill);
-      font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 700;
-      border: none; cursor: pointer; transition: all 0.2s;
-    }
-    .btn-cta-white:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
-    .btn-cta-outline {
-      display: inline-flex; align-items: center; gap: 8px; padding: 14px 28px;
-      background: transparent; color: rgba(255,255,255,0.8); border-radius: var(--radius-pill);
-      font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 600;
-      border: 1.5px solid rgba(255,255,255,0.2); cursor: pointer; transition: all 0.2s;
-    }
-    .btn-cta-outline:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.35); color: #fff; }
+    /* ── CTA BAND ── */
+    .cta-band { background: var(--navy); padding: 96px 48px; text-align: center; position: relative; overflow: hidden; }
+    .cta-band::before { content:''; position:absolute; inset:0; background-image:radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px); background-size:22px 22px; }
+    .cta-inner { position: relative; max-width: 560px; margin: 0 auto; }
+    .cta-band h2 { font-family: var(--font-display); font-size: clamp(2rem, 4.5vw, 3.2rem); font-weight: 800; color: #fff; line-height: 1.1; letter-spacing: -0.02em; margin-bottom: 14px; }
+    .cta-band p { font-size: 16px; color: rgba(255,255,255,0.55); margin-bottom: 34px; line-height: 1.65; }
+    .cta-actions { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
+    .btn-cta-white { display:inline-flex;align-items:center;gap:8px;padding:13px 26px;background:#fff;color:var(--navy);border-radius:100px;font-family:var(--font-body);font-size:14px;font-weight:700;border:none;cursor:pointer;transition:all 0.18s; }
+    .btn-cta-white:hover { opacity:0.92; transform:translateY(-2px); box-shadow:0 8px 20px rgba(0,0,0,0.2); }
+    .btn-cta-outline { display:inline-flex;align-items:center;gap:8px;padding:13px 26px;background:transparent;color:rgba(255,255,255,0.75);border-radius:100px;font-family:var(--font-body);font-size:14px;font-weight:600;border:1px solid rgba(255,255,255,0.2);cursor:pointer;transition:all 0.18s; }
+    .btn-cta-outline:hover { background:rgba(255,255,255,0.06); border-color:rgba(255,255,255,0.35); color:#fff; }
 
-    /* FOOTER */
-    .footer { background: var(--navy-deep); padding: 40px 48px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
-    .footer-logo { display: flex; align-items: center; gap: 10px; }
-    .footer-logo img { width: 28px; height: 28px; border-radius: 7px; }
-    .footer-logo-fallback { width: 28px; height: 28px; background: rgba(255,255,255,0.1); border-radius: 7px; display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-weight: 800; font-size: 11px; color: #fff; }
-    .footer-logo-name { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; color: rgba(255,255,255,0.8); }
-    .footer-links { display: flex; gap: 24px; }
-    .footer-links a { font-size: 13px; color: rgba(255,255,255,0.4); transition: color 0.15s; }
-    .footer-links a:hover { color: rgba(255,255,255,0.8); }
-    .footer-copy { font-size: 12px; color: rgba(255,255,255,0.25); }
+    /* ── FOOTER ── */
+    .footer { background: #07112a; padding: 36px 48px; display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px; }
+    .footer-brand { display:flex;align-items:center;gap:9px; }
+    .footer-brand img { width:26px;height:26px;border-radius:6px; }
+    .footer-brand-fb { width:26px;height:26px;border-radius:6px;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center; }
+    .footer-brand-fb svg { width:15px;height:15px;color:#fff; }
+    .footer-name { font-family:var(--font-display);font-size:13px;font-weight:700;color:rgba(255,255,255,0.75); }
+    .footer-links { display:flex;gap:22px; }
+    .footer-links a { font-size:13px;color:rgba(255,255,255,0.35);transition:color 0.15s; }
+    .footer-links a:hover { color:rgba(255,255,255,0.75); }
+    .footer-copy { font-size:12px;color:rgba(255,255,255,0.2); }
 
-    /* REVEAL */
-    .reveal { opacity: 0; transform: translateY(30px); transition: opacity 0.65s ease, transform 0.65s ease; }
-    .reveal.visible { opacity: 1; transform: translateY(0); }
-    .reveal-delay-1 { transition-delay: 0.1s; }
-    .reveal-delay-2 { transition-delay: 0.2s; }
-    .reveal-delay-3 { transition-delay: 0.3s; }
-    .reveal-delay-4 { transition-delay: 0.4s; }
+    /* ── REVEAL ── */
+    .reveal { opacity:0;transform:translateY(24px);transition:opacity 0.6s ease,transform 0.6s ease; }
+    .reveal.visible { opacity:1;transform:translateY(0); }
+    .reveal-d1 { transition-delay:0.08s; } .reveal-d2 { transition-delay:0.16s; }
+    .reveal-d3 { transition-delay:0.24s; } .reveal-d4 { transition-delay:0.32s; }
 
-    /* RESPONSIVE */
+    /* ── RESPONSIVE ── */
     @media (max-width: 900px) {
       .nav { padding: 0 20px; }
       .nav-links { display: none; }
-      section { padding: 70px 24px; }
-      .mockup-section { padding: 0 24px 70px; }
-      .mockup-wrap { transform: scale(0.8); transform-origin: center top; }
-      .badge-float { display: none; }
-      .pricing-card-wrap { grid-template-columns: 1fr; }
+      section { padding: 64px 24px; }
+      .screenshot-section { padding: 0 24px 64px; }
+      .ext-window { width: 100%; max-width: 420px; }
+      .info-float { display: none; }
+      .pricing-wrap { grid-template-columns: 1fr; }
       .pricing-card.featured { transform: none; }
-      .footer { padding: 32px 24px; flex-direction: column; align-items: flex-start; }
-      .stats-strip { padding: 24px; }
-      .hero { padding: 100px 24px 60px; }
+      .footer { padding: 28px 24px; flex-direction: column; align-items: flex-start; }
+      .cta-band { padding: 64px 24px; }
     }
     @media (max-width: 600px) {
       .hero h1 { font-size: 2.8rem; }
-      .mockup-wrap { transform: scale(0.68); transform-origin: center top; }
-      .extension-frame { width: 340px; }
+      .screenshot-wrap { transform: scale(0.85); transform-origin: center top; }
     }
   </style>
 </head>
 <body>
 
 <!-- NAV -->
-<nav class="nav" id="site-nav">
-  <a href="/" class="nav-logo">
+<nav class="nav" id="main-nav">
+  <a href="/" class="nav-brand">
     <img src="icon128.png" alt="Ultimate Dev Tools"
-         onerror="this.style.display='none';document.getElementById('nav-icon-fallback').style.display='flex'">
-    <div class="nav-logo-fallback" id="nav-icon-fallback" style="display:none;">U</div>
-    <span class="nav-logo-name">Ultimate Dev Tools</span>
+         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+    <div class="nav-brand-fallback" style="display:none;">
+      <svg viewBox="0 0 16 16" fill="none"><path d="M8 2L14 5.5V10.5L8 14L2 10.5V5.5L8 2Z" fill="white" opacity="0.9"/></svg>
+    </div>
+    <span class="nav-brand-name">Ultimate Dev Tools</span>
   </a>
   <div class="nav-links">
     <a href="#tools">Tools</a>
-    <a href="#how-it-works">Process</a>
+    <a href="#process">Process</a>
     <a href="#pricing">Pricing</a>
     <a href="#security">Security</a>
   </div>
   <div class="nav-right">
-    <a href="auth.html" class="btn-nav-ghost">Log in</a>
-    <a href="auth.html?tab=register" class="btn-nav-primary">Get Access →</a>
+    <a href="auth.html" class="btn-nav-outline">Log in</a>
+    <a href="auth.html?tab=register" class="btn-nav-solid">Get Access</a>
   </div>
 </nav>
 
 <!-- HERO -->
 <section class="hero">
-  <div class="hero-dotgrid"></div>
-  <div class="hero-vignette"></div>
+  <div class="hero-dots"></div>
   <div class="hero-inner">
-    <div class="hero-eyebrow">
+    <div class="eyebrow-row">
       <div class="eyebrow-line"></div>
-      <span class="eyebrow-text">Solana Developer Toolkit</span>
+      <span class="eyebrow-text">Professional Solana Toolkit</span>
       <div class="eyebrow-line"></div>
     </div>
     <h1>Ultimate Dev<br>Tools<span class="cursor-blink"></span></h1>
-    <p class="hero-desc">The professional Chrome extension for serious Solana developers. AI volume, market making, token splitting, and wallet analysis — all server-verified.</p>
-    <div class="hero-pills">
-      <div class="hero-pill"><div class="dot-green"></div>Chrome Extension + Web Dashboard</div>
-      <div class="hero-pill"><span class="pill-price">$200</span>/ month</div>
-      <div class="hero-pill">🔐 AES-256 Encrypted</div>
+    <p class="hero-desc">We turn your Solana strategy into execution. AI-powered trading tools, encrypted wallet management, and on-chain analytics — all in one place.</p>
+    <div class="hero-social">
+      <div class="social-pill">
+        <div class="dot-live"></div>
+        Chrome Extension + Web Dashboard
+      </div>
+      <div class="social-pill">
+        <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M5 8h6M8 5v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        5 Pro Tools
+      </div>
+      <div class="social-pill">
+        <svg viewBox="0 0 16 16" fill="none"><path d="M8 2L10 6H14L11 9L12 13L8 11L4 13L5 9L2 6H6L8 2Z" stroke="currentColor" stroke-width="1.4"/></svg>
+        AES-256 Encrypted
+      </div>
     </div>
-    <div class="hero-actions">
-      <a href="auth.html?tab=register" class="btn-primary">Get Access →</a>
-      <a href="#tools" class="btn-ghost">See the tools ↓</a>
+    <div class="hero-cta">
+      <a href="auth.html?tab=register" class="btn-hero-primary">
+        <svg viewBox="0 0 16 16" fill="none" style="width:14px;height:14px;"><path d="M8 2L14 5.5V10.5L8 14L2 10.5V5.5L8 2Z" stroke="currentColor" stroke-width="1.5"/></svg>
+        Get Access
+      </a>
+      <a href="#tools" class="btn-hero-ghost">See the tools &darr;</a>
     </div>
   </div>
 </section>
 
-<!-- EXTENSION MOCKUP -->
-<div class="mockup-section">
-  <div class="mockup-wrap">
-    <div class="mockup-glow"></div>
+<!-- EXTENSION SCREENSHOT -->
+<div class="screenshot-section">
+  <div class="screenshot-wrap">
+    <div class="screenshot-glow"></div>
 
     <!-- Floating badges -->
-    <div class="badge-float b1">
-      <div class="badge-float-icon" style="background:rgba(59,130,246,0.08);">📈</div>
-      <div><div class="badge-float-label">Volume Bot</div><div class="badge-float-value">Running ✓</div></div>
+    <div class="info-float float-a">
+      <div class="float-icon" style="background:rgba(37,99,235,0.08);">
+        <svg viewBox="0 0 16 16" fill="none" style="color:#2563eb;"><path d="M2 12L6 8L9 11L14 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div><div class="float-label">Volume Bot</div><div class="float-value">Running</div></div>
     </div>
-    <div class="badge-float b2">
-      <div class="badge-float-icon" style="background:rgba(34,197,94,0.08);">🔒</div>
-      <div><div class="badge-float-label">Wallets</div><div class="badge-float-value">AES-256</div></div>
+    <div class="info-float float-b">
+      <div class="float-icon" style="background:rgba(34,197,94,0.08);">
+        <svg viewBox="0 0 16 16" fill="none" style="color:#16a34a;"><rect x="2" y="5" width="12" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M5 5V4a3 3 0 016 0v1" stroke="currentColor" stroke-width="1.5"/></svg>
+      </div>
+      <div><div class="float-label">Encryption</div><div class="float-value">AES-256</div></div>
     </div>
-    <div class="badge-float b3">
-      <div class="badge-float-icon" style="background:rgba(245,158,11,0.08);">⚡</div>
-      <div><div class="badge-float-label">Subscription</div><div class="badge-float-value">Active Pro</div></div>
+    <div class="info-float float-c">
+      <div class="float-icon" style="background:rgba(245,158,11,0.08);">
+        <svg viewBox="0 0 16 16" fill="none" style="color:#b45309;"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M8 5v3.5L10.5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </div>
+      <div><div class="float-label">Subscription</div><div class="float-value">Active Pro</div></div>
     </div>
-    <div class="badge-float b4">
-      <div class="badge-float-icon" style="background:rgba(139,92,246,0.08);">🔍</div>
-      <div><div class="badge-float-label">Bundles</div><div class="badge-float-value">0 Snipers</div></div>
+    <div class="info-float float-d">
+      <div class="float-icon" style="background:rgba(139,92,246,0.08);">
+        <svg viewBox="0 0 16 16" fill="none" style="color:#7c3aed;"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </div>
+      <div><div class="float-label">Bundles</div><div class="float-value">0 Snipers</div></div>
     </div>
 
-    <!-- Extension UI mockup -->
-    <div class="extension-frame">
-      <div class="ext-topbar">
-        <div class="ext-logo-row">
-          <img src="icon128.png" alt=""
-               onerror="this.style.display='none';document.getElementById('ext-icon-fallback').style.display='flex'">
-          <div class="ext-logo-fallback" id="ext-icon-fallback" style="display:none;">U</div>
-          <span class="ext-logo-name">Ultimate Dev Tools</span>
+    <!-- Extension window -->
+    <div class="ext-window">
+      <!-- Window chrome bar -->
+      <div class="window-chrome">
+        <div class="chrome-dots">
+          <div class="chrome-dot r"></div>
+          <div class="chrome-dot y"></div>
+          <div class="chrome-dot g"></div>
         </div>
-        <div class="ext-sub-badge"><div class="ext-status-dot" style="width:5px;height:5px;flex-shrink:0;"></div>Pro Active</div>
+        <div class="chrome-bar">chrome-extension://ultimatedevtools/popup.html</div>
       </div>
+
       <div class="ext-body">
-        <div class="ext-sidebar">
-          <div class="ext-nav-item active"><span class="ext-nav-icon">📈</span>Volume Bot</div>
-          <div class="ext-nav-item"><span class="ext-nav-icon">💹</span>Market Maker</div>
-          <div class="ext-nav-item"><span class="ext-nav-icon">🔀</span>Token Split</div>
-          <div class="ext-nav-item"><span class="ext-nav-icon">🔍</span>Bundles</div>
-          <div class="ext-nav-item"><span class="ext-nav-icon">🕸️</span>Wallets</div>
+        <!-- Sidebar -->
+        <div class="ext-side">
+          <div class="ext-side-header">
+            <div class="ext-side-brand">
+              <img src="icon128.png" alt=""
+                   onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+              <div class="ext-side-brand-fb" style="display:none;">
+                <svg viewBox="0 0 16 16" fill="none" style="width:10px;height:10px;"><path d="M8 2L14 5.5V10.5L8 14L2 10.5V5.5L8 2Z" fill="white" opacity="0.8"/></svg>
+              </div>
+              <div>
+                <div class="ext-side-name">Ultimate<br>Dev Tools</div>
+                <div class="ext-side-sub">Professional Toolkit</div>
+              </div>
+            </div>
+          </div>
+          <div class="ext-nav">
+            <div class="ext-nav-label">Tools</div>
+            <div class="ext-nav-item active">
+              <svg viewBox="0 0 16 16" fill="none"><path d="M2 10L6 6L9 9L14 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Token Splitting
+            </div>
+            <div class="ext-nav-item">
+              <svg viewBox="0 0 16 16" fill="none"><path d="M2 12L6 8L9 11L14 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              AI Volume Bot
+            </div>
+            <div class="ext-nav-item">
+              <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M4 8H2M14 8h-2M8 4V2M8 14v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              Bundle Checker
+            </div>
+            <div class="ext-nav-item">
+              <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="5" width="12" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M5 5V4a3 3 0 016 0v1" stroke="currentColor" stroke-width="1.5"/></svg>
+              Wallets
+            </div>
+          </div>
+          <div class="ext-side-footer">
+            <div class="ext-rpc">
+              <div class="rpc-dot"></div>
+              RPC Online
+            </div>
+          </div>
         </div>
+
+        <!-- Main content -->
         <div class="ext-main">
-          <div class="ext-tool-title">📈 AI Volume Bot</div>
+          <div class="ext-panel-title">Token Splitting</div>
+          <div class="ext-tabs">
+            <div class="ext-tab active">Split</div>
+            <div class="ext-tab">Auto</div>
+            <div class="ext-tab">History (9)</div>
+          </div>
           <div class="ext-field">
-            <div class="ext-field-label">Token CA</div>
-            <div class="ext-input">7xKXtg2CW87d9T2e...</div>
+            <div class="ext-field-label">Source Wallet</div>
+            <div class="ext-wallet-row">
+              <div style="display:flex;align-items:center;gap:7px;">
+                <div class="ext-wallet-icon"></div>
+                <div>
+                  <div class="ext-wallet-name">MAIN</div>
+                </div>
+              </div>
+              <div class="ext-wallet-addr">6gAY_swm3 &rsaquo;</div>
+            </div>
           </div>
-          <div class="ext-row">
-            <div class="ext-field"><div class="ext-field-label">Wallets</div><div class="ext-input">12</div></div>
-            <div class="ext-field"><div class="ext-field-label">SOL each</div><div class="ext-input">0.05</div></div>
+          <div class="ext-field">
+            <div class="ext-field-label">Token to Split</div>
+            <div class="ext-input" style="font-size:10px;color:var(--text-muted);justify-content:center;">
+              No tokens found. Hit ↺ Refresh to load.
+              <span style="margin-left:auto;">
+                <svg viewBox="0 0 16 16" fill="none" style="width:12px;height:12px;color:var(--text-muted);"><path d="M13.5 8A5.5 5.5 0 112.5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2.5 2v3h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Refresh
+              </span>
+            </div>
           </div>
-          <div class="ext-row">
-            <div class="ext-field"><div class="ext-field-label">Delay (ms)</div><div class="ext-input">800–2400</div></div>
-            <div class="ext-field"><div class="ext-field-label">Slippage</div><div class="ext-input">5%</div></div>
+          <div class="ext-field">
+            <div class="ext-field-label">Send To</div>
+            <div class="ext-tab-row">
+              <div class="ext-tab-btn active">Existing Wallets</div>
+              <div class="ext-tab-btn">Generate New</div>
+            </div>
           </div>
-          <button class="ext-btn-run">▶ START VOLUME BOT</button>
-          <div class="ext-status-bar">
-            <div class="ext-status-dot"></div>
-            <span class="ext-status-text">Bot running · 3 txns sent</span>
+          <div class="ext-input" style="font-size:10.5px;">1 wallet selected &rsaquo;</div>
+          <div class="ext-field">
+            <div class="ext-field-label">Deviation ±10%</div>
+            <div class="ext-slider-row">
+              <input type="range" class="ext-slider" value="10" min="0" max="50">
+              <span class="ext-slider-val">±10%</span>
+            </div>
           </div>
+          <div class="ext-toggle-row">
+            <div>
+              <div class="ext-toggle-label">Keep in Source Wallet</div>
+              <div class="ext-toggle-sub">Source sends everything</div>
+            </div>
+            <div class="mini-toggle"></div>
+          </div>
+          <button class="ext-btn-exec">
+            <svg viewBox="0 0 16 16" fill="none" style="width:12px;height:12px;"><path d="M8 2L14 5.5V10.5L8 14L2 10.5V5.5L8 2Z" fill="currentColor" opacity="0.8"/></svg>
+            Execute Split
+          </button>
         </div>
       </div>
     </div>
-  </div>
-</div>
-
-<!-- STATS STRIP -->
-<div class="stats-strip">
-  <div class="stats-row">
-    <div class="stat-item"><div class="stat-num" data-count="5">0</div><div class="stat-label">Pro Tools</div></div>
-    <div class="stat-item"><div class="stat-num">AES-256</div><div class="stat-label">Wallet Encryption</div></div>
-    <div class="stat-item"><div class="stat-num" data-count="100">0</div><div class="stat-label">% Server Verified</div></div>
-    <div class="stat-item"><div class="stat-num">24/7</div><div class="stat-label">Always On</div></div>
   </div>
 </div>
 
 <!-- TOOLS -->
-<section class="tools-bg" id="tools">
+<section class="tools-section" id="tools">
   <div class="section-inner">
     <div class="reveal">
-      <div class="section-eyebrow">// Tools</div>
-      <h2 class="section-title">Five tools built for<br>serious Solana devs</h2>
-      <p class="section-desc">Every tool is server-gated and subscription-verified before execution. No bypass. No nonsense.</p>
+      <div class="section-eyebrow">— Tools</div>
+      <h2 class="section-title">Five tools built for<br>serious Solana developers</h2>
+      <p class="section-desc">Every tool is server-verified before execution. No client-side bypasses, no shortcuts.</p>
     </div>
     <div class="tools-grid">
-      <div class="tool-card reveal reveal-delay-1" style="--tc:#3b82f6;--ti:rgba(59,130,246,0.08);">
-        <div class="tool-icon">📈</div><h3>AI Volume Bot</h3>
-        <p>Intelligent volume generation for Solana tokens. Smart randomisation of wallet distribution, timing, and amounts for organic-looking patterns on any SPL token.</p>
-        <div class="tool-tags"><span class="tag">AI-Driven</span><span class="tag">Solana</span><span class="tag">Randomised</span></div>
+      <div class="tool-card reveal reveal-d1" style="--tc:#2563eb;--ti:rgba(37,99,235,0.07);--tic:#2563eb;">
+        <div class="tool-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M3 17L7 13L10 16L15 11L21 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 12L7 8L10 11L15 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/></svg>
+        </div>
+        <h3>AI Volume Bot</h3>
+        <p>Intelligent, randomised volume generation across any SPL token. Configure wallet count, SOL amounts, timing variance, and slippage with adaptive AI-driven patterns.</p>
+        <div class="tool-tags"><span class="tool-tag">AI-Driven</span><span class="tool-tag">SPL Tokens</span><span class="tool-tag">Randomised</span></div>
       </div>
-      <div class="tool-card reveal reveal-delay-2" style="--tc:#22c55e;--ti:rgba(34,197,94,0.08);">
-        <div class="tool-icon">💹</div><h3>AI Market Maker</h3>
-        <p>Automated bid/ask spread management. Define price bands, depth targets, and rebalancing intervals. Keeps your token's orderbook healthy with zero manual work.</p>
-        <div class="tool-tags"><span class="tag">Orderbook</span><span class="tag">Liquidity</span><span class="tag">Auto-Rebalance</span></div>
+      <div class="tool-card reveal reveal-d2" style="--tc:#16a34a;--ti:rgba(34,197,94,0.07);--tic:#16a34a;">
+        <div class="tool-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/><path d="M14 17.5h7M17.5 14v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </div>
+        <h3>AI Market Maker</h3>
+        <p>Automated bid/ask spread management with configurable price bands, depth targets, and auto-rebalancing intervals. Sustain healthy liquidity without manual oversight.</p>
+        <div class="tool-tags"><span class="tool-tag">Orderbook</span><span class="tool-tag">Auto-Rebalance</span><span class="tool-tag">Liquidity</span></div>
       </div>
-      <div class="tool-card reveal reveal-delay-3" style="--tc:#f59e0b;--ti:rgba(245,158,11,0.08);">
-        <div class="tool-icon">🔀</div><h3>Advanced Token Splitter</h3>
-        <p>Distribute tokens across multiple wallets. Manual or auto-split mode. Includes round-trip analysis, fee estimation, and batch execution with confirmation tracking.</p>
-        <div class="tool-tags"><span class="tag">Auto-Split</span><span class="tag">Batch TX</span><span class="tag">Fee Estimate</span></div>
+      <div class="tool-card reveal reveal-d3" style="--tc:#b45309;--ti:rgba(245,158,11,0.07);--tic:#b45309;">
+        <div class="tool-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M8 12H16M12 8L16 12L12 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4" cy="12" r="2" stroke="currentColor" stroke-width="1.8"/><circle cx="20" cy="12" r="2" stroke="currentColor" stroke-width="1.8"/></svg>
+        </div>
+        <h3>Advanced Token Splitter</h3>
+        <p>Distribute tokens across wallets with precision. Manual or auto-split mode. Configurable deviation, fee estimation, batch execution, and full history tracking.</p>
+        <div class="tool-tags"><span class="tool-tag">Auto-Split</span><span class="tool-tag">Batch TX</span><span class="tool-tag">Deviation Control</span></div>
       </div>
-      <div class="tool-card reveal reveal-delay-1" style="--tc:#ef4444;--ti:rgba(239,68,68,0.08);">
-        <div class="tool-icon">🔍</div><h3>Bundle Checker</h3>
-        <p>Detect bundled transactions on pump.fun and other launchpads. Identify insider buys, coordinated snipers, and suspicious patterns before you commit capital.</p>
-        <div class="tool-tags"><span class="tag">Sniper Detection</span><span class="tag">pump.fun</span><span class="tag">Risk Analysis</span></div>
+      <div class="tool-card reveal reveal-d1" style="--tc:#dc2626;--ti:rgba(239,68,68,0.07);--tic:#dc2626;">
+        <div class="tool-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M16.5 16.5L21 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M8 11h6M11 8v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </div>
+        <h3>Bundle Checker</h3>
+        <p>Detect coordinated transactions on pump.fun and other launchpads. Surface insider buys, sniper clusters, and suspicious launch patterns before you commit capital.</p>
+        <div class="tool-tags"><span class="tool-tag">Sniper Detection</span><span class="tool-tag">pump.fun</span><span class="tool-tag">Risk Analysis</span></div>
       </div>
-      <div class="tool-card reveal reveal-delay-2" style="--tc:#8b5cf6;--ti:rgba(139,92,246,0.08);">
-        <div class="tool-icon">🕸️</div><h3>Connected Wallets Checker</h3>
-        <p>Graph-based wallet relationship analysis. Trace on-chain connections between addresses, identify dev wallets, funded clusters, and wallet families.</p>
-        <div class="tool-tags"><span class="tag">Graph Analysis</span><span class="tag">Dev Wallets</span><span class="tag">On-Chain</span></div>
+      <div class="tool-card reveal reveal-d2" style="--tc:#7c3aed;--ti:rgba(139,92,246,0.07);--tic:#7c3aed;">
+        <div class="tool-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><circle cx="5" cy="7" r="2" stroke="currentColor" stroke-width="1.8"/><circle cx="19" cy="7" r="2" stroke="currentColor" stroke-width="1.8"/><circle cx="5" cy="17" r="2" stroke="currentColor" stroke-width="1.8"/><circle cx="19" cy="17" r="2" stroke="currentColor" stroke-width="1.8"/><path d="M7 8l3 2.5M14 13.5l3 2M7 16l3-2.5M14 10.5l3-2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        </div>
+        <h3>Connected Wallets</h3>
+        <p>Graph-based on-chain wallet relationship analysis. Trace funded clusters, identify developer wallets, and map wallet families linked by transaction history.</p>
+        <div class="tool-tags"><span class="tool-tag">Graph Analysis</span><span class="tool-tag">Dev Wallets</span><span class="tool-tag">On-Chain</span></div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- HOW IT WORKS -->
-<section id="how-it-works">
+<!-- PROCESS -->
+<section class="process-section" id="process">
   <div class="section-inner">
     <div class="reveal">
-      <div class="section-eyebrow">// Process</div>
-      <h2 class="section-title">Up and running<br>in minutes</h2>
+      <div class="section-eyebrow">— Process</div>
+      <h2 class="section-title">Operational in minutes</h2>
     </div>
     <div class="steps-grid">
-      <div class="step-card"><div class="step-num">01</div><div class="step-title">Create Account</div><p class="step-desc">Register with your email or Google. Instant access — no waiting for approvals or manual verification.</p></div>
-      <div class="step-card"><div class="step-num">02</div><div class="step-title">Subscribe</div><p class="step-desc">$200/month, manual renewal only. Pay with Phantom (SOL), PayPal, or manual SOL send. No auto-charges, ever.</p></div>
-      <div class="step-card"><div class="step-num">03</div><div class="step-title">Install Extension</div><p class="step-desc">Install from the Chrome Web Store. Sign in to unlock all five pro tools immediately on any device.</p></div>
-      <div class="step-card"><div class="step-num">04</div><div class="step-title">Run Tools</div><p class="step-desc">Every execution is verified server-side in real time. No client-side bypasses exist — subscription checked before every action.</p></div>
+      <div class="step-item"><div class="step-number">01</div><div class="step-title">Create Account</div><p class="step-desc">Register with your email or Google. No waitlist, no manual approval — access provisioned immediately.</p></div>
+      <div class="step-item"><div class="step-number">02</div><div class="step-title">Subscribe</div><p class="step-desc">Manual monthly renewal — no auto-charge. Pay with Phantom Wallet (SOL), PayPal, or direct SOL transfer.</p></div>
+      <div class="step-item"><div class="step-number">03</div><div class="step-title">Install Extension</div><p class="step-desc">Install from the Chrome Web Store. Sign in once — your subscription and wallets sync instantly to the extension.</p></div>
+      <div class="step-item"><div class="step-number">04</div><div class="step-title">Execute</div><p class="step-desc">Every tool execution is verified server-side in real time. Your subscription status is confirmed before each run.</p></div>
     </div>
   </div>
 </section>
 
 <!-- PRICING -->
-<section class="pricing-bg" id="pricing">
+<section class="pricing-section" id="pricing">
   <div class="section-inner">
-    <div class="reveal" style="text-align:center;margin-bottom:48px;">
-      <div class="section-eyebrow">// Pricing</div>
-      <h2 class="section-title">Simple, transparent pricing</h2>
-      <p class="section-desc" style="margin:0 auto;text-align:center;">Manual monthly renewal. No auto-charges, no surprises. Cancel by simply not renewing.</p>
+    <div class="reveal" style="text-align:center;margin-bottom:44px;">
+      <div class="section-eyebrow">— Pricing</div>
+      <h2 class="section-title">Straightforward access</h2>
+      <p class="section-desc" style="margin:0 auto;text-align:center;">Manual monthly renewal. Your card is never charged automatically.</p>
     </div>
-    <div class="pricing-card-wrap reveal">
-
+    <div class="pricing-wrap reveal">
       <!-- Trial -->
       <div class="pricing-card">
-        <div class="pricing-badge light">Free Trial</div>
-        <div class="pricing-name dark">Free Access</div>
-        <div class="pricing-price dark">$0 <span>/ 5 days</span></div>
-        <p class="pricing-desc dark">With a valid promo code. One code per user — strictly single-use, row-locked at DB level.</p>
+        <div class="pricing-eyebrow dark">Free Trial</div>
+        <div class="pricing-price dark">$0 <span class="pricing-period dark">/ 5 days</span></div>
+        <p class="pricing-desc dark">With a valid promo code. Single-use, one per account — enforced with database-level row locking.</p>
         <ul class="pricing-features">
-          <li><span class="feature-check dark">✓</span><span class="feature-text dark">All 5 tools included</span></li>
-          <li><span class="feature-check dark">✓</span><span class="feature-text dark">Full feature access</span></li>
-          <li><span class="feature-check dark">✓</span><span class="feature-text dark">Web + extension access</span></li>
-          <li><span class="feature-check dark" style="color:#aaa;">✗</span><span class="feature-text dark" style="color:var(--text-light);">No code stacking</span></li>
+          <li><div class="check-icon dark"><svg viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></div><span class="feat-text dark">All 5 tools</span></li>
+          <li><div class="check-icon dark"><svg viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></div><span class="feat-text dark">Web + extension access</span></li>
+          <li><div class="check-icon dark"><svg viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></div><span class="feat-text dark">Encrypted wallet storage</span></li>
+          <li><div class="check-icon" style="background:rgba(239,68,68,0.07);color:#dc2626;"><svg viewBox="0 0 10 10"><path d="M3 3l4 4M7 3L3 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></div><span class="feat-text dark" style="color:var(--text-muted);">No stacking</span></li>
         </ul>
-        <div class="payment-label dark">Redeem via</div>
-        <div class="payment-chips"><div class="payment-chip dark">🎟 Promo Code</div></div>
-        <a href="auth.html?tab=register" class="btn-pricing dark-btn">Redeem Code →</a>
+        <div class="payment-methods-label dark">Redemption</div>
+        <div class="payment-chips"><div class="pchip dark"><svg viewBox="0 0 16 16" fill="none" style="color:var(--navy);"><rect x="2" y="4" width="12" height="9" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M5 4V3a3 3 0 016 0v1" stroke="currentColor" stroke-width="1.4"/></svg>Promo Code</div></div>
+        <a href="auth.html?tab=register" class="btn-price dark">Redeem Code</a>
       </div>
-
       <!-- Pro -->
       <div class="pricing-card featured">
-        <div class="pricing-badge">★ Recommended</div>
-        <div class="pricing-name">Pro Monthly</div>
-        <div class="pricing-price light">$200 <span>/ month</span></div>
-        <p class="pricing-desc light">Manual renewal. Renew before expiry — your card is never automatically charged.</p>
+        <div class="pricing-eyebrow light">Pro Monthly</div>
+        <div class="pricing-price light">$199 <span class="pricing-period light">/ month</span></div>
+        <p class="pricing-desc light">Manual renewal. No automatic charges — renew when you choose.</p>
         <ul class="pricing-features">
-          <li><span class="feature-check green">✓</span><span class="feature-text light">All 5 pro tools</span></li>
-          <li><span class="feature-check green">✓</span><span class="feature-text light">AI Volume Bot + Market Maker</span></li>
-          <li><span class="feature-check green">✓</span><span class="feature-text light">Unlimited encrypted wallets</span></li>
-          <li><span class="feature-check green">✓</span><span class="feature-text light">Web dashboard + Chrome extension</span></li>
-          <li><span class="feature-check green">✓</span><span class="feature-text light">Priority support</span></li>
-          <li><span class="feature-check green">✓</span><span class="feature-text light">Early access to new tools</span></li>
+          <li><div class="check-icon light"><svg viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></div><span class="feat-text light">All 5 professional tools</span></li>
+          <li><div class="check-icon light"><svg viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></div><span class="feat-text light">AI Volume Bot + Market Maker</span></li>
+          <li><div class="check-icon light"><svg viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></div><span class="feat-text light">Unlimited encrypted wallets</span></li>
+          <li><div class="check-icon light"><svg viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></div><span class="feat-text light">Web dashboard + Chrome extension</span></li>
+          <li><div class="check-icon light"><svg viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></div><span class="feat-text light">Priority support</span></li>
+          <li><div class="check-icon light"><svg viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></div><span class="feat-text light">Early access to new tools</span></li>
         </ul>
-        <div class="payment-label light">Payment methods</div>
+        <div class="payment-methods-label light">Payment methods</div>
         <div class="payment-chips">
-          <div class="payment-chip light">◎ Phantom (SOL)</div>
-          <div class="payment-chip light">🅿 PayPal</div>
-          <div class="payment-chip light">📋 Manual SOL</div>
+          <div class="pchip light"><svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/></svg>Phantom (SOL)</div>
+          <div class="pchip light"><svg viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/></svg>PayPal</div>
+          <div class="pchip light"><svg viewBox="0 0 16 16" fill="none"><path d="M3 8h10M8 4l4 4-4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>Manual SOL</div>
         </div>
-        <a href="auth.html?tab=register" class="btn-pricing light-btn">Get Pro Access →</a>
+        <a href="auth.html?tab=register" class="btn-price light">Get Pro Access</a>
       </div>
     </div>
-    <div class="renewal-note reveal">🔄 Manual renewal only — your card is never charged automatically.</div>
+    <div class="pricing-note reveal">
+      <svg viewBox="0 0 16 16" fill="none"><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.2 3.2l1.4 1.4M11.4 11.4l1.4 1.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      Manual renewal only — subscriptions never renew automatically
+    </div>
   </div>
 </section>
 
@@ -656,28 +791,31 @@
 <section id="security">
   <div class="section-inner">
     <div class="reveal">
-      <div class="section-eyebrow">// Security</div>
-      <h2 class="section-title">Security built in,<br>not bolted on</h2>
-      <p class="section-desc">Your private keys never leave your device unencrypted. Every action server-verified.</p>
+      <div class="section-eyebrow">— Security</div>
+      <h2 class="section-title">Security by design</h2>
+      <p class="section-desc">Your private keys never leave your device in plain text. Every action server-verified.</p>
     </div>
-    <div class="features-grid">
-      <div class="feature-item reveal reveal-delay-1"><div class="feature-icon-wrap">🔐</div><div><div class="feature-title">AES-256-GCM</div><p class="feature-desc">Wallet data encrypted client-side before any storage or transmission.</p></div></div>
-      <div class="feature-item reveal reveal-delay-2"><div class="feature-icon-wrap">🔑</div><div><div class="feature-title">PBKDF2 Key Derivation</div><p class="feature-desc">Encryption keys derived from your password with 100k iterations. Never stored.</p></div></div>
-      <div class="feature-item reveal reveal-delay-3"><div class="feature-icon-wrap">🛡️</div><div><div class="feature-title">Server-Side Auth</div><p class="feature-desc">JWT sessions verified server-side on every request. No client bypass routes exist.</p></div></div>
-      <div class="feature-item reveal reveal-delay-4"><div class="feature-icon-wrap">✅</div><div><div class="feature-title">Real-Time Sub Gating</div><p class="feature-desc">Subscription verified against live server before every single tool execution.</p></div></div>
-      <div class="feature-item reveal reveal-delay-1"><div class="feature-icon-wrap">🎟️</div><div><div class="feature-title">Single-Use Promo Codes</div><p class="feature-desc">Row-level DB locks prevent race conditions and double redemption.</p></div></div>
-      <div class="feature-item reveal reveal-delay-2"><div class="feature-icon-wrap">👁️</div><div><div class="feature-title">Admin Verified</div><p class="feature-desc">Admin status checked from DB on every admin request — JWT claims not trusted alone.</p></div></div>
+    <div class="security-grid">
+      <div class="sec-item reveal reveal-d1"><div class="sec-icon"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M7 11V7a5 5 0 0110 0v4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div><div><div class="sec-title">AES-256-GCM</div><p class="sec-desc">All wallet data encrypted client-side before any storage or network transmission.</p></div></div>
+      <div class="sec-item reveal reveal-d2"><div class="sec-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2L4 6v6c0 5.5 3.5 10 8 12 4.5-2 8-6.5 8-12V6L12 2z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></div><div><div class="sec-title">PBKDF2 Derivation</div><p class="sec-desc">Encryption keys derived from your password with 100,000 iterations. Never stored anywhere.</p></div></div>
+      <div class="sec-item reveal reveal-d3"><div class="sec-icon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/><path d="M12 8v4l3 3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div><div><div class="sec-title">Server-Side Auth</div><p class="sec-desc">JWT sessions verified server-side on every request. No client-side bypass routes exist.</p></div></div>
+      <div class="sec-item reveal reveal-d4"><div class="sec-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M9 12l2 2 4-4"/><path d="M12 2L4 6v6c0 5.5 3.5 10 8 12 4.5-2 8-6.5 8-12V6L12 2z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></div><div><div class="sec-title">Real-Time Sub Gate</div><p class="sec-desc">Subscription verified from the live server before every tool execution — not cached.</p></div></div>
+      <div class="sec-item reveal reveal-d1"><div class="sec-icon"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M3 10h18" stroke="currentColor" stroke-width="1.7"/></svg></div><div><div class="sec-title">Single-Use Codes</div><p class="sec-desc">Database row-level locks prevent race conditions and double-redemption of promo codes.</p></div></div>
+      <div class="sec-item reveal reveal-d2"><div class="sec-icon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.7"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div><div><div class="sec-title">Admin DB Verification</div><p class="sec-desc">Admin status re-queried from the database on every admin request — JWT claims alone are never trusted.</p></div></div>
     </div>
   </div>
 </section>
 
 <!-- CTA -->
 <div class="cta-band">
-  <div class="cta-band-inner">
-    <h2>Ready to trade<br>smarter on Solana?</h2>
-    <p>Join developers using Ultimate Dev Tools to run faster, smarter Solana operations.</p>
+  <div class="cta-inner">
+    <h2>Ready to operate<br>at a higher level?</h2>
+    <p>Join developers using Ultimate Dev Tools to execute faster, smarter Solana operations.</p>
     <div class="cta-actions">
-      <a href="auth.html?tab=register" class="btn-cta-white">Create Account →</a>
+      <a href="auth.html?tab=register" class="btn-cta-white">
+        <svg viewBox="0 0 16 16" fill="none" style="width:13px;height:13px;"><path d="M8 2L14 5.5V10.5L8 14L2 10.5V5.5L8 2Z" fill="currentColor"/></svg>
+        Create Account
+      </a>
       <a href="#tools" class="btn-cta-outline">View All Tools</a>
     </div>
   </div>
@@ -685,11 +823,13 @@
 
 <!-- FOOTER -->
 <footer class="footer">
-  <div class="footer-logo">
+  <div class="footer-brand">
     <img src="icon128.png" alt=""
-         onerror="this.style.display='none';document.getElementById('footer-icon-fallback').style.display='flex'">
-    <div class="footer-logo-fallback" id="footer-icon-fallback" style="display:none;">U</div>
-    <span class="footer-logo-name">Ultimate Dev Tools by Essor Studios</span>
+         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+    <div class="footer-brand-fb" style="display:none;">
+      <svg viewBox="0 0 16 16" fill="none"><path d="M8 2L14 5.5V10.5L8 14L2 10.5V5.5L8 2Z" fill="white" opacity="0.8"/></svg>
+    </div>
+    <span class="footer-name">Ultimate Dev Tools — Essor Studios</span>
   </div>
   <div class="footer-links">
     <a href="#tools">Tools</a>
@@ -701,43 +841,27 @@
 </footer>
 
 <script>
-  // Sticky nav
-  const nav = document.getElementById('site-nav');
-  window.addEventListener('scroll', () => nav.classList.toggle('scrolled', window.scrollY > 20), { passive: true });
+  // Nav scroll
+  const nav = document.getElementById('main-nav');
+  window.addEventListener('scroll', () => nav.classList.toggle('scrolled', window.scrollY > 16), { passive: true });
 
-  // Scroll reveal
-  const revealObs = new IntersectionObserver(entries => {
-    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); revealObs.unobserve(e.target); } });
-  }, { threshold: 0.12 });
-  document.querySelectorAll('.reveal').forEach(el => revealObs.observe(el));
+  // Reveal observer
+  const revObs = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); revObs.unobserve(e.target); } });
+  }, { threshold: 0.1 });
+  document.querySelectorAll('.reveal').forEach(el => revObs.observe(el));
 
   // Steps stagger
   const stepObs = new IntersectionObserver(entries => {
     let i = 0;
-    entries.forEach(e => { if (e.isIntersecting) { setTimeout(() => e.target.classList.add('visible'), i++ * 130); stepObs.unobserve(e.target); } });
-  }, { threshold: 0.1 });
-  document.querySelectorAll('.step-card').forEach(el => stepObs.observe(el));
+    entries.forEach(e => { if (e.isIntersecting) { setTimeout(() => e.target.classList.add('visible'), i++ * 120); stepObs.unobserve(e.target); } });
+  }, { threshold: 0.08 });
+  document.querySelectorAll('.step-item').forEach(el => stepObs.observe(el));
 
-  // Count up
-  function countUp(el, target, dur = 1200) {
-    const start = performance.now();
-    const tick = now => {
-      const p = Math.min((now - start) / dur, 1);
-      const ease = 1 - Math.pow(1 - p, 3);
-      el.textContent = Math.round(ease * target);
-      if (p < 1) requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  }
-  const countObs = new IntersectionObserver(entries => {
-    entries.forEach(e => { if (e.isIntersecting && e.target.dataset.count) { countUp(e.target, parseInt(e.target.dataset.count)); countObs.unobserve(e.target); } });
-  }, { threshold: 0.5 });
-  document.querySelectorAll('[data-count]').forEach(el => countObs.observe(el));
-
-  // If logged in, update nav
+  // Update nav if logged in
   try {
     if (localStorage.getItem('udt_token')) {
-      document.querySelector('.nav-right').innerHTML = '<a href="dashboard.html" class="btn-nav-primary">Open Dashboard →</a>';
+      document.querySelector('.nav-right').innerHTML = '<a href="dashboard.html" class="btn-nav-solid">Open Dashboard &rarr;</a>';
     }
   } catch {}
 </script>

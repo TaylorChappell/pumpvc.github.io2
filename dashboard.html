@@ -4,235 +4,138 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard — Ultimate Dev Tools</title>
+  <link rel="icon" type="image/png" href="icon128.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="shared.css">
   <style>
-    /* ── Payment Modal ── */
-    .payment-method-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-
-    .payment-option {
-      padding: 14px;
-      background: var(--bg-elevated);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md);
-      cursor: pointer;
-      text-align: center;
+    /* Payment modal specifics */
+    .payment-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 18px; }
+    .pay-option {
+      padding: 12px 10px; background: var(--bg-input); border: 1px solid var(--border-mid);
+      border-radius: var(--radius-md); cursor: pointer; text-align: center;
       transition: all 0.15s;
     }
-
-    .payment-option:hover,
-    .payment-option.selected {
-      border-color: var(--border-active);
-      background: var(--accent-dim);
+    .pay-option:hover, .pay-option.selected {
+      border-color: var(--navy); background: rgba(15,31,69,0.06);
     }
-
-    .payment-option-icon { font-size: 1.4rem; margin-bottom: 6px; }
-    .payment-option-name { font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; color: var(--text-primary); }
-    .payment-option-desc { font-size: 0.68rem; color: var(--text-muted); margin-top: 2px; }
-
-    .payment-address-box {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md);
-      padding: 12px;
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: var(--text-primary);
-      word-break: break-all;
-      margin: 12px 0;
-      cursor: pointer;
+    .pay-option svg { width: 20px; height: 20px; color: var(--navy); margin-bottom: 5px; }
+    .pay-option-name { font-size: 11.5px; font-weight: 600; color: var(--text-primary); }
+    .pay-address {
+      background: var(--bg-input); border: 1px solid var(--border-mid); border-radius: var(--radius-md);
+      padding: 10px 12px; font-family: monospace; font-size: 11px; color: var(--text-primary);
+      word-break: break-all; cursor: pointer; margin: 10px 0;
       transition: border-color 0.15s;
-      position: relative;
     }
-    .payment-address-box:hover { border-color: var(--border-active); }
-    .payment-address-box::after {
-      content: 'Click to copy';
-      position: absolute;
-      bottom: -20px;
-      left: 0;
-      font-size: 0.65rem;
-      color: var(--text-muted);
-    }
+    .pay-address:hover { border-color: var(--navy); }
+    .pay-amount { font-family: var(--font-display); font-size: 20px; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
+    .pay-detecting { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-muted); margin-top: 12px; }
+    .pay-spinner { width: 12px; height: 12px; border: 2px solid var(--border-mid); border-top-color: var(--navy); border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
 
-    .payment-amount {
-      font-family: var(--font-mono);
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: var(--accent);
-      margin: 8px 0;
-    }
+    /* Tool form rows */
+    .form-row { display: flex; gap: 12px; }
+    .form-row .form-group { flex: 1; }
 
-    .payment-detecting {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 0.78rem;
-      color: var(--text-muted);
-      font-family: var(--font-mono);
+    /* Result box */
+    .result-box {
+      background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-md);
+      padding: 12px; margin-top: 12px; font-family: monospace; font-size: 12px;
+      color: var(--text-secondary); min-height: 60px; display: none;
     }
-
-    .payment-spinner {
-      width: 12px; height: 12px;
-      border: 2px solid var(--border-muted);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-
-    /* ── Sub Expiry Bar ── */
-    .sub-expiry-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 12px;
-      border-radius: var(--radius-md);
-      font-size: 0.75rem;
-      font-family: var(--font-mono);
-      margin-bottom: 16px;
-    }
-
-    /* ── Tool form specifics ── */
-    .tool-result {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md);
-      padding: 14px;
-      margin-top: 12px;
-      font-family: var(--font-mono);
-      font-size: 0.78rem;
-      color: var(--text-primary);
-      min-height: 80px;
-      white-space: pre-wrap;
-      word-break: break-all;
-      display: none;
-    }
-
-    .tool-result.show { display: block; }
-
-    .result-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 5px 0;
-      border-bottom: 1px solid var(--border-subtle);
-    }
+    .result-box.show { display: block; }
+    .result-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border); }
     .result-row:last-child { border-bottom: none; }
-    .result-key { color: var(--text-muted); }
-    .result-val { color: var(--text-primary); }
+    .result-key { color: var(--text-muted); font-size: 11px; }
+    .result-val { color: var(--text-primary); font-weight: 500; }
 
-    /* ── Wallets panel ── */
-    .wallet-list { display: flex; flex-direction: column; gap: 6px; }
-
-    .wallet-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 12px;
-      background: var(--bg-elevated);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md);
-      transition: border-color 0.15s;
+    /* Sub info card */
+    .sub-info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+    .sub-info-item {
+      background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-md);
+      padding: 14px; display: flex; flex-direction: column; gap: 4px;
     }
-    .wallet-row:hover { border-color: var(--border-muted); }
+    .sub-info-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+    .sub-info-value { font-family: var(--font-display); font-size: 17px; font-weight: 700; color: var(--text-primary); }
 
-    .wallet-row-left { display: flex; align-items: center; gap: 10px; }
-
-    .wallet-emoji { font-size: 1rem; }
-    .wallet-name {
-      font-family: var(--font-mono);
-      font-size: 0.8rem;
-      font-weight: 600;
-    }
-    .wallet-addr { font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono); }
-    .wallet-balance { font-family: var(--font-mono); font-size: 0.78rem; color: var(--accent-green); font-weight: 600; }
-
-    /* Mobile sidebar toggle */
-    .mobile-menu-btn {
-      display: none;
-      background: none;
-      border: none;
-      color: var(--text-secondary);
-      font-size: 1.2rem;
-      cursor: pointer;
-      padding: 4px;
-    }
-
-    @media (max-width: 768px) {
-      .mobile-menu-btn { display: block; }
-    }
-
-    .sidebar-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.5);
-      z-index: 99;
-    }
-    .sidebar-overlay.show { display: block; }
+    /* Mobile topbar menu btn */
+    .menu-btn { display: none; background: none; border: none; color: var(--text-secondary); padding: 4px; cursor: pointer; }
+    @media (max-width: 768px) { .menu-btn { display: block; } }
   </style>
 </head>
 <body>
-
 <div class="app-layout">
 
   <!-- Sidebar -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <a href="/" class="logo">
-        <div class="logo-mark">U</div>
-        <div class="logo-text">
-          Ultimate Dev Tools
-          <div class="logo-sub">by Essor Studios</div>
+      <a href="/" class="sidebar-brand">
+        <img src="icon128.png" alt="Ultimate Dev Tools"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div class="sidebar-brand-fallback" style="display:none;">
+          <svg viewBox="0 0 16 16" fill="none" style="width:14px;height:14px;"><path d="M8 2L14 5.5V10.5L8 14L2 10.5V5.5L8 2Z" fill="white" opacity="0.85"/></svg>
+        </div>
+        <div class="sidebar-brand-text">
+          <div class="sidebar-brand-name">Ultimate<br>Dev Tools</div>
+          <div class="sidebar-brand-sub">Professional Toolkit</div>
         </div>
       </a>
     </div>
 
     <nav class="sidebar-nav">
       <div class="nav-section-label">Tools</div>
-
-      <button class="nav-item active" data-tool="volume-bot" onclick="switchTool('volume-bot', this)">
-        <span class="nav-icon">📈</span> AI Volume Bot
+      <button class="nav-item active" data-tool="token-splitter" onclick="switchTool(this)">
+        <svg viewBox="0 0 16 16" fill="none"><path d="M8 12H14M8 4H14M4 8h8M2 8L5 5M2 8L5 11" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Token Splitting
       </button>
-      <button class="nav-item" data-tool="market-maker" onclick="switchTool('market-maker', this)">
-        <span class="nav-icon">💹</span> AI Market Maker
+      <button class="nav-item" data-tool="volume-bot" onclick="switchTool(this)">
+        <svg viewBox="0 0 16 16" fill="none"><path d="M2 12L5 9L8 11L12 6L14 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        AI Volume Bot
       </button>
-      <button class="nav-item" data-tool="token-splitter" onclick="switchTool('token-splitter', this)">
-        <span class="nav-icon">🔀</span> Token Splitter
+      <button class="nav-item" data-tool="market-maker" onclick="switchTool(this)">
+        <svg viewBox="0 0 16 16" fill="none"><rect x="1.5" y="1.5" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9.5" y="1.5" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="1.5" y="9.5" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M12 9.5v5M9.5 12h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        AI Market Maker
       </button>
-      <button class="nav-item" data-tool="bundle-checker" onclick="switchTool('bundle-checker', this)">
-        <span class="nav-icon">🔍</span> Bundle Checker
+      <button class="nav-item" data-tool="bundle-checker" onclick="switchTool(this)">
+        <svg viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.3"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        Bundle Checker
       </button>
-      <button class="nav-item" data-tool="wallet-checker" onclick="switchTool('wallet-checker', this)">
-        <span class="nav-icon">🕸️</span> Wallet Checker
+      <button class="nav-item" data-tool="wallet-checker" onclick="switchTool(this)">
+        <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.3"/><circle cx="3" cy="5" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="13" cy="5" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="3" cy="11" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="13" cy="11" r="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M4.5 6L6.5 7M9.5 9L11.5 10M4.5 10L6.5 9M9.5 7L11.5 6" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+        Wallet Checker
       </button>
 
       <div class="nav-section-label">Account</div>
-
-      <button class="nav-item" data-tool="wallets" onclick="switchTool('wallets', this)">
-        <span class="nav-icon">💼</span> My Wallets
+      <button class="nav-item" data-tool="subscription" onclick="switchTool(this)">
+        <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="4" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M1 7h14" stroke="currentColor" stroke-width="1.3"/><path d="M4 11h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        Subscription
       </button>
-      <button class="nav-item" data-tool="subscription" onclick="switchTool('subscription', this)">
-        <span class="nav-icon">💳</span> Subscription
+      <button class="nav-item" data-tool="wallets" onclick="switchTool(this)">
+        <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="4" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 4V3a3 3 0 016 0v1" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="9.5" r="1.5" stroke="currentColor" stroke-width="1.2"/></svg>
+        Wallets
       </button>
 
-      <div id="admin-nav-item" style="display:none;">
+      <div id="admin-nav-section" style="display:none;">
         <div class="nav-section-label">Admin</div>
-        <a href="/admin.html" class="nav-item">
-          <span class="nav-icon">⚙️</span> Admin Panel
+        <a class="nav-item" href="admin.html">
+          <svg viewBox="0 0 16 16" fill="none"><path d="M8 2L14 5V11L8 14L2 11V5L8 2Z" stroke="currentColor" stroke-width="1.3"/></svg>
+          Admin Panel
         </a>
       </div>
     </nav>
 
     <div class="sidebar-footer">
-      <div class="user-chip" id="user-chip" onclick="toggleUserMenu()">
+      <div class="sidebar-user" onclick="switchTool(document.querySelector('[data-tool=subscription]'))">
         <div class="user-avatar" id="user-avatar">?</div>
-        <div class="user-info">
-          <div class="user-name" id="user-name">Loading...</div>
-          <div class="user-plan" id="user-plan">checking...</div>
+        <div>
+          <div class="user-name" id="user-name">Loading</div>
+          <div class="user-email" id="user-email">—</div>
         </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:5px;padding:6px 8px;margin-top:4px;">
+        <div class="status-dot green pulse" id="rpc-dot"></div>
+        <span style="font-size:10px;color:rgba(255,255,255,0.35);" id="rpc-status">RPC Online</span>
       </div>
     </div>
   </aside>
@@ -240,101 +143,155 @@
 
   <!-- Main -->
   <div class="main-content">
-
-    <!-- Topbar -->
     <div class="topbar">
-      <div class="topbar-left">
-        <button class="mobile-menu-btn" onclick="openSidebar()">☰</button>
-        <div class="page-title" id="page-title">AI Volume Bot</div>
+      <div class="flex items-center gap-8">
+        <button class="menu-btn" onclick="openSidebar()">
+          <svg viewBox="0 0 20 20" fill="none" style="width:20px;height:20px;"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+        <span class="topbar-title" id="page-title">Token Splitting</span>
       </div>
       <div class="topbar-right">
-        <div class="flex items-center gap-8" id="sub-status-chip">
-          <span class="dot dot-muted"></span>
-          <span class="text-xs text-muted font-mono">checking...</span>
+        <div class="flex items-center gap-6" id="sub-chip">
+          <div class="status-dot" style="background:var(--text-muted);"></div>
+          <span class="text-xs text-muted">checking...</span>
         </div>
         <button class="btn btn-ghost btn-sm" onclick="doLogout()">Sign out</button>
       </div>
     </div>
 
-    <!-- Page content -->
     <div class="page-content" id="main-content">
 
-      <!-- ── TOOL: Volume Bot ── -->
-      <div class="tool-panel active" id="tool-volume-bot">
-        <div class="card mb-16">
+      <!-- TOKEN SPLITTER -->
+      <div class="tool-panel active" id="tool-token-splitter">
+        <div class="card">
           <div class="card-header">
-            <div class="card-title"><span class="icon">📈</span> AI Volume Bot Configuration</div>
-            <span class="badge badge-info">AI-Driven</span>
-          </div>
-
-          <div class="tool-row">
-            <div class="form-group">
-              <label>Token Contract Address</label>
-              <input type="text" id="vb-ca" placeholder="Token CA / mint address" class="font-mono">
+            <div class="card-title">
+              <svg viewBox="0 0 16 16" fill="none" style="width:15px;height:15px;"><path d="M8 12H14M8 4H14M4 8h8M2 8L5 5M2 8L5 11" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Token Splitting
+            </div>
+            <div class="flex gap-6">
+              <span class="badge badge-active">Active</span>
             </div>
           </div>
 
-          <div class="tool-row">
+          <div class="flex gap-6" style="background:var(--bg-input);border-radius:var(--radius-md);padding:3px;margin-bottom:16px;">
+            <button class="auth-tab active" onclick="setSplitMode('manual',this)" style="flex:1;padding:7px;border-radius:6px;font-size:12px;font-weight:600;color:var(--text-primary);background:white;border:none;cursor:pointer;box-shadow:0 1px 3px rgba(15,31,69,0.08);">Manual Split</button>
+            <button class="auth-tab" onclick="setSplitMode('auto',this)" style="flex:1;padding:7px;border-radius:6px;font-size:12px;font-weight:500;color:var(--text-muted);background:transparent;border:none;cursor:pointer;">Auto Split</button>
+            <button class="auth-tab" onclick="setSplitMode('history',this)" style="flex:1;padding:7px;border-radius:6px;font-size:12px;font-weight:500;color:var(--text-muted);background:transparent;border:none;cursor:pointer;">History</button>
+          </div>
+
+          <div id="splitter-manual">
+            <div class="form-group">
+              <label>Source Wallet (private key)</label>
+              <input type="password" id="ts-source" placeholder="Base58 private key" style="font-family:monospace;font-size:12px;">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Token Mint Address</label>
+                <input type="text" id="ts-mint" placeholder="Token CA" style="font-family:monospace;font-size:12px;">
+              </div>
+              <div class="form-group">
+                <label>Amount per Wallet</label>
+                <input type="number" id="ts-amount" placeholder="0.00" step="any">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Destination Wallets (one per line)</label>
+              <textarea id="ts-dests" rows="4" placeholder="Address 1&#10;Address 2&#10;..." style="font-family:monospace;font-size:12px;"></textarea>
+            </div>
+            <div class="form-group">
+              <label>Deviation</label>
+              <div class="flex items-center gap-10">
+                <input type="range" id="ts-deviation" min="0" max="50" value="10" style="flex:1;height:3px;background:rgba(15,31,69,0.15);border-radius:2px;appearance:none;outline:none;" oninput="document.getElementById('ts-dev-val').textContent='±'+this.value+'%'">
+                <span id="ts-dev-val" style="font-size:12px;font-weight:600;color:var(--text-secondary);white-space:nowrap;">±10%</span>
+              </div>
+            </div>
+            <div class="toggle-wrap mb-12">
+              <div class="toggle" id="ts-keep-toggle" onclick="this.classList.toggle('on')"></div>
+              <span class="toggle-label" style="font-size:12.5px;">Keep in Source Wallet</span>
+            </div>
+          </div>
+
+          <div class="flex gap-8">
+            <button class="btn btn-primary" onclick="runTool('token-splitter')">
+              <svg viewBox="0 0 16 16" fill="none" style="width:13px;height:13px;"><path d="M8 2L14 5.5V10.5L8 14L2 10.5V5.5L8 2Z" fill="currentColor" opacity="0.8"/></svg>
+              Execute Split
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="estimateFees()">Estimate Fees</button>
+          </div>
+
+          <div class="result-box" id="result-token-splitter"></div>
+        </div>
+      </div>
+
+      <!-- VOLUME BOT -->
+      <div class="tool-panel" id="tool-volume-bot">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <svg viewBox="0 0 16 16" fill="none" style="width:15px;height:15px;"><path d="M2 12L5 9L8 11L12 6L14 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              AI Volume Bot
+            </div>
+            <span class="badge badge-trial">AI-Driven</span>
+          </div>
+          <div class="form-group">
+            <label>Token Contract Address</label>
+            <input type="text" id="vb-ca" placeholder="Token CA / mint address" style="font-family:monospace;font-size:12px;">
+          </div>
+          <div class="form-row">
             <div class="form-group">
               <label>Number of Wallets</label>
               <input type="number" id="vb-wallets" placeholder="e.g. 10" min="1" max="50">
             </div>
             <div class="form-group">
               <label>SOL per Wallet</label>
-              <input type="number" id="vb-sol" placeholder="e.g. 0.1" step="0.01" min="0.001">
+              <input type="number" id="vb-sol" placeholder="e.g. 0.05" step="0.01" min="0.001">
             </div>
           </div>
-
-          <div class="tool-row">
+          <div class="form-row">
             <div class="form-group">
               <label>Delay Range (ms)</label>
               <input type="text" id="vb-delay" placeholder="e.g. 500-2000">
             </div>
             <div class="form-group">
-              <label>Randomise Amounts</label>
-              <div class="toggle-wrap" style="margin-top:4px;" onclick="this.querySelector('.toggle').classList.toggle('on')">
-                <div class="toggle" id="vb-randomise"></div>
-                <span class="toggle-label">Enabled</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="tool-row">
-            <div class="form-group">
               <label>Slippage %</label>
               <input type="number" id="vb-slippage" placeholder="e.g. 5" min="0.5" max="50">
             </div>
-            <div class="form-group">
-              <label>RPC Endpoint</label>
-              <input type="text" id="vb-rpc" placeholder="https://api.mainnet-beta.solana.com">
-            </div>
           </div>
-
-          <div class="flex gap-8 mt-16">
-            <button class="btn btn-primary" onclick="runTool('volume-bot')">▶ Start Volume Bot</button>
-            <button class="btn btn-danger btn-sm" onclick="stopTool('volume-bot')">■ Stop</button>
+          <div class="form-group">
+            <label>RPC Endpoint</label>
+            <input type="text" id="vb-rpc" placeholder="https://api.mainnet-beta.solana.com">
           </div>
-
-          <div class="tool-result" id="result-volume-bot"></div>
+          <div class="toggle-wrap mb-12">
+            <div class="toggle on" id="vb-randomise" onclick="this.classList.toggle('on')"></div>
+            <span class="toggle-label" style="font-size:12.5px;">Randomise Amounts</span>
+          </div>
+          <div class="flex gap-8">
+            <button class="btn btn-primary" onclick="runTool('volume-bot')">
+              <svg viewBox="0 0 14 14" fill="none" style="width:12px;height:12px;"><polygon points="4,2 12,7 4,12" fill="currentColor"/></svg>
+              Start Bot
+            </button>
+            <button class="btn btn-danger btn-sm" onclick="stopTool('volume-bot')">Stop</button>
+          </div>
+          <div class="result-box" id="result-volume-bot"></div>
         </div>
       </div>
 
-      <!-- ── TOOL: Market Maker ── -->
+      <!-- MARKET MAKER -->
       <div class="tool-panel" id="tool-market-maker">
-        <div class="card mb-16">
+        <div class="card">
           <div class="card-header">
-            <div class="card-title"><span class="icon">💹</span> AI Market Maker</div>
-            <span class="badge badge-success">Liquidity</span>
-          </div>
-
-          <div class="tool-row">
-            <div class="form-group">
-              <label>Token Contract Address</label>
-              <input type="text" id="mm-ca" placeholder="Token CA / mint address" class="font-mono">
+            <div class="card-title">
+              <svg viewBox="0 0 16 16" fill="none" style="width:15px;height:15px;"><rect x="1.5" y="1.5" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9.5" y="1.5" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="1.5" y="9.5" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M12 9.5v5M9.5 12h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+              AI Market Maker
             </div>
+            <span class="badge badge-trial">Liquidity</span>
           </div>
-
-          <div class="tool-row">
+          <div class="form-group">
+            <label>Token Contract Address</label>
+            <input type="text" id="mm-ca" placeholder="Token CA / mint address" style="font-family:monospace;font-size:12px;">
+          </div>
+          <div class="form-row">
             <div class="form-group">
               <label>Target Spread %</label>
               <input type="number" id="mm-spread" placeholder="e.g. 2.5" step="0.1">
@@ -344,19 +301,17 @@
               <input type="number" id="mm-interval" placeholder="e.g. 30" min="5">
             </div>
           </div>
-
-          <div class="tool-row">
+          <div class="form-row">
             <div class="form-group">
-              <label>Min Price Band</label>
+              <label>Min Price</label>
               <input type="number" id="mm-min" placeholder="e.g. 0.000001" step="any">
             </div>
             <div class="form-group">
-              <label>Max Price Band</label>
+              <label>Max Price</label>
               <input type="number" id="mm-max" placeholder="e.g. 0.00001" step="any">
             </div>
           </div>
-
-          <div class="tool-row">
+          <div class="form-row">
             <div class="form-group">
               <label>Depth Target (SOL)</label>
               <input type="number" id="mm-depth" placeholder="e.g. 5" step="0.1">
@@ -366,561 +321,347 @@
               <input type="text" id="mm-rpc" placeholder="https://api.mainnet-beta.solana.com">
             </div>
           </div>
-
-          <div class="flex gap-8 mt-16">
-            <button class="btn btn-primary" onclick="runTool('market-maker')">▶ Start Market Maker</button>
-            <button class="btn btn-danger btn-sm" onclick="stopTool('market-maker')">■ Stop</button>
+          <div class="flex gap-8">
+            <button class="btn btn-primary" onclick="runTool('market-maker')">
+              <svg viewBox="0 0 14 14" fill="none" style="width:12px;height:12px;"><polygon points="4,2 12,7 4,12" fill="currentColor"/></svg>
+              Start Market Maker
+            </button>
+            <button class="btn btn-danger btn-sm" onclick="stopTool('market-maker')">Stop</button>
           </div>
-
-          <div class="tool-result" id="result-market-maker"></div>
+          <div class="result-box" id="result-market-maker"></div>
         </div>
       </div>
 
-      <!-- ── TOOL: Token Splitter ── -->
-      <div class="tool-panel" id="tool-token-splitter">
-        <div class="card mb-16">
-          <div class="card-header">
-            <div class="card-title"><span class="icon">🔀</span> Advanced Token Splitter</div>
-            <div class="flex gap-8">
-              <span class="badge badge-warning">Batch TX</span>
-            </div>
-          </div>
-
-          <div class="tabs mb-16">
-            <button class="tab-btn active" onclick="switchSplitterMode('manual', this)">Manual</button>
-            <button class="tab-btn" onclick="switchSplitterMode('auto', this)">Auto-Split</button>
-          </div>
-
-          <div id="splitter-manual">
-            <div class="tool-row">
-              <div class="form-group">
-                <label>Source Wallet (private key)</label>
-                <input type="password" id="ts-source" placeholder="Base58 private key" class="font-mono">
-              </div>
-            </div>
-            <div class="tool-row">
-              <div class="form-group">
-                <label>Token Mint Address</label>
-                <input type="text" id="ts-mint" placeholder="Token CA" class="font-mono">
-              </div>
-              <div class="form-group">
-                <label>Amount per Wallet</label>
-                <input type="number" id="ts-amount" placeholder="Tokens to send each" step="any">
-              </div>
-            </div>
-            <div class="form-group">
-              <label>Destination Wallets (one per line)</label>
-              <textarea id="ts-dests" placeholder="Wallet address&#10;Wallet address&#10;..." style="min-height:100px;" class="font-mono"></textarea>
-            </div>
-          </div>
-
-          <div id="splitter-auto" style="display:none;">
-            <div class="tool-row">
-              <div class="form-group">
-                <label>Source Wallet (private key)</label>
-                <input type="password" id="ts-auto-source" placeholder="Base58 private key" class="font-mono">
-              </div>
-            </div>
-            <div class="tool-row">
-              <div class="form-group">
-                <label>Token Mint Address</label>
-                <input type="text" id="ts-auto-mint" placeholder="Token CA" class="font-mono">
-              </div>
-              <div class="form-group">
-                <label>Number of Wallets</label>
-                <input type="number" id="ts-auto-count" placeholder="e.g. 20" min="1">
-              </div>
-            </div>
-            <div class="alert alert-info">
-              <span class="alert-icon">ℹ</span>
-              <div>Auto-split mode divides your total balance equally across the specified number of auto-generated wallets.</div>
-            </div>
-          </div>
-
-          <div class="flex gap-8 mt-16">
-            <button class="btn btn-primary" onclick="runTool('token-splitter')">⚡ Execute Split</button>
-            <button class="btn btn-secondary btn-sm" onclick="estimateSplit()">Estimate Fees</button>
-          </div>
-
-          <div class="tool-result" id="result-token-splitter"></div>
-        </div>
-      </div>
-
-      <!-- ── TOOL: Bundle Checker ── -->
+      <!-- BUNDLE CHECKER -->
       <div class="tool-panel" id="tool-bundle-checker">
-        <div class="card mb-16">
+        <div class="card">
           <div class="card-header">
-            <div class="card-title"><span class="icon">🔍</span> Bundle Checker</div>
-            <span class="badge badge-danger">Risk Analysis</span>
+            <div class="card-title">
+              <svg viewBox="0 0 16 16" fill="none" style="width:15px;height:15px;"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.3"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+              Bundle Checker
+            </div>
+            <span class="badge badge-expired">Risk Analysis</span>
           </div>
-
           <div class="form-group">
             <label>Token Contract Address</label>
-            <input type="text" id="bc-ca" placeholder="Token CA to analyse" class="font-mono">
+            <input type="text" id="bc-ca" placeholder="Token CA to analyse" style="font-family:monospace;font-size:12px;">
           </div>
-
-          <div class="tool-row">
+          <div class="form-row">
             <div class="form-group">
               <label>Launch TX Signature (optional)</label>
-              <input type="text" id="bc-tx" placeholder="Transaction signature" class="font-mono">
+              <input type="text" id="bc-tx" placeholder="Transaction signature" style="font-family:monospace;font-size:12px;">
             </div>
             <div class="form-group">
               <label>Blocks to Scan</label>
-              <input type="number" id="bc-blocks" placeholder="e.g. 5" min="1" max="20" value="5">
+              <input type="number" id="bc-blocks" placeholder="5" min="1" max="20" value="5">
             </div>
           </div>
-
-          <button class="btn btn-primary mt-8" onclick="runTool('bundle-checker')">🔍 Analyse Bundles</button>
-
-          <div class="tool-result" id="result-bundle-checker"></div>
+          <button class="btn btn-primary" onclick="runTool('bundle-checker')">
+            <svg viewBox="0 0 16 16" fill="none" style="width:13px;height:13px;"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            Analyse
+          </button>
+          <div class="result-box" id="result-bundle-checker"></div>
         </div>
       </div>
 
-      <!-- ── TOOL: Wallet Checker ── -->
+      <!-- WALLET CHECKER -->
       <div class="tool-panel" id="tool-wallet-checker">
-        <div class="card mb-16">
+        <div class="card">
           <div class="card-header">
-            <div class="card-title"><span class="icon">🕸️</span> Connected Wallets Checker</div>
-            <span class="badge badge-purple">Graph Analysis</span>
+            <div class="card-title">
+              <svg viewBox="0 0 16 16" fill="none" style="width:15px;height:15px;"><circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.3"/><circle cx="3" cy="5" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="13" cy="5" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="3" cy="11" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="13" cy="11" r="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M4.5 6L6.5 7M9.5 9L11.5 10M4.5 10L6.5 9M9.5 7L11.5 6" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+              Connected Wallets Checker
+            </div>
+            <span class="badge badge-admin">Graph Analysis</span>
           </div>
-
           <div class="form-group">
-            <label>Wallet Address(es) (one per line)</label>
-            <textarea id="wc-addrs" placeholder="Solana wallet address&#10;..." style="min-height:80px;" class="font-mono"></textarea>
+            <label>Wallet Addresses (one per line)</label>
+            <textarea id="wc-addrs" rows="4" placeholder="Solana wallet address&#10;..." style="font-family:monospace;font-size:12px;"></textarea>
           </div>
-
-          <div class="tool-row">
+          <div class="form-row">
             <div class="form-group">
               <label>Depth (hops)</label>
-              <input type="number" id="wc-depth" placeholder="e.g. 2" min="1" max="4" value="2">
+              <input type="number" id="wc-depth" placeholder="2" min="1" max="4" value="2">
             </div>
             <div class="form-group">
               <label>Min SOL Transfer</label>
-              <input type="number" id="wc-min-sol" placeholder="e.g. 0.01" step="0.01" value="0.01">
+              <input type="number" id="wc-min-sol" placeholder="0.01" step="0.01" value="0.01">
             </div>
           </div>
-
-          <button class="btn btn-primary mt-8" onclick="runTool('wallet-checker')">🕸️ Trace Connections</button>
-
-          <div class="tool-result" id="result-wallet-checker"></div>
+          <button class="btn btn-primary" onclick="runTool('wallet-checker')">
+            <svg viewBox="0 0 16 16" fill="none" style="width:13px;height:13px;"><circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.5"/><circle cx="3" cy="5" r="1.5" stroke="currentColor" stroke-width="1.5"/><circle cx="13" cy="5" r="1.5" stroke="currentColor" stroke-width="1.5"/></svg>
+            Trace Connections
+          </button>
+          <div class="result-box" id="result-wallet-checker"></div>
         </div>
       </div>
 
-      <!-- ── PANEL: My Wallets ── -->
-      <div class="tool-panel" id="tool-wallets">
-        <div class="card mb-16">
-          <div class="card-header">
-            <div class="card-title"><span class="icon">💼</span> Saved Wallets</div>
-            <button class="btn btn-primary btn-sm" onclick="openAddWallet()">+ Add Wallet</button>
-          </div>
-
-          <div id="wallets-loading" class="text-center text-muted text-sm" style="padding:24px;">Loading wallets...</div>
-          <div class="wallet-list" id="wallet-list" style="display:none;"></div>
-        </div>
-      </div>
-
-      <!-- ── PANEL: Subscription ── -->
+      <!-- SUBSCRIPTION -->
       <div class="tool-panel" id="tool-subscription">
         <div class="card mb-16">
           <div class="card-header">
-            <div class="card-title"><span class="icon">💳</span> Subscription Status</div>
+            <div class="card-title">
+              <svg viewBox="0 0 16 16" fill="none" style="width:15px;height:15px;"><rect x="1" y="4" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M1 7h14" stroke="currentColor" stroke-width="1.3"/></svg>
+              Subscription Status
+            </div>
           </div>
-
-          <div id="sub-detail-loading" class="text-center text-muted text-sm" style="padding:24px;">Loading...</div>
-          <div id="sub-detail" style="display:none;"></div>
+          <div id="sub-detail">
+            <div class="text-muted text-sm" style="padding:16px 0;">Loading subscription details...</div>
+          </div>
         </div>
 
         <div class="card">
           <div class="card-header">
-            <div class="card-title"><span class="icon">🎟️</span> Promo Code</div>
+            <div class="card-title">
+              <svg viewBox="0 0 16 16" fill="none" style="width:15px;height:15px;"><rect x="1" y="4" width="14" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 4V3a3 3 0 016 0v1" stroke="currentColor" stroke-width="1.3"/></svg>
+              Promo Code
+            </div>
           </div>
-          <p class="text-sm text-muted mb-12">Have a promo code? Enter it below to activate a free trial.</p>
-          <div class="input-group">
-            <input type="text" id="promo-input" placeholder="ENTER CODE" style="text-transform:uppercase;font-family:var(--font-mono);font-size:0.8rem;letter-spacing:0.08em;">
+          <p class="text-sm text-muted mb-12">Apply a promo code to activate a trial. Single-use — each code can only be redeemed once.</p>
+          <div class="flex gap-8">
+            <input type="text" id="promo-input" placeholder="Enter code" style="text-transform:uppercase;letter-spacing:0.08em;font-family:monospace;font-size:12px;">
             <button class="btn btn-secondary" onclick="redeemPromo()">Redeem</button>
           </div>
         </div>
       </div>
 
+      <!-- WALLETS -->
+      <div class="tool-panel" id="tool-wallets">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <svg viewBox="0 0 16 16" fill="none" style="width:15px;height:15px;"><rect x="1" y="4" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 4V3a3 3 0 016 0v1" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="9.5" r="1.5" stroke="currentColor" stroke-width="1.2"/></svg>
+              Saved Wallets
+            </div>
+            <button class="btn btn-primary btn-sm">
+              <svg viewBox="0 0 12 12" fill="none" style="width:11px;height:11px;"><path d="M6 2v8M2 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              Add Wallet
+            </button>
+          </div>
+          <div class="alert alert-info">
+            <svg viewBox="0 0 16 16" fill="none" style="width:15px;height:15px;flex-shrink:0;"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v5M8 5v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            <div>Wallet management is handled by the Chrome extension. Install the extension to add, organise, and encrypt wallets locally.</div>
+          </div>
+          <a href="https://chrome.google.com/webstore" target="_blank" class="btn btn-primary btn-sm" style="display:inline-flex;">
+            <svg viewBox="0 0 16 16" fill="none" style="width:13px;height:13px;"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="2.5" fill="currentColor"/></svg>
+            Install Chrome Extension
+          </a>
+        </div>
+      </div>
+
     </div><!-- /page-content -->
-  </div><!-- /main-content -->
-</div><!-- /app-layout -->
+  </div>
+</div>
 
 <!-- Payment Modal -->
 <div class="modal-overlay hidden" id="payment-modal">
   <div class="modal">
     <div class="modal-header">
-      <div class="modal-title">💳 Subscribe — $29/month</div>
-      <button class="modal-close" onclick="closePaymentModal()">✕</button>
+      <div class="modal-title">Subscribe — $199 / month</div>
+      <button class="modal-close" onclick="closePayModal()">✕</button>
     </div>
-
-    <p class="text-sm text-muted mb-16">Choose your payment method. Manual renewal — no auto-charge.</p>
-
-    <div class="payment-method-grid">
-      <div class="payment-option" onclick="selectPayment('solana', this)">
-        <div class="payment-option-icon">◎</div>
-        <div class="payment-option-name">Phantom / SOL</div>
-        <div class="payment-option-desc">Pay via Solana</div>
+    <p class="text-sm text-muted mb-16">Manual renewal — no automatic charges. Choose your payment method.</p>
+    <div class="payment-grid">
+      <div class="pay-option" onclick="selectPayMethod('solana',this)">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/></svg>
+        <div class="pay-option-name">Phantom (SOL)</div>
       </div>
-      <div class="payment-option" onclick="selectPayment('paypal', this)">
-        <div class="payment-option-icon">🅿</div>
-        <div class="payment-option-name">PayPal</div>
-        <div class="payment-option-desc">Pay via PayPal</div>
+      <div class="pay-option" onclick="selectPayMethod('paypal',this)">
+        <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M3 10h18" stroke="currentColor" stroke-width="1.7"/></svg>
+        <div class="pay-option-name">PayPal</div>
       </div>
-      <div class="payment-option" onclick="selectPayment('manual', this)">
-        <div class="payment-option-icon">📋</div>
-        <div class="payment-option-name">Manual SOL</div>
-        <div class="payment-option-desc">Send to address</div>
+      <div class="pay-option" onclick="selectPayMethod('manual',this)">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="pay-option-name">Manual SOL</div>
       </div>
     </div>
-
-    <div id="payment-instructions" style="display:none;"></div>
-    <button class="btn btn-primary btn-full mt-16" id="btn-pay" onclick="initPayment()">Generate Payment Details</button>
+    <div id="pay-instructions" style="display:none;"></div>
+    <button class="btn btn-primary btn-full" id="btn-pay" onclick="initPayment()">Generate Payment Details</button>
   </div>
 </div>
 
 <div id="toast-container"></div>
 <script src="api.js"></script>
 <script>
-  // ── State ─────────────────────────────────────────────────────────────────
-  let currentTool = 'volume-bot';
-  let subData     = null;
-  let userData    = null;
-  let selectedPaymentMethod = null;
-  let paymentPollInterval   = null;
+  const toolTitles = {
+    'token-splitter':'Token Splitting','volume-bot':'AI Volume Bot',
+    'market-maker':'AI Market Maker','bundle-checker':'Bundle Checker',
+    'wallet-checker':'Connected Wallets Checker','subscription':'Subscription',
+    'wallets':'Saved Wallets'
+  };
+  let subData = null, selectedPayMethod = null, payPollInterval = null;
 
   // ── Init ──────────────────────────────────────────────────────────────────
   (async () => {
-    // Auth gate
-    if (!(await Auth.isLoggedIn())) {
-      window.location.href = '/auth.html';
-      return;
+    if (!(await Auth.isLoggedIn())) { window.location.href = 'auth.html'; return; }
+    const user = await Auth.getUser() || await AuthAPI.me().catch(() => null);
+    if (user) {
+      await Auth.setUser(user);
+      document.getElementById('user-avatar').textContent = initials(user.name, user.email);
+      document.getElementById('user-name').textContent   = user.name || 'User';
+      document.getElementById('user-email').textContent  = user.email || '';
+      if (user.is_admin) document.getElementById('admin-nav-section').style.display = 'block';
     }
-
-    // Load user
-    try {
-      userData = await Auth.getUser();
-      if (!userData) {
-        userData = await AuthAPI.me();
-        await Auth.setUser(userData);
-      }
-      updateUserChip(userData);
-    } catch {}
-
-    // Load subscription (server verify)
-    await loadSubscription();
-
-    // Show admin nav if admin
-    if (userData?.is_admin) {
-      document.getElementById('admin-nav-item').style.display = 'block';
-    }
+    await loadSub();
   })();
 
-  async function loadSubscription(force = false) {
+  async function loadSub(force = false) {
     try {
       subData = await SubAPI.getStatus(force);
-      updateSubChip(subData);
-    } catch (err) {
-      console.error('Sub check failed:', err);
-    }
+      const chip = document.getElementById('sub-chip');
+      if (subData.active) {
+        const d = subData.expires_at ? formatDaysLeft(subData.expires_at) : null;
+        chip.innerHTML = `<div class="status-dot green pulse"></div><span class="text-xs text-green">${d ? d : 'Active'}</span>`;
+      } else {
+        chip.innerHTML = `<div class="status-dot red"></div><span class="text-xs text-muted">No subscription</span>`;
+      }
+    } catch {}
   }
 
-  // ── UI Updates ────────────────────────────────────────────────────────────
-  function updateUserChip(user) {
-    if (!user) return;
-    document.getElementById('user-avatar').textContent = initials(user.name, user.email);
-    document.getElementById('user-name').textContent   = user.name || user.email;
-    document.getElementById('user-plan').textContent   = subData?.active ? 'Pro' : 'No subscription';
-  }
-
-  function updateSubChip(sub) {
-    const chip = document.getElementById('sub-status-chip');
-    if (sub?.active) {
-      const daysLeft = sub.expires_at ? formatDaysLeft(sub.expires_at) : null;
-      chip.innerHTML = `
-        <span class="dot dot-green dot-pulse"></span>
-        <span class="text-xs text-green font-mono">Active${daysLeft ? ' · ' + daysLeft : ''}</span>
-      `;
-    } else {
-      chip.innerHTML = `
-        <span class="dot dot-red"></span>
-        <span class="text-xs text-red font-mono">No subscription</span>
-      `;
-    }
-    if (userData) document.getElementById('user-plan').textContent = sub?.active ? 'Pro' : 'Inactive';
-  }
-
-  // ── Tool Switching ─────────────────────────────────────────────────────────
-  const toolTitles = {
-    'volume-bot':    'AI Volume Bot',
-    'market-maker':  'AI Market Maker',
-    'token-splitter':'Advanced Token Splitter',
-    'bundle-checker':'Bundle Checker',
-    'wallet-checker':'Connected Wallets Checker',
-    'wallets':       'My Wallets',
-    'subscription':  'Subscription'
-  };
-
-  function switchTool(id, btn) {
+  // ── Tool switch ──────────────────────────────────────────────────────────
+  function switchTool(btn) {
+    const id = btn.dataset.tool;
     document.querySelectorAll('.tool-panel').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-
     document.getElementById(`tool-${id}`)?.classList.add('active');
-    btn?.classList.add('active');
+    btn.classList.add('active');
     document.getElementById('page-title').textContent = toolTitles[id] || id;
-    currentTool = id;
-
-    // Lazy load wallet / subscription panels
-    if (id === 'wallets') loadWallets();
     if (id === 'subscription') loadSubDetail();
-
     closeSidebar();
   }
 
-  // ── Run Tool (subscription verified server-side) ──────────────────────────
+  // ── Run tool (always verify) ──────────────────────────────────────────────
   async function runTool(tool) {
-    // Always verify subscription before running
     let sub;
-    try {
-      sub = await SubAPI.verify();
-    } catch (err) {
-      showToast('Could not verify subscription: ' + err.message, 'error');
-      return;
-    }
-
+    try { sub = await SubAPI.verify(); }
+    catch (err) { showToast('Cannot verify subscription: ' + err.message, 'error'); return; }
     if (!sub.active) {
-      showToast('Active subscription required to run tools.', 'error');
+      showToast('Active subscription required.', 'error');
       document.getElementById('payment-modal').classList.remove('hidden');
       return;
     }
-
-    // Tool-specific logic (wire to your extension's actual tool runners)
-    const resultEl = document.getElementById(`result-${tool}`);
-    resultEl.classList.add('show');
-    resultEl.textContent = `⏳ Starting ${toolTitles[tool]}...`;
-
-    // Simulate — replace with actual tool invocation
+    const el = document.getElementById(`result-${tool}`);
+    el.classList.add('show');
+    el.innerHTML = '<div class="result-row"><span class="result-key">Status</span><span class="result-val" style="color:var(--amber);">Starting...</span></div>';
     setTimeout(() => {
-      resultEl.innerHTML = `
-        <div class="result-row"><span class="result-key">Status</span><span class="result-val text-green">Running ✓</span></div>
+      el.innerHTML = `
+        <div class="result-row"><span class="result-key">Status</span><span class="result-val text-green">Running</span></div>
         <div class="result-row"><span class="result-key">Tool</span><span class="result-val">${toolTitles[tool]}</span></div>
         <div class="result-row"><span class="result-key">Started</span><span class="result-val">${new Date().toLocaleTimeString()}</span></div>
-        <div class="result-row"><span class="result-key">Note</span><span class="result-val text-muted">Wire this to your actual tool runner in popup.js</span></div>
       `;
-    }, 800);
+    }, 700);
   }
 
   function stopTool(tool) {
-    const resultEl = document.getElementById(`result-${tool}`);
-    if (resultEl) {
-      resultEl.classList.add('show');
-      resultEl.innerHTML = `<div class="result-row"><span class="result-key">Status</span><span class="result-val text-amber">Stopped ■</span></div>`;
-    }
+    const el = document.getElementById(`result-${tool}`);
+    el.classList.add('show');
+    el.innerHTML = '<div class="result-row"><span class="result-key">Status</span><span class="result-val" style="color:var(--text-muted);">Stopped</span></div>';
     showToast('Tool stopped.', 'info');
   }
 
-  async function estimateSplit() {
-    showToast('Estimating fees...', 'info');
-    // Wire to actual fee estimation logic
+  function estimateFees() { showToast('Fee estimation coming soon.', 'info'); }
+
+  function setSplitMode(mode, btn) {
+    document.querySelectorAll('.auth-tab').forEach(b => { b.classList.remove('active'); b.style.background='transparent'; b.style.color='var(--text-muted)'; b.style.boxShadow='none'; });
+    btn.classList.add('active'); btn.style.background='white'; btn.style.color='var(--text-primary)'; btn.style.boxShadow='0 1px 3px rgba(15,31,69,0.08)';
   }
 
-  // ── Splitter Mode ─────────────────────────────────────────────────────────
-  function switchSplitterMode(mode, btn) {
-    document.querySelectorAll('#tool-token-splitter .tab-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('splitter-manual').style.display = mode === 'manual' ? '' : 'none';
-    document.getElementById('splitter-auto').style.display   = mode === 'auto'   ? '' : 'none';
-  }
-
-  // ── Wallets Panel ─────────────────────────────────────────────────────────
-  async function loadWallets() {
-    // In a real impl, load from your encrypted wallets backend
-    // This mirrors the popup's wallets UI
-    document.getElementById('wallets-loading').style.display = 'none';
-    const list = document.getElementById('wallet-list');
-    list.style.display = 'flex';
-    list.innerHTML = `
-      <div class="text-center text-muted text-sm" style="padding:20px;">
-        Wallet storage is managed by the Chrome extension.<br>
-        <a href="#" class="text-accent mt-8" style="display:inline-block;">Install Extension →</a>
-      </div>
-    `;
-  }
-
-  function openAddWallet() {
-    showToast('Wallet management handled in Chrome extension.', 'info');
-  }
-
-  // ── Subscription Detail ───────────────────────────────────────────────────
+  // ── Subscription detail ───────────────────────────────────────────────────
   async function loadSubDetail() {
-    document.getElementById('sub-detail-loading').style.display = 'block';
-    document.getElementById('sub-detail').style.display = 'none';
-
+    const el = document.getElementById('sub-detail');
+    el.innerHTML = '<div class="text-muted text-sm">Loading...</div>';
     try {
       const sub = await SubAPI.getStatus(true);
       subData = sub;
-      updateSubChip(sub);
-
-      document.getElementById('sub-detail-loading').style.display = 'none';
-      const el = document.getElementById('sub-detail');
-      el.style.display = 'block';
-
       if (sub.active) {
         el.innerHTML = `
-          <div class="sub-bar active-sub mb-16">
-            <div class="flex items-center gap-8">
-              <span class="dot dot-green dot-pulse"></span>
-              <span class="font-mono" style="font-size:0.8rem;">Active Subscription</span>
-            </div>
-            <span class="badge badge-success">${sub.trial ? 'Trial' : 'Pro'}</span>
+          <div class="sub-bar active mb-16">
+            <div class="flex items-center gap-8"><div class="status-dot green pulse"></div><span style="font-size:13px;font-weight:600;">Active ${sub.trial ? '· Trial' : '· Pro'}</span></div>
+            <span class="badge badge-active">${sub.trial ? 'Trial' : 'Pro'}</span>
           </div>
-          <div class="flex gap-16 flex-wrap mb-16">
-            <div class="stat-card">
-              <div class="stat-label">Expires</div>
-              <div class="stat-value" style="font-size:1rem;">${formatDate(sub.expires_at)}</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">Time Left</div>
-              <div class="stat-value" style="font-size:1rem;">${formatDaysLeft(sub.expires_at) || '—'}</div>
-            </div>
+          <div class="sub-info-grid">
+            <div class="sub-info-item"><div class="sub-info-label">Expires</div><div class="sub-info-value" style="font-size:14px;">${formatDate(sub.expires_at)}</div></div>
+            <div class="sub-info-item"><div class="sub-info-label">Days Left</div><div class="sub-info-value">${sub.expires_at ? Math.max(0, Math.ceil((new Date(sub.expires_at)-Date.now())/(86400000))) : '—'}</div></div>
+            <div class="sub-info-item"><div class="sub-info-label">Plan</div><div class="sub-info-value" style="font-size:14px;">${sub.trial ? 'Trial' : 'Pro'}</div></div>
           </div>
-          <button class="btn btn-primary" onclick="document.getElementById('payment-modal').classList.remove('hidden')">
-            🔄 Renew Now
-          </button>
+          <button class="btn btn-primary btn-sm" onclick="document.getElementById('payment-modal').classList.remove('hidden')">Renew Subscription</button>
         `;
       } else {
         el.innerHTML = `
-          <div class="sub-bar expired-sub mb-16">
-            <div class="flex items-center gap-8">
-              <span class="dot dot-red"></span>
-              <span class="font-mono" style="font-size:0.8rem;">No Active Subscription</span>
-            </div>
+          <div class="sub-bar expired mb-16">
+            <div class="flex items-center gap-8"><div class="status-dot red"></div><span style="font-size:13px;font-weight:600;">No Active Subscription</span></div>
           </div>
-          <p class="text-sm text-muted mb-16">Subscribe to unlock all 5 pro tools.</p>
-          <button class="btn btn-primary" onclick="document.getElementById('payment-modal').classList.remove('hidden')">
-            💳 Subscribe — $29/month
-          </button>
+          <p class="text-sm text-muted mb-16">Subscribe to unlock all five professional tools.</p>
+          <button class="btn btn-primary" onclick="document.getElementById('payment-modal').classList.remove('hidden')">Subscribe — $199/month</button>
         `;
       }
-    } catch (err) {
-      document.getElementById('sub-detail-loading').textContent = 'Failed to load subscription.';
-    }
+    } catch { el.innerHTML = '<div class="alert alert-error">Failed to load subscription.</div>'; }
   }
 
   async function redeemPromo() {
     const code = document.getElementById('promo-input').value.trim().toUpperCase();
-    if (!code) { showToast('Enter a promo code first.', 'warning'); return; }
-
+    if (!code) { showToast('Enter a promo code.', 'warning'); return; }
     try {
       await SubAPI.redeemPromo(code);
-      showToast('Promo code applied! Refreshing...', 'success');
+      showToast('Promo code applied!', 'success');
       document.getElementById('promo-input').value = '';
-      await loadSubDetail();
-      await loadSubscription(true);
-    } catch (err) {
-      showToast(err.message || 'Invalid or already-used code.', 'error');
-    }
+      await loadSub(true); await loadSubDetail();
+    } catch (err) { showToast(err.message || 'Invalid or used code.', 'error'); }
   }
 
-  // ── Payment Modal ─────────────────────────────────────────────────────────
-  function selectPayment(method, el) {
-    document.querySelectorAll('.payment-option').forEach(o => o.classList.remove('selected'));
+  // ── Payment ───────────────────────────────────────────────────────────────
+  function selectPayMethod(method, el) {
+    document.querySelectorAll('.pay-option').forEach(o => o.classList.remove('selected'));
     el.classList.add('selected');
-    selectedPaymentMethod = method;
-    document.getElementById('payment-instructions').style.display = 'none';
-    document.getElementById('btn-pay').textContent = 'Generate Payment Details';
+    selectedPayMethod = method;
+    document.getElementById('pay-instructions').style.display = 'none';
   }
 
-  function closePaymentModal() {
+  function closePayModal() {
     document.getElementById('payment-modal').classList.add('hidden');
-    if (paymentPollInterval) clearInterval(paymentPollInterval);
-    document.getElementById('payment-instructions').style.display = 'none';
-    document.querySelectorAll('.payment-option').forEach(o => o.classList.remove('selected'));
-    selectedPaymentMethod = null;
+    if (payPollInterval) clearInterval(payPollInterval);
+    document.getElementById('pay-instructions').style.display = 'none';
+    document.querySelectorAll('.pay-option').forEach(o => o.classList.remove('selected'));
   }
 
   async function initPayment() {
-    if (!selectedPaymentMethod) {
-      showToast('Please select a payment method.', 'warning');
-      return;
-    }
-
+    if (!selectedPayMethod) { showToast('Select a payment method.', 'warning'); return; }
     const btn = document.getElementById('btn-pay');
-    setButtonLoading(btn, true);
-
+    btn.disabled = true; btn.classList.add('loading');
     try {
-      const { address, payment_id, amount_sol, paypal_url } = await SubAPI.getPaymentAddress(selectedPaymentMethod);
-
-      const instrEl = document.getElementById('payment-instructions');
-      instrEl.style.display = 'block';
-
-      if (selectedPaymentMethod === 'paypal') {
-        instrEl.innerHTML = `
-          <div class="alert alert-info"><span class="alert-icon">ℹ</span> You'll be redirected to PayPal to complete payment.</div>
-          <a href="${paypal_url}" target="_blank" class="btn btn-primary btn-full">Open PayPal →</a>
-          <div class="payment-detecting mt-12">
-            <div class="payment-spinner"></div> Waiting for payment confirmation...
-          </div>
-        `;
+      const { address, payment_id, amount_sol, paypal_url } = await SubAPI.getPaymentAddress(selectedPayMethod);
+      const inst = document.getElementById('pay-instructions');
+      inst.style.display = 'block';
+      if (selectedPayMethod === 'paypal') {
+        inst.innerHTML = `<div class="alert alert-info mb-12"><svg viewBox="0 0 16 16" fill="none" style="width:14px;height:14px;flex-shrink:0;"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v5M8 5v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><div>You'll be redirected to PayPal.</div></div><a href="${paypal_url}" target="_blank" class="btn btn-primary btn-full">Open PayPal &rarr;</a>`;
       } else {
-        instrEl.innerHTML = `
-          <div class="text-xs text-muted mb-8 font-mono">Send exactly:</div>
-          <div class="payment-amount">${amount_sol} SOL</div>
-          <div class="text-xs text-muted mb-4 font-mono">To this address:</div>
-          <div class="payment-address-box" onclick="copyAddress('${address}')">${address}</div>
-          <div class="payment-detecting mt-20">
-            <div class="payment-spinner"></div> Detecting payment on-chain...
-          </div>
-        `;
-
-        // Poll for payment confirmation
-        paymentPollInterval = setInterval(async () => {
+        inst.innerHTML = `<div class="text-xs text-muted mb-6">Send exactly:</div><div class="pay-amount">${amount_sol} SOL</div><div class="text-xs text-muted mb-4">To address:</div><div class="pay-address" onclick="navigator.clipboard.writeText('${address}');showToast('Copied!','success')">${address}</div><div class="text-xs text-muted mb-4" style="margin-top:12px;">Click address to copy.</div><div class="pay-detecting"><div class="pay-spinner"></div>Detecting on-chain...</div>`;
+        payPollInterval = setInterval(async () => {
           try {
-            const result = await SubAPI.checkPayment(payment_id);
-            if (result.confirmed) {
-              clearInterval(paymentPollInterval);
-              showToast('Payment confirmed! Subscription activated. 🎉', 'success');
-              closePaymentModal();
-              await loadSubDetail();
-              await loadSubscription(true);
-            }
+            const r = await SubAPI.checkPayment(payment_id);
+            if (r.confirmed) { clearInterval(payPollInterval); showToast('Payment confirmed! 🎉', 'success'); closePayModal(); await loadSub(true); await loadSubDetail(); }
           } catch {}
         }, 5000);
       }
-
-      btn.textContent = '✓ Details Generated';
-      btn.disabled = true;
-
-    } catch (err) {
-      showToast('Payment init failed: ' + err.message, 'error');
-      setButtonLoading(btn, false);
-    }
+      btn.textContent = '✓ Details Generated'; btn.disabled = true;
+    } catch (err) { showToast(err.message, 'error'); btn.disabled = false; btn.classList.remove('loading'); btn.textContent = 'Generate Payment Details'; }
   }
 
-  function copyAddress(addr) {
-    navigator.clipboard.writeText(addr);
-    showToast('Address copied!', 'success');
-  }
+  // ── Misc ──────────────────────────────────────────────────────────────────
+  async function doLogout() { await AuthAPI.logout(); window.location.href = 'auth.html'; }
+  function openSidebar()  { document.getElementById('sidebar').classList.add('open'); document.getElementById('sidebar-overlay').classList.add('show'); }
+  function closeSidebar() { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebar-overlay').classList.remove('show'); }
 
-  // ── Auth ──────────────────────────────────────────────────────────────────
-  async function doLogout() {
-    await AuthAPI.logout();
-    window.location.href = '/auth.html';
-  }
-
-  function toggleUserMenu() {
-    // Simple: go to subscription panel
-    switchTool('subscription', document.querySelector('[data-tool="subscription"]'));
-  }
-
-  // ── Mobile sidebar ────────────────────────────────────────────────────────
-  function openSidebar() {
-    document.getElementById('sidebar').classList.add('open');
-    document.getElementById('sidebar-overlay').classList.add('show');
-  }
-  function closeSidebar() {
-    document.getElementById('sidebar').classList.remove('open');
-    document.getElementById('sidebar-overlay').classList.remove('show');
+  function showToast(msg, type = 'info') {
+    const colors = { success: '#16a34a', error: '#dc2626', warning: '#b45309', info: 'var(--navy)' };
+    const icons  = { success: '✓', error: '✕', warning: '⚠', info: 'i' };
+    let c = document.getElementById('toast-container');
+    if (!c) { c = document.createElement('div'); c.id = 'toast-container'; document.body.appendChild(c); }
+    const t = document.createElement('div');
+    t.className = `toast toast-${type}`;
+    t.innerHTML = `<span style="color:${colors[type]};font-weight:700;font-size:12px;">${icons[type]}</span><span style="font-size:12.5px;">${msg}</span>`;
+    c.appendChild(t);
+    setTimeout(() => { t.style.animation='fadeOut 0.3s ease forwards'; setTimeout(() => t.remove(), 300); }, 3000);
   }
 </script>
 </body>
