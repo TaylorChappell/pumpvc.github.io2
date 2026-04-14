@@ -1,0 +1,60 @@
+{
+  "manifest_version": 3,
+  "name": "Ultimate Dev Tools",
+  "version": "2.1.0",
+  "description": "Professional Solana development toolkit \u2014 Essor Studios",
+  "permissions": [
+    "storage",
+    "alarms",
+    "clipboardWrite",
+    "identity",
+    "windows",
+    "tabs",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "https://api.mainnet-beta.solana.com/*",
+    "https://mainnet.helius-rpc.com/*",
+    "https://*.railway.app/*",
+    "https://quote-api.jup.ag/*",
+    "https://www.googleapis.com/*",
+    "https://accounts.google.com/*",
+    "https://mainnet.block-engine.jito.wtf/*",
+    "https://api.anthropic.com/*",
+    "https://api.jup.ag/*",
+    "https://amsterdam.mainnet.block-engine.jito.wtf/*",
+    "https://frankfurt.mainnet.block-engine.jito.wtf/*",
+    "https://ny.mainnet.block-engine.jito.wtf/*",
+    "https://tokyo.mainnet.block-engine.jito.wtf/*"
+  ],
+  "oauth2": {
+    "client_id": "218003563778-r5bktonmq8di7uh23r29t5dnroalbr2s.apps.googleusercontent.com",
+    "scopes": [
+      "openid",
+      "email",
+      "profile"
+    ]
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Ultimate Dev Tools",
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icon16.png",
+    "32": "icon32.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}
