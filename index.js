@@ -1,18 +1,12 @@
 /**
  * Ultimate Dev Tools — Railway Backend (FIXED)
  * Essor Studios
- *
- * npm install express pg bcryptjs jsonwebtoken nanoid cors helmet google-auth-library node-fetch@2 @solana/web3.js
  */
 'use strict';
 
-const fetch = require('node-fetch');           // ← NEW: fixes "fetch is not defined"
-const { Keypair } = require('@solana/web3.js'); // ← NEW: rock-solid keypair
-
-// Polyfill fetch for Node versions where globalThis.fetch isn't available
-if (!globalThis.fetch) {
-  try { globalThis.fetch = require('node-fetch'); } catch(e) {}
-}
+const fetch = require('node-fetch');                    // Required for Node < 18
+const { Keypair } = require('@solana/web3.js');        // For stable keypair generation
+const bs58 = require('bs58');   // ← Add this line
 
 const express    = require('express');
 const bcrypt     = require('bcryptjs');
@@ -21,7 +15,8 @@ const { Pool }   = require('pg');
 const cors       = require('cors');
 const helmet     = require('helmet');
 const { nanoid } = require('nanoid');
-const app        = express();
+
+const app = express();
 
 const JWT_SECRET       = process.env.JWT_SECRET       || 'CHANGE_THIS_IN_PROD';
 const ADMIN_EMAIL      = process.env.ADMIN_EMAIL       || 'taylorchappell02@gmail.com';
@@ -227,14 +222,14 @@ function genKeypair() {
   const kp = Keypair.generate();
   return {
     publicKey:     kp.publicKey.toBase58(),
-    privateKeyB58: Buffer.from(kp.secretKey).toString('base58')
+    privateKeyB58: bs58.encode(kp.secretKey)   // ← Fixed: use bs58 library
   };
 }
 
-// Restore keypair from stored 64-byte secret key
+// Restore keypair from stored 64-byte secret key (for refund/sweep)
 function keypairFromB58(privB58) {
-  const sk = b58dec(privB58); // 64 bytes
-  return nacl.sign.keyPair.fromSecretKey(sk);
+  const sk = b58dec(privB58);
+  return Keypair.fromSecretKey(sk);
 }
 
 // ── Solana RPC (raw JSON-RPC, no SDK needed) ────────────────────────────────────
@@ -616,13 +611,39 @@ app.use('/api/admin', aR);
 // =============================================================================
 
 // Add state_data column to users table if it doesn't exist
+// ── Ensure all required columns exist (critical for payment system) ───────────
 async function ensureStateColumn() {
-  await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS state_data TEXT`);
-  // Add new payment columns to existing deployments
-  await db.query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS sender_address TEXT`);
-  await db.query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS refunded BOOLEAN DEFAULT false`);
-  await db.query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ`);
-  await db.query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS refund_sig TEXT`);
+  console.log('[migration] Ensuring all payments table columns exist...');
+
+  // User state
+  await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS state_data TEXT`).catch(() => {});
+
+  // All payment columns (this fixes your current error and future ones)
+  const paymentColumns = [
+    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS amount_sol NUMERIC`,
+    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS amount_usd NUMERIC`,
+    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS sol_price_usd NUMERIC`,
+    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS receive_address TEXT`,
+    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS receive_privkey TEXT`,
+    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS sender_address TEXT`,
+    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS confirmed BOOLEAN DEFAULT false`,
+    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ`,
+    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS refunded BOOLEAN DEFAULT false`,
+    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ`,
+    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS refund_sig TEXT`,
+    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS swept BOOLEAN DEFAULT false`,
+    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS swept_at TIMESTAMPTZ`
+  ];
+
+  for (const sql of paymentColumns) {
+    try {
+      await db.query(sql);
+    } catch (e) {
+      console.warn('[migration] Column may already exist:', e.message);
+    }
+  }
+
+  console.log('[migration] Payments table columns ensured.');
 }
 
 app.get('/api/state', authMiddleware, async (req, res) => {
@@ -711,10 +732,13 @@ app.use(express.static('public'));
 
 initDB()
   .then(async () => {
-    await ensureStateColumn();
+    await ensureStateColumn();     // ← Must be here
     await ensureWalletsTable();
     app.listen(PORT, () => console.log(`UDT backend on port ${PORT}`));
   })
-  .catch(e=>{ console.error('DB init failed:',e); process.exit(1); });
+  .catch(e => { 
+    console.error('DB init failed:', e); 
+    process.exit(1); 
+  });
 
 module.exports = app;

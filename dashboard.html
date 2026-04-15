@@ -782,7 +782,7 @@ function renderSubPage() {
 
       ${!isFree ? `
         <div class="sub-section">
-          <div class="sub-section-label">${sub?.active ? 'Renew' : 'Subscribe'} — $199 / month</div>
+          <div class="sub-section-label">${sub?.active ? 'Renew' : 'Subscribe'} — $99 / month</div>
           <p style="font-size:10px;color:var(--text-muted);margin-bottom:10px;line-height:1.6">
             Manual renewal. Pay with Phantom or direct SOL transfer. Price is converted to SOL at the current rate and locked at the time you pay.
           </p>
@@ -1213,7 +1213,7 @@ window._triggerPhantomTx = async function() {
     const web3 = window.solanaWeb3;
     if (!web3) throw new Error('@solana/web3.js not loaded — please refresh the page');
 
-    const conn       = new web3.Connection('https://api.mainnet-beta.solana.com', 'confirmed');
+    const conn       = new web3.Connection('https://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007', 'confirmed');
     const fromPubkey = new web3.PublicKey(senderAddress);
     const toPubkey   = new web3.PublicKey(payData.address);
     const lamports   = Math.floor(payData.amount_sol * 1e9);
