@@ -1287,15 +1287,14 @@ window._triggerPhantomTx = async function() {
     const toPubkey   = new web3.PublicKey(payData.address);
     const lamports   = Math.floor(parseFloat(payData.amount_sol) * 1_000_000_000);
 
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
+    const { blockhash } = await connection.getLatestBlockhash('finalized');
 
-    // ── MANUAL TRANSFER INSTRUCTION (no SystemProgram → no buffer-layout) ──
+    // ── MANUAL TRANSFER (no buffer-layout) ──
     const SYSTEM_PROGRAM_ID = new web3.PublicKey('11111111111111111111111111111111');
 
-    // Transfer instruction data: [2, lamports (u64 little-endian)]
     const data = new Uint8Array(9);
-    data[0] = 2;                                      // Transfer instruction
-    new DataView(data.buffer).setBigUint64(1, BigInt(lamports), true); // little-endian
+    data[0] = 2; // Transfer instruction
+    new DataView(data.buffer).setBigUint64(1, BigInt(lamports), true);
 
     const transferIx = new web3.TransactionInstruction({
       keys: [
@@ -1306,11 +1305,11 @@ window._triggerPhantomTx = async function() {
       data: data
     });
 
-    const tx = new web3.Transaction({
-      recentBlockhash: blockhash,
-      feePayer: fromPubkey,
-      lastValidBlockHeight
-    }).add(transferIx);
+    // Build transaction the way Phantom likes it
+    const tx = new web3.Transaction();
+    tx.add(transferIx);
+    tx.recentBlockhash = blockhash;      // ← This fixes the error
+    tx.feePayer = fromPubkey;
 
     if (btn) btn.textContent = 'Waiting for approval in Phantom...';
 
