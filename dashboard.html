@@ -1139,8 +1139,6 @@ async function payGenerate() {
   btn.disabled = true; btn.textContent = 'Creating…';
 
   try {
-    // For Phantom: check it's installed, but DON'T connect yet —
-    // we connect + sign in one step when the user clicks confirm in the panel
     if (_payMethod === 'phantom') {
       const phantom = window.solana || window.phantom?.solana;
       if (!phantom?.isPhantom) {
@@ -1149,8 +1147,6 @@ async function payGenerate() {
       }
     }
 
-    // Create payment on server — unique receiving wallet + locked price
-    // sender_address not needed until tx is sent (Phantom), or not needed at all (manual)
     const r = await fetch(BACKEND + '/api/subscription/payment/init', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -1160,7 +1156,6 @@ async function payGenerate() {
     if (!r.ok) throw new Error(d.error || `Server error ${r.status}`);
     _payData = d;
 
-    // Close selection overlay, open full-screen panel
     document.getElementById('pay-overlay').style.display = 'none';
     _openPayPanel(d, token);
 
@@ -1208,8 +1203,8 @@ function _startCountdown() {
     if (left === 0) {
       clearInterval(_payTimer); _payTimer = null;
       if (_payPoll) { clearInterval(_payPoll); _payPoll = null; }
-      const s = document.getElementById('pp-status');
-      if (s) s.innerHTML = `
+      const statusEl = document.getElementById('pp-status');
+      if (statusEl) statusEl.innerHTML = `
         <div style="background:var(--danger-bg);border:1px solid rgba(220,38,38,0.2);border-radius:8px;padding:14px 16px;text-align:center">
           <div style="font-size:13px;font-weight:700;color:var(--danger);margin-bottom:4px">Payment window expired</div>
           <div style="font-size:10px;color:var(--text-muted);margin-bottom:12px">The 30-minute window has closed. Please start a new payment.</div>
@@ -1248,11 +1243,11 @@ function _buildPhantomPanel(payData, token) {
 }
 
 window._triggerPhantomTx = async function() {
-  const payData = window._ppPayData;
-  const token = window._ppToken;
-  const phantom = window.solana || window.phantom?.solana;
-  const btn = document.getElementById('pp-phantom-btn');
-  const statusEl = document.getElementById('pp-status');
+  const payData   = window._ppPayData;
+  const token     = window._ppToken;
+  const phantom   = window.solana || window.phantom?.solana;
+  const btn       = document.getElementById('pp-phantom-btn');
+  const statusEl  = document.getElementById('pp-status');
 
   if (!phantom?.isPhantom) {
     if (statusEl) statusEl.innerHTML = `<div style="color:var(--warn)">Phantom wallet not detected.</div>`;
@@ -1263,7 +1258,7 @@ window._triggerPhantomTx = async function() {
     if (btn) { btn.disabled = true; btn.textContent = 'Connecting to Phantom...'; }
 
     await phantom.disconnect().catch(() => {});
-    const connectResp = await phantom.connect({ onlyIfTrusted: false });
+    const connectResp  = await phantom.connect({ onlyIfTrusted: false });
     const senderPubkey = connectResp.publicKey;
     if (!senderPubkey) throw new Error('Failed to get wallet public key');
 
@@ -1281,8 +1276,8 @@ window._triggerPhantomTx = async function() {
     );
 
     const fromPubkey = new web3.PublicKey(senderAddress);
-    const toPubkey = new web3.PublicKey(payData.address);
-    const lamports = Math.floor(parseFloat(payData.amount_sol) * 1_000_000_000);
+    const toPubkey   = new web3.PublicKey(payData.address);
+    const lamports   = Math.floor(parseFloat(payData.amount_sol) * 1_000_000_000);
 
     const { blockhash } = await connection.getLatestBlockhash('finalized');
 
@@ -1293,7 +1288,7 @@ window._triggerPhantomTx = async function() {
 
     const transferIx = new web3.TransactionInstruction({
       keys: [
-        { pubkey: fromPubkey, isSigner: true, isWritable: true },
+        { pubkey: fromPubkey, isSigner: true,  isWritable: true },
         { pubkey: toPubkey,   isSigner: false, isWritable: true }
       ],
       programId: SYSTEM_PROGRAM_ID,
@@ -1308,24 +1303,39 @@ window._triggerPhantomTx = async function() {
     if (btn) btn.textContent = 'Waiting for approval in Phantom...';
 
     const { signature } = await phantom.signAndSendTransaction(tx);
-
     console.log('✅ Phantom tx sent →', signature);
-
-    // ── NEW: Tell backend the exact signature for instant confirmation ──
-    fetch(BACKEND + '/api/subscription/payment/confirm', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ payment_id: payData.payment_id, signature })
-    }).catch(() => {});
 
     if (statusEl) {
       statusEl.innerHTML = `
-        <div style="color:var(--green-dim);font-size:11px">
-          ✓ Transaction sent!<br>
-          <span style="font-family:var(--mono);opacity:0.8">Sig: ${signature.slice(0,20)}...</span>
+        <div style="background:var(--surface2);border:1px solid var(--border-md);border-radius:8px;padding:12px 14px">
+          <div style="font-size:11px;font-weight:600;color:var(--green-dim);margin-bottom:5px">✓ Transaction sent! Waiting for confirmation…</div>
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text-muted);word-break:break-all">${signature}</div>
+          <div id="pp-phantom-watch" class="pay-watch" style="margin-top:8px;font-size:10px">
+            <div class="pay-spin"></div>
+            <span>Confirming on-chain…</span>
+          </div>
         </div>`;
     }
 
+    // FIX: Try the fast /confirm path first. If it returns pending (tx not indexed yet),
+    // that's fine — the polling loop below will catch it via /check
+    fetch(BACKEND + '/api/subscription/payment/confirm', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body:    JSON.stringify({ payment_id: payData.payment_id, signature })
+    })
+    .then(r => r.json())
+    .then(d => {
+      if (d.confirmed) {
+        // Fast path succeeded — stop the poll and show success
+        if (_payPoll) { clearInterval(_payPoll); _payPoll = null; }
+        _showPaySuccess();
+      }
+      // If pending/not confirmed, the polling loop below handles it
+    })
+    .catch(() => {}); // non-critical — polling is the safety net
+
+    // Always start the polling fallback regardless of /confirm result
     _startPaymentPolling(payData.payment_id, token, 'pp-phantom-watch');
 
   } catch (err) {
@@ -1343,7 +1353,6 @@ window._triggerPhantomTx = async function() {
 // ── Manual payment panel ───────────────────────────────────────────────────────
 function _buildManualPanel(payData, token) {
   const content = document.getElementById('pp-content');
-  const addrId  = 'pp-addr-' + Date.now();
 
   content.innerHTML = `
     <div style="background:var(--surface);border:1px solid var(--border-md);border-radius:10px;padding:16px;margin-bottom:12px">
@@ -1352,7 +1361,7 @@ function _buildManualPanel(payData, token) {
         This address was generated just for you. Send exactly
         <strong style="color:var(--navy)">${payData.amount_sol} SOL</strong> here.
       </div>
-      <div id="${addrId}"
+      <div
         style="background:var(--surface2);border:1.5px dashed var(--navy);border-radius:6px;padding:12px;font-family:var(--mono);font-size:9.5px;word-break:break-all;cursor:pointer;color:var(--navy);line-height:1.7;text-align:center"
         onclick="navigator.clipboard.writeText('${payData.address}');showToast('Address copied!')">
         ${payData.address}
@@ -1386,11 +1395,34 @@ function _buildManualPanel(payData, token) {
   _startPaymentPolling(payData.payment_id, token, 'pp-manual-watch');
 }
 
+// ── Payment success screen ─────────────────────────────────────────────────────
+function _showPaySuccess() {
+  const panel = document.getElementById('pay-panel');
+  if (!panel) return;
+  if (_payPoll)  { clearInterval(_payPoll);  _payPoll  = null; }
+  if (_payTimer) { clearInterval(_payTimer); _payTimer = null; }
+  panel.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:18px;padding:40px 24px;text-align:center">
+      <div style="width:70px;height:70px;border-radius:50%;background:var(--green-bg);border:2px solid var(--green-dim);display:flex;align-items:center;justify-content:center;font-size:32px">🎉</div>
+      <div style="font-size:22px;font-weight:800;color:var(--navy)">Payment Confirmed!</div>
+      <div style="font-size:12px;color:var(--text-muted);max-width:300px;line-height:1.7">
+        Your 30-day subscription is now active.<br>You have full access to all five tools.
+      </div>
+      <button class="btn btn-primary" style="padding:12px 28px;font-size:12px;font-weight:700"
+        onclick="document.getElementById('pay-panel').style.display='none';_refreshSubServer().then(()=>{if(typeof render==='function')render();if(_webTool==='subscription')renderSubPage();})">
+        Start Using Tools →
+      </button>
+    </div>`;
+  _refreshSubServer();
+  showToast('Subscription activated! 🎉');
+}
+
 // ── Payment polling ────────────────────────────────────────────────────────────
 function _startPaymentPolling(paymentId, token, watchElId) {
   if (_payPoll) clearInterval(_payPoll);
 
   _payPoll = setInterval(async () => {
+    // Stop if the panel was closed
     if (document.getElementById('pay-panel').style.display === 'none') {
       clearInterval(_payPoll); _payPoll = null; return;
     }
@@ -1402,22 +1434,7 @@ function _startPaymentPolling(paymentId, token, watchElId) {
 
       if (pd.confirmed) {
         clearInterval(_payPoll); _payPoll = null;
-        if (_payTimer) { clearInterval(_payTimer); _payTimer = null; }
-        // Replace entire panel with success screen
-        document.getElementById('pay-panel').innerHTML = `
-          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:18px;padding:40px 24px;text-align:center">
-            <div style="width:70px;height:70px;border-radius:50%;background:var(--green-bg);border:2px solid var(--green-dim);display:flex;align-items:center;justify-content:center;font-size:32px">&#x1F389;</div>
-            <div style="font-size:22px;font-weight:800;color:var(--navy)">Payment Confirmed!</div>
-            <div style="font-size:12px;color:var(--text-muted);max-width:300px;line-height:1.7">
-              Your 30-day subscription is now active.<br>You have full access to all five tools.
-            </div>
-            <button class="btn btn-primary" style="padding:12px 28px;font-size:12px;font-weight:700"
-              onclick="document.getElementById('pay-panel').style.display='none';_refreshSubServer().then(()=>{if(typeof render==='function')render();if(_webTool==='subscription')renderSubPage();})">
-              Start Using Tools &rarr;
-            </button>
-          </div>`;
-        await _refreshSubServer();
-        showToast('Subscription activated! 🎉');
+        _showPaySuccess();
 
       } else if (pd.refunding) {
         clearInterval(_payPoll); _payPoll = null;
@@ -1436,7 +1453,7 @@ function _startPaymentPolling(paymentId, token, watchElId) {
         const s = document.getElementById('pp-status');
         if (s) s.innerHTML = `
           <div style="background:var(--warn-bg);border:1px solid rgba(217,119,6,0.2);border-radius:8px;padding:14px 16px">
-            <div style="font-size:12px;font-weight:700;color:var(--warn);margin-bottom:5px">&#x21A9; Refunded</div>
+            <div style="font-size:12px;font-weight:700;color:var(--warn);margin-bottom:5px">↩ Refunded</div>
             <div style="font-size:10px;color:var(--text-muted);margin-bottom:12px">${pd.message}</div>
             <button class="btn btn-primary btn-sm" onclick="cancelPayPanel();openPayOverlay()">Try Again</button>
           </div>`;
@@ -1445,11 +1462,11 @@ function _startPaymentPolling(paymentId, token, watchElId) {
 
       } else if (pd.underpaid) {
         const w = document.getElementById(watchElId);
-        if (w) w.innerHTML = `<span style="color:var(--warn);font-size:10px">&#x26A0; ${pd.message}</span>`;
+        if (w) w.innerHTML = `<span style="color:var(--warn);font-size:10px">⚠ ${pd.message}</span>`;
 
       } else if (pd.expired) {
         clearInterval(_payPoll); _payPoll = null;
-        // countdown will handle the UI
+        // countdown timer handles the UI
       }
     } catch {} // network blip — keep polling
   }, 5000);

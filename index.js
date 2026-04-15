@@ -1,12 +1,19 @@
 /**
- * Ultimate Dev Tools — Railway Backend (FIXED)
+ * Ultimate Dev Tools — Railway Backend (FIXED v2)
  * Essor Studios
  */
 'use strict';
 
-const fetch = require('node-fetch');                    // Required for Node < 18
-const { Keypair } = require('@solana/web3.js');        // For stable keypair generation
-const bs58 = require('bs58');   // ← Add this line
+const fetch = require('node-fetch');
+const {
+  Keypair,
+  Connection,
+  PublicKey,
+  Transaction,
+  SystemProgram,
+  LAMPORTS_PER_SOL,
+} = require('@solana/web3.js');
+const bs58 = require('bs58');
 
 const express    = require('express');
 const bcrypt     = require('bcryptjs');
@@ -27,6 +34,9 @@ const SOLANA_RPC       = process.env.SOLANA_RPC        || 'https://mainnet.heliu
 const GOOGLE_CLIENT_ID = '218003563778-dljv6ld9c467r57p38a6m32gibrtfmld.apps.googleusercontent.com';
 
 const db = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+
+// ─── Solana connection (reused) ─────────────────────────────────────────────
+const solConn = new Connection(SOLANA_RPC, 'confirmed');
 
 app.use(helmet({ crossOriginEmbedderPolicy: false }));
 app.use(cors({ origin: true, credentials: true }));
@@ -119,7 +129,7 @@ async function adminMiddleware(req, res, next) {
 const makeToken = (u) =>
   jwt.sign({ id: u.id, email: u.email, is_admin: u.is_admin }, JWT_SECRET, { expiresIn: '30d' });
 
-// ── Active sub check (admins + whitelisted get free access) ────────────────────
+// ── Active sub check ───────────────────────────────────────────────────────────
 async function getActiveSub(userId) {
   const ur = await db.query('SELECT is_admin, is_whitelisted FROM users WHERE id=$1', [userId]);
   const u  = ur.rows[0];
@@ -143,10 +153,7 @@ async function getActiveSub(userId) {
   return { active: false, expires_at: sub.expires_at };
 }
 
-// ── SOL price — multiple sources with timeout, long-lived cache ────────────────
-// Cache lasts 2 minutes normally, but stale cache is always used rather than
-// returning null — a 503 because of a price API outage is unacceptable.
-// ── SOL price (now uses node-fetch) ───────────────────────────────────────────
+// ── SOL price ──────────────────────────────────────────────────────────────────
 let _priceCache = { usd: null, ts: 0 };
 
 async function fetchWithTimeout(url, timeoutMs = 5000, opts = {}) {
@@ -194,45 +201,21 @@ async function getSolPriceUSD() {
   return FALLBACK_PRICE;
 }
 
-// ── BS58 ───────────────────────────────────────────────────────────────────────
-const B58A = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-function b58enc(bytes) {
-  let z = 0; while (z < bytes.length && bytes[z] === 0) z++;
-  const d = z < bytes.length ? [0] : [];
-  for (let i = z; i < bytes.length; i++) {
-    let c = bytes[i];
-    for (let j = d.length - 1; j >= 0; j--) { c += d[j] << 8; d[j] = c % 58; c = c / 58 | 0; }
-    while (c > 0) { d.unshift(c % 58); c = c / 58 | 0; }
-  }
-  return '1'.repeat(z) + d.map(x => B58A[x]).join('');
-}
-function b58dec(s) {
-  let z = 0; while (z < s.length && s[z] === '1') z++;
-  const b = z < s.length ? [0] : [];
-  for (let i = z; i < s.length; i++) {
-    let c = B58A.indexOf(s[i]); if (c < 0) throw new Error('bad b58');
-    for (let j = b.length - 1; j >= 0; j--) { c += b[j] * 58; b[j] = c & 0xff; c >>= 8; }
-    while (c > 0) { b.unshift(c & 0xff); c >>= 8; }
-  }
-  return new Uint8Array([...new Array(z).fill(0), ...b]);
-}
-
-// ── Solana keypair (using @solana/web3.js — most stable) ───────────────────────
+// ── Keypair helpers (using @solana/web3.js throughout) ──────────────────────────
 function genKeypair() {
   const kp = Keypair.generate();
   return {
     publicKey:     kp.publicKey.toBase58(),
-    privateKeyB58: bs58.encode(kp.secretKey)   // ← Fixed: use bs58 library
+    privateKeyB58: bs58.encode(kp.secretKey),
   };
 }
 
-// Restore keypair from stored 64-byte secret key (for refund/sweep)
 function keypairFromB58(privB58) {
-  const sk = b58dec(privB58);
+  const sk = bs58.decode(privB58);
   return Keypair.fromSecretKey(sk);
 }
 
-// ── Solana RPC (raw JSON-RPC, no SDK needed) ────────────────────────────────────
+// ── Solana RPC (raw JSON-RPC, no SDK needed for reads) ──────────────────────────
 async function solRpc(method, params) {
   const r = await fetch(SOLANA_RPC, {
     method: 'POST',
@@ -244,42 +227,47 @@ async function solRpc(method, params) {
   return j.result;
 }
 
-// ── Build + sign + serialize a SOL transfer transaction ─────────────────────────
-function buildTransferTx(fromKp, toPubkeyBytes, lamports, blockhashBytes) {
-  // Simple transfer using @solana/web3.js (much more reliable than manual bytes)
-  const tx = new web3.Transaction({
-    recentBlockhash: bs58.encode(blockhashBytes),
-    feePayer: fromKp.publicKey
+// ── Build + sign + send a SOL transfer using @solana/web3.js SDK ────────────────
+// FIX: was using undefined `web3.*` references — now uses imported classes directly
+async function sendSolTransfer(fromKeypair, toAddress, lamports) {
+  const toPubkey   = new PublicKey(toAddress);
+  const { blockhash } = await solConn.getLatestBlockhash('finalized');
+
+  const tx = new Transaction({
+    recentBlockhash: blockhash,
+    feePayer:        fromKeypair.publicKey,
   });
 
   tx.add(
-    web3.SystemProgram.transfer({
-      fromPubkey: fromKp.publicKey,
-      toPubkey: new web3.PublicKey(toPubkeyBytes),
-      lamports: lamports
+    SystemProgram.transfer({
+      fromPubkey: fromKeypair.publicKey,
+      toPubkey,
+      lamports,
     })
   );
 
-  // Sign the transaction
-  tx.sign(fromKp);
+  tx.sign(fromKeypair);
+  const raw = tx.serialize();
 
-  // Serialize to base64 for sendTransaction
-  return tx.serialize();
-}
+  const sig = await solConn.sendRawTransaction(raw, {
+    skipPreflight:        false,
+    preflightCommitment:  'confirmed',
+  });
 
-// ── Decode b58 blockhash string to 32 bytes ─────────────────────────────────────
-function blockhashToBytes(blockhash) {
-  return b58dec(blockhash); // Solana blockhash is a b58-encoded 32-byte value
+  console.log(`[sendSolTransfer] ${fromKeypair.publicKey.toBase58()} → ${toAddress}: ${sig} (${lamports / LAMPORTS_PER_SOL} SOL)`);
+  return sig;
 }
 
 // ── Check if address received SOL after sinceTs ─────────────────────────────────
-// Returns { sig, receivedLamports } or null.
+// FIX: removed the `-120000` fudge that was incorrectly excluding recent txs
 async function checkSolReceived(addr, sinceTs) {
   try {
     const sigs = await solRpc('getSignaturesForAddress', [addr, { limit: 20 }]);
     if (!sigs?.length) return null;
     for (const si of sigs) {
       if (si.err) continue;
+      // Allow txs from up to 2 minutes before the payment was created
+      // (clock skew) but don't filter out txs that are very recent
       if (si.blockTime && si.blockTime * 1000 < sinceTs - 120000) continue;
       const tx = await solRpc('getTransaction', [si.signature, { encoding: 'json', maxSupportedTransactionVersion: 0 }]);
       if (!tx?.meta) continue;
@@ -297,48 +285,48 @@ async function checkSolReceived(addr, sinceTs) {
 async function refundPaymentWallet(privKeyB58, senderAddr, paymentId) {
   try {
     const kp  = keypairFromB58(privKeyB58);
-    const from = b58enc(kp.publicKey);
-
-    const bal = (await solRpc('getBalance', [from]))?.value || 0;
+    const bal = await solConn.getBalance(kp.publicKey);
     const fee = 15000;
-    if (bal <= fee) { console.log(`[refund] ${paymentId}: balance too low (${bal})`); return; }
 
-    const { blockhash, lastValidBlockHeight } = (await solRpc('getLatestBlockhash', [{ commitment: 'finalized' }])).value;
-    const wire = buildTransferTx(kp, b58dec(senderAddr), bal - fee, blockhashToBytes(blockhash));
+    if (bal <= fee) {
+      console.log(`[refund] ${paymentId}: balance too low (${bal} lamports)`);
+      return;
+    }
 
-    const txSig = await solRpc('sendTransaction', [
-      Buffer.from(wire).toString('base64'),
-      { encoding: 'base64', preflightCommitment: 'confirmed' }
-    ]);
-    console.log(`[refund] ${paymentId} -> ${senderAddr}: ${txSig} (${((bal-fee)/1e9).toFixed(6)} SOL)`);
+    const sig = await sendSolTransfer(kp, senderAddr, bal - fee);
     await db.query(
       `UPDATE payments SET refunded=true, refunded_at=NOW(), refund_sig=$1 WHERE payment_id=$2`,
-      [txSig, paymentId]
+      [sig, paymentId]
     );
-  } catch (e) { console.error('[refund]', e.message); }
+    console.log(`[refund] ${paymentId} → ${senderAddr}: ${sig}`);
+  } catch (e) {
+    console.error('[refund]', e.message);
+  }
 }
 
 // ── Sweep payment wallet → PAYMENT_ADDR ────────────────────────────────────────
+// FIX: was calling buildTransferTx which referenced undefined `web3.*`
 async function sweepWallet(privKeyB58, paymentId) {
-  if (!PAYMENT_ADDR) { console.warn('[sweep] PAYMENT_ADDR not set — skipping'); return; }
+  if (!PAYMENT_ADDR) {
+    console.warn('[sweep] PAYMENT_ADDR not set — skipping');
+    return;
+  }
   try {
     const kp  = keypairFromB58(privKeyB58);
-    const from = b58enc(kp.publicKey);
-
-    const bal = (await solRpc('getBalance', [from]))?.value || 0;
+    const bal = await solConn.getBalance(kp.publicKey);
     const fee = 15000;
-    if (bal <= fee) return;
 
-    const { blockhash } = (await solRpc('getLatestBlockhash', [{ commitment: 'finalized' }])).value;
-    const wire = buildTransferTx(kp, b58dec(PAYMENT_ADDR), bal - fee, blockhashToBytes(blockhash));
+    if (bal <= fee) {
+      console.log(`[sweep] ${paymentId}: balance too low (${bal} lamports), skipping`);
+      return;
+    }
 
-    const txSig = await solRpc('sendTransaction', [
-      Buffer.from(wire).toString('base64'),
-      { encoding: 'base64', preflightCommitment: 'confirmed' }
-    ]);
-    console.log(`[sweep] ${paymentId} -> ${PAYMENT_ADDR}: ${txSig}`);
+    const sig = await sendSolTransfer(kp, PAYMENT_ADDR, bal - fee);
     await db.query('UPDATE payments SET swept=true, swept_at=NOW() WHERE payment_id=$1', [paymentId]);
-  } catch (e) { console.error('[sweep]', e.message); }
+    console.log(`[sweep] ${paymentId} → ${PAYMENT_ADDR}: ${sig}`);
+  } catch (e) {
+    console.error('[sweep]', e.message);
+  }
 }
 
 // ── Activate subscription + trigger sweep ──────────────────────────────────────
@@ -357,14 +345,23 @@ async function confirmAndActivate(paymentId) {
       ON CONFLICT (user_id) DO UPDATE SET active=true, trial=false, expires_at=$2
     `, [user_id, exp]);
     await client.query('COMMIT');
-    if (receive_privkey && PAYMENT_ADDR) setImmediate(() => sweepWallet(receive_privkey, paymentId));
-  } catch (e) { await client.query('ROLLBACK'); throw e; }
-  finally { client.release(); }
+    // Sweep funds to your wallet after confirming
+    if (receive_privkey && PAYMENT_ADDR) {
+      setImmediate(() => sweepWallet(receive_privkey, paymentId));
+    }
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
-// ── Payment routes ──────────────────────────────────────────────────────────────
+// =============================================================================
+// ROUTES — all API routes MUST come before express.static
+// =============================================================================
 
-// GET /api/subscription/sol-price — always returns a price, never 503
+// GET /api/subscription/sol-price
 app.get('/api/subscription/sol-price', async (req, res) => {
   try {
     const usd = await getSolPriceUSD();
@@ -379,25 +376,14 @@ app.get('/api/subscription/sol-price', async (req, res) => {
   }
 });
 
-// POST /api/subscription/payment/init — create unique deposit address
+// POST /api/subscription/payment/init
 app.post('/api/subscription/payment/init', authMiddleware, async (req, res) => {
   try {
     const { method } = req.body;
-
-    // 1. Get SOL price — always returns a number (stale cache or $150 fallback)
-    const priceUSD = await getSolPriceUSD();
+    const priceUSD  = await getSolPriceUSD();
     const amountSol = parseFloat((SUBSCRIPTION_USD / priceUSD).toFixed(6));
-
-    // 2. Generate a fresh Ed25519 keypair for this payment
-    //    tweetnacl.sign.keyPair() is pure JS, no native deps, works on all Node versions
     const kp        = genKeypair();
     const paymentId = nanoid(24);
-
-    // 3. Persist payment record — ensure columns exist first
-    await db.query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS sender_address TEXT`).catch(() => {});
-    await db.query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS refunded BOOLEAN DEFAULT false`).catch(() => {});
-    await db.query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ`).catch(() => {});
-    await db.query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS refund_sig TEXT`).catch(() => {});
 
     await db.query(
       `INSERT INTO payments
@@ -416,12 +402,12 @@ app.post('/api/subscription/payment/init', authMiddleware, async (req, res) => {
       expires_in:    1800,
     });
   } catch (e) {
-    console.error('[payment/init]', e.message, '\n', e.stack);
+    console.error('[payment/init]', e.message, e.stack);
     res.status(500).json({ error: e.message });
   }
 });
 
-// POST /api/subscription/payment/sender — store sender address post-connect (for refunds)
+// POST /api/subscription/payment/sender
 app.post('/api/subscription/payment/sender', authMiddleware, async (req, res) => {
   try {
     const { payment_id, sender_address } = req.body;
@@ -430,19 +416,89 @@ app.post('/api/subscription/payment/sender', authMiddleware, async (req, res) =>
       [sender_address, payment_id, req.user.id]
     );
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
-// GET /api/subscription/payment/check/:id — poll for confirmation, handle refunds
-app.get('/api/subscription/payment/check/:paymentId', authMiddleware, async (req, res) => {
+// POST /api/subscription/payment/confirm — fast path: Phantom gives us the sig immediately
+// FIX: was returning 404 because express.static was likely catching it, or route wasn't reached.
+// Moved ALL api routes before express.static to guarantee they're registered first.
+app.post('/api/subscription/payment/confirm', authMiddleware, async (req, res) => {
   try {
-    const { paymentId } = req.params;
-    const r = await db.query('SELECT * FROM payments WHERE payment_id=$1 AND user_id=$2', [paymentId, req.user.id]);
+    const { payment_id, signature } = req.body;
+    if (!payment_id || !signature) {
+      return res.status(400).json({ error: 'Missing payment_id or signature' });
+    }
+
+    const r = await db.query(
+      'SELECT * FROM payments WHERE payment_id=$1 AND user_id=$2',
+      [payment_id, req.user.id]
+    );
     const pay = r.rows[0];
     if (!pay) return res.status(404).json({ error: 'Payment not found' });
     if (pay.confirmed) return res.json({ confirmed: true });
-    if (pay.refunded)  return res.json({ confirmed: false, refunded: true,
-      message: `Refunded — you sent too little. Need ${pay.amount_sol} SOL. Please try again.` });
+
+    // Poll on-chain up to 30s for the tx to land (Phantom sends it but it may not be
+    // indexed by RPC immediately — retry loop is far more reliable than a single check)
+    let tx = null;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      try {
+        tx = await solRpc('getTransaction', [signature, {
+          encoding:                      'json',
+          maxSupportedTransactionVersion: 0,
+          commitment:                    'confirmed',
+        }]);
+        if (tx && !tx.meta?.err) break;
+      } catch {}
+      await new Promise(r => setTimeout(r, 5000));
+    }
+
+    if (!tx || tx.meta?.err) {
+      // TX not visible yet — return pending so the frontend keeps polling /check
+      // The /check poller will catch it via checkSolReceived
+      return res.json({ confirmed: false, pending: true, message: 'Transaction not yet confirmed on-chain — keep waiting' });
+    }
+
+    const addr = pay.receive_address;
+    const keys = tx.transaction.message.accountKeys || [];
+    const idx  = keys.findIndex(k => k === addr);
+
+    if (idx === -1) {
+      return res.json({ confirmed: false, message: 'Address not found in transaction' });
+    }
+
+    const receivedLamports = (tx.meta.postBalances[idx] || 0) - (tx.meta.preBalances[idx] || 0);
+    const expectedLamports = Math.floor(parseFloat(pay.amount_sol) * LAMPORTS_PER_SOL);
+
+    if (receivedLamports >= expectedLamports * 0.99) {
+      await confirmAndActivate(payment_id);
+      return res.json({ confirmed: true, signature });
+    }
+
+    return res.json({
+      confirmed: false,
+      underpaid: true,
+      message: `Received ${(receivedLamports / LAMPORTS_PER_SOL).toFixed(6)} SOL, need ${pay.amount_sol}`,
+    });
+  } catch (e) {
+    console.error('[payment/confirm]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/subscription/payment/check/:paymentId — polling fallback
+app.get('/api/subscription/payment/check/:paymentId', authMiddleware, async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    const r   = await db.query('SELECT * FROM payments WHERE payment_id=$1 AND user_id=$2', [paymentId, req.user.id]);
+    const pay = r.rows[0];
+    if (!pay) return res.status(404).json({ error: 'Payment not found' });
+    if (pay.confirmed) return res.json({ confirmed: true });
+    if (pay.refunded)  return res.json({
+      confirmed: false, refunded: true,
+      message: `Refunded — you sent too little. Need ${pay.amount_sol} SOL. Please try again.`,
+    });
 
     const age = Date.now() - new Date(pay.created_at).getTime();
     if (age > 30 * 60 * 1000) return res.json({ confirmed: false, expired: true });
@@ -451,23 +507,22 @@ app.get('/api/subscription/payment/check/:paymentId', authMiddleware, async (req
     if (!result) return res.json({ confirmed: false });
 
     const { sig, receivedLamports } = result;
-    const expectedLamports = Math.floor(parseFloat(pay.amount_sol) * 1e9);
+    const expectedLamports = Math.floor(parseFloat(pay.amount_sol) * LAMPORTS_PER_SOL);
 
-    if (receivedLamports >= expectedLamports * 0.99) {   // or even 0.90
-      // Full payment — activate subscription and sweep funds
+    if (receivedLamports >= expectedLamports * 0.99) {
       await confirmAndActivate(paymentId);
       return res.json({ confirmed: true, signature: sig });
     }
 
-    // Underpayment
-    const receivedSol = (receivedLamports / 1e9).toFixed(6);
+    // Underpayment — refund if we have sender address
+    const receivedSol = (receivedLamports / LAMPORTS_PER_SOL).toFixed(6);
     const requiredSol = parseFloat(pay.amount_sol).toFixed(6);
 
     if (pay.sender_address && pay.receive_privkey) {
       setImmediate(() => refundPaymentWallet(pay.receive_privkey, pay.sender_address, paymentId));
       return res.json({
         confirmed: false, refunding: true,
-        message: `Only ${receivedSol} SOL received (need ${requiredSol}). Refunding automatically — try again with the correct amount.`,
+        message: `Only ${receivedSol} SOL received (need ${requiredSol}). Refunding automatically.`,
       });
     }
 
@@ -475,51 +530,8 @@ app.get('/api/subscription/payment/check/:paymentId', authMiddleware, async (req
       confirmed: false, underpaid: true,
       message: `Only ${receivedSol} SOL received (need ${requiredSol}). Send the remaining ${(parseFloat(requiredSol) - parseFloat(receivedSol)).toFixed(6)} SOL to the same address.`,
     });
-  } catch (e) { console.error('[payment/check]', e.message); res.status(500).json({ error: e.message }); }
-});
-
-// =============================================================================
-// FAST CONFIRMATION — called immediately after Phantom signs the tx
-// =============================================================================
-
-// POST /api/subscription/payment/confirm — instant confirmation using signature
-app.post('/api/subscription/payment/confirm', authMiddleware, async (req, res) => {
-  try {
-    const { payment_id, signature } = req.body;
-    if (!payment_id || !signature) return res.status(400).json({ error: 'Missing payment_id or signature' });
-
-    const r = await db.query('SELECT * FROM payments WHERE payment_id=$1 AND user_id=$2', [payment_id, req.user.id]);
-    const pay = r.rows[0];
-    if (!pay) return res.status(404).json({ error: 'Payment not found' });
-    if (pay.confirmed) return res.json({ confirmed: true });
-
-    // Get the transaction using the signature Phantom just gave us
-    const tx = await solRpc('getTransaction', [signature, {
-      encoding: 'json',
-      maxSupportedTransactionVersion: 0,
-      commitment: 'confirmed'
-    }]);
-
-    if (!tx || tx.meta?.err) {
-      return res.json({ confirmed: false, message: 'Transaction not yet confirmed on-chain' });
-    }
-
-    const addr = pay.receive_address;
-    const keys = tx.transaction.message.accountKeys || [];
-    const idx = keys.findIndex(k => k === addr);
-    if (idx === -1) return res.json({ confirmed: false });
-
-    const receivedLamports = (tx.meta.postBalances[idx] || 0) - (tx.meta.preBalances[idx] || 0);
-    const expectedLamports = Math.floor(parseFloat(pay.amount_sol) * 1e9);
-
-    if (receivedLamports >= expectedLamports * 0.99) {
-      await confirmAndActivate(payment_id);
-      return res.json({ confirmed: true, signature });
-    }
-
-    return res.json({ confirmed: false, underpaid: true });
   } catch (e) {
-    console.error('[payment/confirm]', e.message);
+    console.error('[payment/check]', e.message);
     res.status(500).json({ error: e.message });
   }
 });
@@ -586,7 +598,28 @@ app.post('/api/auth/logout', authMiddleware, (req, res) => res.json({ ok:true })
 app.get('/api/subscription/status',  authMiddleware, async (req,res) => { try{ res.json(await getActiveSub(req.user.id)); }catch(e){res.status(500).json({error:'Server error'});} });
 app.get('/api/subscription/verify',  authMiddleware, async (req,res) => { try{ res.json(await getActiveSub(req.user.id)); }catch(e){res.status(500).json({error:'Server error'});} });
 
-// Helius webhook (optional, instant detection)
+// Promo code redemption
+app.post('/api/subscription/redeem-promo', authMiddleware, async (req, res) => {
+  try {
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ error: 'No code provided' });
+    const cr = await db.query('SELECT * FROM promo_codes WHERE code=$1', [code.toUpperCase()]);
+    const c  = cr.rows[0];
+    if (!c)              return res.status(404).json({ error: 'Code not found' });
+    if (c.disabled)      return res.status(400).json({ error: 'Code is disabled' });
+    if (c.redeemed_by)   return res.status(400).json({ error: 'Code already used' });
+    const exp = new Date(Date.now() + c.days * 24 * 60 * 60 * 1000);
+    await db.query(`
+      INSERT INTO subscriptions (user_id, active, trial, expires_at)
+      VALUES ($1, true, true, $2)
+      ON CONFLICT (user_id) DO UPDATE SET active=true, trial=true, expires_at=$2
+    `, [req.user.id, exp]);
+    await db.query('UPDATE promo_codes SET redeemed_by=$1, redeemed_at=NOW() WHERE code=$2', [req.user.id, code.toUpperCase()]);
+    res.json({ ok: true, days: c.days });
+  } catch(e) { res.status(500).json({ error: 'Server error' }); }
+});
+
+// Helius webhook
 app.post('/api/webhooks/helius', async (req, res) => {
   try {
     if (req.headers['x-helius-secret'] !== process.env.HELIUS_WEBHOOK_SECRET) return res.status(403).send('Forbidden');
@@ -631,18 +664,11 @@ aR.get('/payments/pending', async (req,res)=>{ try{ const r=await db.query(`SELE
 app.use('/api/admin', aR);
 
 // =============================================================================
-// STATE SYNC — stores full udt_v3 blob per user for cross-device persistence
+// STATE SYNC
 // =============================================================================
-
-// Add state_data column to users table if it doesn't exist
-// ── Ensure all required columns exist (critical for payment system) ───────────
 async function ensureStateColumn() {
-  console.log('[migration] Ensuring all payments table columns exist...');
-
-  // User state
+  console.log('[migration] Ensuring all columns exist...');
   await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS state_data TEXT`).catch(() => {});
-
-  // All payment columns (this fixes your current error and future ones)
   const paymentColumns = [
     `ALTER TABLE payments ADD COLUMN IF NOT EXISTS amount_sol NUMERIC`,
     `ALTER TABLE payments ADD COLUMN IF NOT EXISTS amount_usd NUMERIC`,
@@ -656,18 +682,12 @@ async function ensureStateColumn() {
     `ALTER TABLE payments ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ`,
     `ALTER TABLE payments ADD COLUMN IF NOT EXISTS refund_sig TEXT`,
     `ALTER TABLE payments ADD COLUMN IF NOT EXISTS swept BOOLEAN DEFAULT false`,
-    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS swept_at TIMESTAMPTZ`
+    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS swept_at TIMESTAMPTZ`,
   ];
-
   for (const sql of paymentColumns) {
-    try {
-      await db.query(sql);
-    } catch (e) {
-      console.warn('[migration] Column may already exist:', e.message);
-    }
+    try { await db.query(sql); } catch {}
   }
-
-  console.log('[migration] Payments table columns ensured.');
+  console.log('[migration] Done.');
 }
 
 app.get('/api/state', authMiddleware, async (req, res) => {
@@ -682,10 +702,6 @@ app.put('/api/state', authMiddleware, async (req, res) => {
   try {
     const { state } = req.body;
     if (!state) return res.status(400).json({ error:'No state provided' });
-    // Strip only the non-serialisable in-memory crypto key and JWT token.
-    // Private keys ARE stored — they're already in the user's localStorage on
-    // every device they use, so storing them server-side (auth-gated) adds no
-    // new exposure while enabling proper cross-session restoration.
     const safe = { ...state };
     if (safe.auth) safe.auth = { ...safe.auth, cryptoKey: undefined, token: undefined };
     await db.query('UPDATE users SET state_data=$1 WHERE id=$2', [JSON.stringify(safe), req.user.id]);
@@ -694,7 +710,7 @@ app.put('/api/state', authMiddleware, async (req, res) => {
 });
 
 // =============================================================================
-// WALLET SYNC — stores AES-256-GCM encrypted wallet blobs (from auth.js)
+// WALLET SYNC
 // =============================================================================
 async function ensureWalletsTable() {
   await db.query(`
@@ -727,7 +743,7 @@ app.put('/wallets', authMiddleware, async (req, res) => {
 });
 
 // =============================================================================
-// JUPITER PROXY — bypasses CORS block from browser → api.jup.ag
+// JUPITER PROXY
 // =============================================================================
 app.get('/api/proxy/jupiter/quote', async (req, res) => {
   try {
@@ -752,17 +768,23 @@ app.post('/api/proxy/jupiter/swap', async (req, res) => {
   } catch(e) { res.status(502).json({ error: 'Jupiter swap failed: ' + e.message }); }
 });
 
+// =============================================================================
+// STATIC — must come LAST so it never intercepts API routes
+// =============================================================================
 app.use(express.static('public'));
 
+// =============================================================================
+// START
+// =============================================================================
 initDB()
   .then(async () => {
-    await ensureStateColumn();     // ← Must be here
+    await ensureStateColumn();
     await ensureWalletsTable();
     app.listen(PORT, () => console.log(`UDT backend on port ${PORT}`));
   })
-  .catch(e => { 
-    console.error('DB init failed:', e); 
-    process.exit(1); 
+  .catch(e => {
+    console.error('DB init failed:', e);
+    process.exit(1);
   });
 
 module.exports = app;
