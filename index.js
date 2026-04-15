@@ -20,7 +20,7 @@ const ADMIN_EMAIL      = process.env.ADMIN_EMAIL       || 'taylorchappell02@gmai
 const PAYMENT_ADDR     = process.env.PAYMENT_ADDR      || '';
 const SUBSCRIPTION_USD = parseFloat(process.env.SUBSCRIPTION_USD || '199');
 const PORT             = process.env.PORT              || 3000;
-const SOLANA_RPC       = process.env.SOLANA_RPC        || 'https://api.mainnet-beta.solana.com';
+const SOLANA_RPC       = process.env.SOLANA_RPC        || 'https://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007';
 const GOOGLE_CLIENT_ID = '218003563778-dljv6ld9c467r57p38a6m32gibrtfmld.apps.googleusercontent.com';
 
 const db = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
