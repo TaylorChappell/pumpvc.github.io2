@@ -1248,48 +1248,75 @@ function _buildPhantomPanel(payData, token) {
 }
 
 window._triggerPhantomTx = async function() {
-  const payData  = window._ppPayData;
-  const token    = window._ppToken;
-  const phantom  = window.solana || window.phantom?.solana;
-  const btn      = document.getElementById('pp-phantom-btn');
+  const payData = window._ppPayData;
+  const token = window._ppToken;
+  const phantom = window.solana || window.phantom?.solana;
+  const btn = document.getElementById('pp-phantom-btn');
   const statusEl = document.getElementById('pp-status');
 
   if (!phantom?.isPhantom) {
-    if (statusEl) statusEl.innerHTML = `<div style="color:var(--warn)">Phantom not detected.</div>`;
+    if (statusEl) statusEl.innerHTML = `<div style="color:var(--warn)">Phantom wallet not detected. Please install or enable it.</div>`;
     return;
   }
 
   try {
-    if (btn) { btn.disabled = true; btn.textContent = 'Connecting...'; }
-
-    await phantom.disconnect().catch(() => {});
-    await phantom.connect({ onlyIfTrusted: false });
-
-    const senderAddress = phantom.publicKey?.toString();
-    if (!senderAddress) throw new Error('Could not get wallet address');
-
-    const web3 = window.solanaWeb3;
-    if (!web3 || typeof web3.Transaction !== 'function' || typeof window.Buffer?.from !== 'function') {
-      throw new Error('Crypto libraries not ready — please refresh the page');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Connecting to Phantom...';
     }
+
+    // Disconnect first to force fresh connection (helps with some Phantom states)
+    await phantom.disconnect().catch(() => {});
+
+    const connectResp = await phantom.connect({ onlyIfTrusted: false });
+    const senderPubkey = connectResp.publicKey;
+
+    if (!senderPubkey) throw new Error('Failed to get wallet public key');
+
+    const senderAddress = senderPubkey.toString();
 
     if (btn) btn.textContent = 'Building transaction...';
 
-    const conn = new web3.Connection('https://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007', 'confirmed');
+    // Use the global solanaWeb3 from your IIFE
+    const web3 = window.solanaWeb3 || window.Web3;
+    if (!web3 || typeof web3.Transaction === 'undefined') {
+      throw new Error('Solana web3.js not loaded properly. Refresh the page.');
+    }
+
+    // Create a clean Transaction
+    const connection = new web3.Connection(
+      'https://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007',
+      'confirmed'
+    );
+
     const fromPubkey = new web3.PublicKey(senderAddress);
     const toPubkey   = new web3.PublicKey(payData.address);
-    const lamports   = Math.floor(payData.amount_sol * 1e9);
+    const lamports   = Math.floor(parseFloat(payData.amount_sol) * 1_000_000_000);
 
-    const { blockhash } = await conn.getLatestBlockhash('finalized');
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
 
-    const tx = new web3.Transaction({ recentBlockhash: blockhash, feePayer: fromPubkey });
-    tx.add(web3.SystemProgram.transfer({ fromPubkey, toPubkey, lamports }));
+    const tx = new web3.Transaction({
+      recentBlockhash: blockhash,
+      feePayer: fromPubkey,
+      lastValidBlockHeight
+    });
+
+    tx.add(
+      web3.SystemProgram.transfer({
+        fromPubkey: fromPubkey,
+        toPubkey:   toPubkey,
+        lamports:   lamports
+      })
+    );
 
     if (btn) btn.textContent = 'Waiting for approval in Phantom...';
 
+    // This is the recommended modern way with Phantom
     const { signature } = await phantom.signAndSendTransaction(tx);
 
-    // Update sender address on server
+    console.log('Transaction sent → Signature:', signature);
+
+    // Optional: tell backend who sent it (for refund logic)
     fetch(BACKEND + '/api/subscription/payment/sender', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -1297,15 +1324,30 @@ window._triggerPhantomTx = async function() {
     }).catch(() => {});
 
     if (statusEl) {
-      statusEl.innerHTML = `<div style="color:var(--green-dim)">✓ Transaction sent (Sig: ${signature.slice(0,16)}...)</div>`;
+      statusEl.innerHTML = `
+        <div style="color:var(--green-dim);font-size:11px">
+          ✓ Transaction sent!<br>
+          <span style="font-family:var(--mono);opacity:0.8">Sig: ${signature.slice(0,20)}...</span>
+        </div>`;
     }
 
+    // Start polling for confirmation (your existing function)
     _startPaymentPolling(payData.payment_id, token, 'pp-phantom-watch');
 
-  } catch (e) {
-    console.error(e);
-    if (btn) { btn.disabled = false; btn.textContent = 'Open Phantom & Confirm Payment →'; }
-    if (statusEl) statusEl.innerHTML = `<div style="color:var(--danger)">${e.message || 'Transaction failed'}</div>`;
+  } catch (err) {
+    console.error('Phantom tx error:', err);
+
+    let msg = err.message || 'Transaction failed';
+    if (msg.includes('User rejected')) msg = 'You rejected the transaction in Phantom.';
+    if (msg.includes('Buffer') || msg.includes('write') || msg.includes('layout')) {
+      msg = 'Browser crypto libraries failed. Try refreshing the page or use Manual SOL instead.';
+    }
+
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Open Phantom & Confirm Payment →';
+    }
+    if (statusEl) statusEl.innerHTML = `<div style="color:var(--danger)">${msg}</div>`;
   }
 };
 
