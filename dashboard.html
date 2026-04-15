@@ -20,42 +20,58 @@
   <script src="bs58.js"></script>
 
   <!-- Full polyfill setup -->
-  <script>
-    (function setupPolyfills() {
-      // Force Buffer global with all methods
-      if (typeof window.buffer !== 'undefined' && window.buffer.Buffer) {
-        window.Buffer = window.buffer.Buffer;
+<script>
+  (function setupPolyfills() {
+    // Force Buffer global with ALL methods @solana/web3.js expects
+    if (typeof window.buffer !== 'undefined' && window.buffer.Buffer) {
+      window.Buffer = window.buffer.Buffer;
+    } else if (typeof window.Buffer === 'undefined') {
+      console.warn('[polyfill] Buffer not found on window — using fallback');
+    }
+
+    if (window.Buffer) {
+      // Core methods already present in buffer@6.0.3
+      if (!window.Buffer.from) {
+        window.Buffer.from = function (value, encoding) {
+          if (typeof value === 'string') {
+            return new window.Buffer(value, encoding || 'utf8');
+          }
+          return new window.Buffer(value);
+        };
+      }
+      if (!window.Buffer.isEncoding) {
+        window.Buffer.isEncoding = function (encoding) {
+          const valid = ['hex', 'utf8', 'utf-8', 'ascii', 'latin1', 'binary', 'base64', 'ucs2', 'ucs-2', 'utf16le', 'utf-16le'];
+          return valid.includes(String(encoding).toLowerCase());
+        };
       }
 
-      // Polyfill missing methods that @solana/web3.js expects
-      if (window.Buffer) {
-        if (!window.Buffer.from) {
-          window.Buffer.from = function (value, encoding) {
-            if (typeof value === 'string') {
-              return new window.Buffer(value, encoding || 'utf8');
-            }
-            return new window.Buffer(value);
-          };
-        }
-        if (!window.Buffer.isEncoding) {
-          window.Buffer.isEncoding = function (encoding) {
-            const valid = ['hex', 'utf8', 'utf-8', 'ascii', 'latin1', 'binary', 'base64', 'ucs2', 'ucs-2', 'utf16le', 'utf-16le'];
-            return valid.includes(String(encoding).toLowerCase());
-          };
-        }
+      // ← THIS WAS MISSING AND CAUSED THE CRASH
+      if (typeof window.Buffer.isBuffer !== 'function') {
+        window.Buffer.isBuffer = function isBuffer(obj) {
+          return !!(obj && (obj._isBuffer || obj instanceof window.Buffer));
+        };
       }
 
-      window.solanaWeb3 = window.solanaWeb3 || window.Web3;
+      // Extra safety for other Solana internals
+      if (!window.Buffer.alloc) {
+        window.Buffer.alloc = function (size, fill, encoding) {
+          return new window.Buffer(size).fill(fill || 0, encoding);
+        };
+      }
+    }
 
-      window.bs58 = {
-        encode: typeof bs58encode === 'function' ? bs58encode : null,
-        decode: typeof bs58decode === 'function' ? bs58decode : null
-      };
+    window.solanaWeb3 = window.solanaWeb3 || window.Web3;
 
-      console.log('[polyfill] Buffer.isEncoding ready:', typeof window.Buffer?.isEncoding);
-      console.log('[polyfill] Buffer.from ready:', typeof window.Buffer?.from);
-    })();
-  </script>
+    window.bs58 = {
+      encode: typeof bs58encode === 'function' ? bs58encode : null,
+      decode: typeof bs58decode === 'function' ? bs58decode : null
+    };
+
+    console.log('[polyfill] ✅ Buffer.isBuffer ready:', typeof window.Buffer?.isBuffer);
+    console.log('[polyfill] ✅ Buffer.from ready:', typeof window.Buffer?.from);
+  })();
+</script>
 
   <style>
     /* Remove 480px popup constraint */
