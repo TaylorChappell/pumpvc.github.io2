@@ -17,6 +17,19 @@
     .shell { height:calc(100vh - 40px) !important; }
     .sidebar { width:172px !important; min-width:172px !important; }
 
+    /* Web-only nav items — identical styling to nav-item but NOT targeted by popup.js's
+       querySelectorAll('.nav-item') so their onclick handlers are never overwritten */
+    .web-nav-item {
+      display:flex; align-items:center; gap:8px; padding:5px 10px; border-radius:6px;
+      cursor:pointer; font-size:11px; font-weight:500; color:var(--text-dim);
+      transition:all 0.12s; user-select:none; margin:1px 0; list-style:none;
+    }
+    .web-nav-item:hover { background:var(--navy-ghost); color:var(--navy); }
+    .web-nav-item.active { background:var(--navy-ghost2); color:var(--navy); font-weight:600; }
+    .web-nav-item .nav-svg { opacity:0.6; flex-shrink:0; }
+    .web-nav-item:hover .nav-svg, .web-nav-item.active .nav-svg { opacity:1; }
+    .web-nav-item .nav-label { flex:1; }
+
     /* Web topbar */
     #web-bar {
       height:40px; background:var(--bg2); border-bottom:1px solid var(--border-md);
@@ -222,7 +235,8 @@
 
       <div class="nav-section-label" style="margin-top:4px">ACCOUNT</div>
       <ul class="nav-list">
-        <li class="nav-item" data-tool="subscription" onclick="setWebTool('subscription')">
+        <!-- web-nav-item (not nav-item) so popup.js attachHandlers() never overwrites these onclick handlers -->
+        <li class="web-nav-item" id="nav-subscription-item" onclick="setWebTool('subscription')">
           <svg class="nav-svg" width="13" height="13" viewBox="0 0 13 13" fill="none">
             <rect x="1" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.2"/>
             <path d="M1 6.5h11" stroke="currentColor" stroke-width="1.1"/>
@@ -231,7 +245,7 @@
           <span class="nav-label">Subscription</span>
           <span id="sub-days-badge" class="nav-badge" style="display:none;background:var(--warn-bg);color:var(--warn);border-radius:20px;padding:1px 5px;font-size:8px;"></span>
         </li>
-        <li class="nav-item" data-tool="admin-panel" id="nav-admin-item" onclick="setWebTool('admin-panel')" style="display:none">
+        <li class="web-nav-item" id="nav-admin-item" onclick="setWebTool('admin-panel')" style="display:none">
           <svg class="nav-svg" width="13" height="13" viewBox="0 0 13 13" fill="none">
             <path d="M6.5 1.5L11.5 4v4L6.5 11.5 1.5 8V4L6.5 1.5Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
             <path d="M4.5 6.5l1.5 1.5 2.5-2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -323,9 +337,10 @@
   </div>
 </div>
 
-<!-- Extension JS — same order as popup.html -->
+<!-- Extension JS — same load order as popup.html -->
+<!-- IMPORTANT: Split.js must be deployed to Railway public/ as split.js (lowercase) -->
 <script src="bs58.js"></script>
-<script src="split.js"></script>
+<script src="split.js" onerror="console.error('FATAL: split.js 404 — deploy Split.js as split.js (lowercase) in Railway public/')"></script>
 <script src="auth.js"></script>
 <script src="bundle.js"></script>
 <script src="wallets.js"></script>
@@ -497,20 +512,112 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('web-bar').style.display = '';
   document.getElementById('root').style.display = '';
 
-  // 11. Now let popup.js DOMContentLoaded do its thing
-  // (it already fired, but render() won't show login because S.auth.loggedIn = true)
-  // Trigger a fresh render
+  // 11. Override saveState to also push state to the server (cross-device sync)
+  //     The original popup.js saveState writes to chrome.storage.local (localStorage on web).
+  //     We wrap it to also PUT the state blob to /api/state so any device that loads the
+  //     dashboard pulls the same wallets, settings, tool state etc.
+  const _origSaveState = window.saveState;
+  let _stateSyncTimer = null;
+  window.saveState = async function() {
+    await _origSaveState(); // write to localStorage as normal
+    // Debounce the server push so rapid saves don't spam the API
+    clearTimeout(_stateSyncTimer);
+    _stateSyncTimer = setTimeout(() => _pushStateToServer(), 1500);
+  };
+
+  // 12. Load state from server first (so fresh browser sessions get the saved state)
+  setBootMsg('Loading your data…');
+  await _pullStateFromServer(token);
+
+  // 13. Override VB_JUP_QUOTE and VB_JUP_SWAP constants to use Railway proxy
+  //     api.jup.ag blocks browser requests with CORS — the proxy forwards them server-side
+  if (typeof window.VB_JUP_QUOTE !== 'undefined') {
+    window.VB_JUP_QUOTE = BACKEND + '/api/proxy/jupiter/quote';
+    window.VB_JUP_SWAP  = BACKEND + '/api/proxy/jupiter/swap';
+  }
+  // Also patch the module-level constants that volume-bot.js captured at parse time
+  // by overriding vbJupFetch to rewrite urls transparently
+  const _origVbJupFetch = window.vbJupFetch;
+  if (typeof _origVbJupFetch === 'function') {
+    window.vbJupFetch = async function(url, opts) {
+      // Rewrite api.jup.ag URLs to go through our proxy
+      url = url
+        .replace('https://api.jup.ag/swap/v1/quote', BACKEND + '/api/proxy/jupiter/quote')
+        .replace('https://api.jup.ag/swap/v1/swap',  BACKEND + '/api/proxy/jupiter/swap')
+        .replace('https://quote-api.jup.ag/v6/quote', BACKEND + '/api/proxy/jupiter/quote')
+        .replace('https://quote-api.jup.ag/v6/swap',  BACKEND + '/api/proxy/jupiter/swap');
+      return _origVbJupFetch(url, opts);
+    };
+  }
+
+  // 14. Trigger render
   if (typeof render === 'function') render();
   if (typeof checkRpc === 'function') checkRpc();
   if (typeof buildNavList === 'function') buildNavList();
 
-  // 12. Refresh sub status every 3 min
+  // 15. Refresh sub status every 3 min
   setInterval(_refreshSubServer, 3 * 60 * 1000);
 });
 
 function setBootMsg(msg) {
   const el = document.getElementById('boot-msg');
   if (el) el.textContent = msg;
+}
+
+// ── Server state push/pull ────────────────────────────────────────────────────
+async function _pushStateToServer() {
+  const token = localStorage.getItem('udt_token');
+  if (!token || typeof S === 'undefined') return;
+  try {
+    await fetch(BACKEND + '/api/state', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ state: S })
+    });
+  } catch {} // non-critical — state is also in localStorage
+}
+
+async function _pullStateFromServer(token) {
+  if (!token) return;
+  try {
+    const r = await fetch(BACKEND + '/api/state', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!r.ok) return;
+    const { state } = await r.json();
+    if (!state || typeof state !== 'object') return;
+
+    // Deep-merge server state into S, but never overwrite auth or crypto keys
+    const safeMerge = (target, source) => {
+      if (!source || typeof source !== 'object') return;
+      for (const key of Object.keys(source)) {
+        if (key === 'auth' || key === 'cryptoKey') continue; // never overwrite auth
+        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+          if (!target[key] || typeof target[key] !== 'object') target[key] = {};
+          safeMerge(target[key], source[key]);
+        } else {
+          target[key] = source[key];
+        }
+      }
+    };
+    safeMerge(S, state);
+
+    // Wallets from server state have no private keys (stripped before saving).
+    // Merge with existing local wallets to restore private keys where we have them.
+    if (state.savedWallets?.length) {
+      const localMap = {};
+      (S.savedWallets || []).forEach(w => { if (w.privateKey) localMap[w.publicKey] = w.privateKey; });
+      S.savedWallets = state.savedWallets.map(w => ({
+        ...w,
+        privateKey: w.privateKey || localMap[w.publicKey] || ''
+      }));
+    }
+
+    // Persist merged state to localStorage
+    await chrome.storage.local.set({ udt_v3: S });
+  } catch (e) {
+    console.warn('[state pull]', e.message);
+  }
 }
 
 // ── Server sub refresh (also used after payment) ─────────────────────────────
@@ -567,11 +674,15 @@ document.addEventListener('click', (e) => {
 });
 
 function _syncWebNav() {
-  document.querySelectorAll('.nav-item[data-tool]').forEach(el => {
-    const t = el.dataset.tool;
-    el.classList.toggle('active', _webTool ? t === _webTool : t === S?.activeTool);
+  // Regular tool items (inside #nav-list, built by popup.js buildNavList)
+  document.querySelectorAll('#nav-list .nav-item[data-tool]').forEach(el => {
+    el.classList.toggle('active', !_webTool && el.dataset.tool === S?.activeTool);
   });
+  // Settings button
   document.getElementById('settings-nav-btn')?.classList.toggle('active', !_webTool && S?.activeTool === 'settings');
+  // Web-only items (subscription / admin) — keyed by id, not class
+  document.getElementById('nav-subscription-item')?.classList.toggle('active', _webTool === 'subscription');
+  document.getElementById('nav-admin-item')?.classList.toggle('active', _webTool === 'admin-panel');
 }
 
 // ── Sign out ─────────────────────────────────────────────────────────────────
