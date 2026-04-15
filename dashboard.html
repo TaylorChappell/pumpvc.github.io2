@@ -1255,7 +1255,7 @@ window._triggerPhantomTx = async function() {
   const statusEl = document.getElementById('pp-status');
 
   if (!phantom?.isPhantom) {
-    if (statusEl) statusEl.innerHTML = `<div style="color:var(--warn)">Phantom wallet not detected. Please install or enable it.</div>`;
+    if (statusEl) statusEl.innerHTML = `<div style="color:var(--warn)">Phantom wallet not detected.</div>`;
     return;
   }
 
@@ -1265,25 +1265,19 @@ window._triggerPhantomTx = async function() {
       btn.textContent = 'Connecting to Phantom...';
     }
 
-    // Disconnect first to force fresh connection (helps with some Phantom states)
     await phantom.disconnect().catch(() => {});
-
     const connectResp = await phantom.connect({ onlyIfTrusted: false });
     const senderPubkey = connectResp.publicKey;
-
     if (!senderPubkey) throw new Error('Failed to get wallet public key');
 
     const senderAddress = senderPubkey.toString();
-
     if (btn) btn.textContent = 'Building transaction...';
 
-    // Use the global solanaWeb3 from your IIFE
     const web3 = window.solanaWeb3 || window.Web3;
     if (!web3 || typeof web3.Transaction === 'undefined') {
-      throw new Error('Solana web3.js not loaded properly. Refresh the page.');
+      throw new Error('Solana web3.js not loaded. Refresh the page.');
     }
 
-    // Create a clean Transaction
     const connection = new web3.Connection(
       'https://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007',
       'confirmed'
@@ -1295,28 +1289,36 @@ window._triggerPhantomTx = async function() {
 
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
 
+    // ── MANUAL TRANSFER INSTRUCTION (no SystemProgram → no buffer-layout) ──
+    const SYSTEM_PROGRAM_ID = new web3.PublicKey('11111111111111111111111111111111');
+
+    // Transfer instruction data: [2, lamports (u64 little-endian)]
+    const data = new Uint8Array(9);
+    data[0] = 2;                                      // Transfer instruction
+    new DataView(data.buffer).setBigUint64(1, BigInt(lamports), true); // little-endian
+
+    const transferIx = new web3.TransactionInstruction({
+      keys: [
+        { pubkey: fromPubkey, isSigner: true,  isWritable: true },
+        { pubkey: toPubkey,   isSigner: false, isWritable: true }
+      ],
+      programId: SYSTEM_PROGRAM_ID,
+      data: data
+    });
+
     const tx = new web3.Transaction({
       recentBlockhash: blockhash,
       feePayer: fromPubkey,
       lastValidBlockHeight
-    });
-
-    tx.add(
-      web3.SystemProgram.transfer({
-        fromPubkey: fromPubkey,
-        toPubkey:   toPubkey,
-        lamports:   lamports
-      })
-    );
+    }).add(transferIx);
 
     if (btn) btn.textContent = 'Waiting for approval in Phantom...';
 
-    // This is the recommended modern way with Phantom
     const { signature } = await phantom.signAndSendTransaction(tx);
 
-    console.log('Transaction sent → Signature:', signature);
+    console.log('✅ Phantom tx sent →', signature);
 
-    // Optional: tell backend who sent it (for refund logic)
+    // Tell backend who sent it (for refunds)
     fetch(BACKEND + '/api/subscription/payment/sender', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -1331,18 +1333,12 @@ window._triggerPhantomTx = async function() {
         </div>`;
     }
 
-    // Start polling for confirmation (your existing function)
     _startPaymentPolling(payData.payment_id, token, 'pp-phantom-watch');
 
   } catch (err) {
     console.error('Phantom tx error:', err);
-
     let msg = err.message || 'Transaction failed';
     if (msg.includes('User rejected')) msg = 'You rejected the transaction in Phantom.';
-    if (msg.includes('Buffer') || msg.includes('write') || msg.includes('layout')) {
-      msg = 'Browser crypto libraries failed. Try refreshing the page or use Manual SOL instead.';
-    }
-
     if (btn) {
       btn.disabled = false;
       btn.textContent = 'Open Phantom & Confirm Payment →';
