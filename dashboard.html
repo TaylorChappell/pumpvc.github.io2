@@ -427,6 +427,10 @@
       </ul>
 
       <div class="sidebar-footer">
+        <button class="pin-btn" id="pin-btn">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="10" height="10" rx="1.5" stroke="currentColor" stroke-width="1.2"/><line x1="8" y1="1" x2="8" y2="11" stroke="currentColor" stroke-width="1.2"/><path d="M9.5 4.5L11 6l-1.5 1.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="pin-btn-label">Pin Sidebar</span>
+        </button>
         <button class="settings-btn" data-tool="settings" id="settings-nav-btn">
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M5.3 1.5h2.4l.4 1.3a4 4 0 0 1 .9.5l1.3-.4 1.2 2-1 .9a4 4 0 0 1 0 1.1l1 .9-1.2 2-1.3-.4a4 4 0 0 1-.9.5l-.4 1.2H5.3l-.4-1.2a4 4 0 0 1-.9-.5l-1.3.4-1.2-2 1-.9a4 4 0 0 1 0-1.1l-1-.9 1.2-2 1.3.4a4 4 0 0 1 .9-.5l.4-1.3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><circle cx="6.5" cy="6.5" r="1.6" stroke="currentColor" stroke-width="1.2"/></svg>
           Settings
@@ -574,7 +578,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch { sub = { active: false }; }
   _webSub = sub;
 
-  // Auth stored in localStorage via api.js
+  await chrome.storage.local.set({
+    udt_auth_v2: JSON.stringify({ token, email: user.email||'', userId: user.id||0, encKeyB64:'web-session-no-enc-key', ts: Date.now() })
+  });
 
   S.auth = { loggedIn: true, token, email: user.email||'', userId: user.id||0, is_admin: user.is_admin||false, cryptoKey: null };
   window.tryAutoLogin = async () => true;
@@ -692,7 +698,7 @@ async function _pullStateFromServer(token) {
         privateKey: w.privateKey || localPrivKeys[w.publicKey] || localPrivKeys['id:' + w.id] || ''
       }));
     }
-    localStorage.setItem('udt_v3', JSON.stringify(S));
+    await chrome.storage.local.set({ udt_v3: S });
     console.log(`[state pull] restored ${S.savedWallets?.length || 0} wallets`);
   } catch (e) { console.warn('[state pull]', e.message); }
 }
@@ -760,7 +766,7 @@ async function webSignOut() {
   localStorage.removeItem('udt_token');
   localStorage.removeItem('udt_user');
   localStorage.removeItem('udt_sub_cache');
-  try { localStorage.removeItem('udt_v3'); } catch {}
+  await chrome.storage.local.clear();
   window.location.replace('auth.html');
 }
 
