@@ -360,12 +360,13 @@
 const BACKEND = 'https://ultimatedevtools-production.up.railway.app';
 
 // State set after boot
-let _webUser    = null;   // user object from /api/auth/me
-let _webSub     = null;   // sub status from /api/subscription/verify
-let _webTool    = null;   // 'subscription' | 'admin-panel' | null
+let _webUser    = null;
+let _webSub     = null;
+let _webTool    = null;
 let _adminTab   = 'users';
 let _payMethod  = null;
 let _payPoll    = null;
+let _payData    = null;
 
 // ── Boot sequence ────────────────────────────────────────────────────────────
 // Runs immediately after DOMContentLoaded. No extension JS involved here.
@@ -856,9 +857,6 @@ window._removeAdmin = async (email) => {
 };
 
 // ── Payment overlay ───────────────────────────────────────────────────────────
-let _payMethod  = null;
-let _payPoll    = null;
-let _payData    = null;  // locked payment details from server
 
 function openPayOverlay() {
   _payMethod = null;
