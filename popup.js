@@ -12,6 +12,10 @@ const RPC = 'https://api.mainnet-beta.solana.com';
 // ─────────────────────────────────────────
 let S = {
   activeTool: 'token-splitting',
+  // Tool order & colors (persisted, synced to account)
+  toolOrder:  ['token-splitting', 'bundle-checker', 'volume-bot', 'wallets'],
+  toolColors: {}, // { toolId: '#hex' }  — empty = use default navy
+  navEditMode: false,
 
   split: {
     tab: 'split',
@@ -392,6 +396,237 @@ function openEmojiPicker(walletId) {
 
 // ─────────────────────────────────────────
 // RENDER ROUTER
+
+// ─────────────────────────────────────────
+// TOOL DEFINITIONS (used by nav builder)
+// ─────────────────────────────────────────
+const TOOL_DEFS = {
+  'token-splitting': {
+    label: 'Token Splitting',
+    svg: `<svg class="nav-svg" width="13" height="13" viewBox="0 0 13 13" fill="none">
+      <circle cx="3" cy="6.5" r="2" stroke="currentColor" stroke-width="1.3"/>
+      <circle cx="10" cy="3" r="2" stroke="currentColor" stroke-width="1.3"/>
+      <circle cx="10" cy="10" r="2" stroke="currentColor" stroke-width="1.3"/>
+      <path d="M5 6.5h2l1.5-3.5M7 6.5l1.5 3.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+    </svg>`,
+  },
+  'bundle-checker': {
+    label: 'Bundle Checker',
+    svg: `<svg class="nav-svg" width="13" height="13" viewBox="0 0 13 13" fill="none">
+      <path d="M2 9.5L6.5 2 11 9.5H2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+      <path d="M6.5 6v2M6.5 9.3v.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+    </svg>`,
+  },
+  'volume-bot': {
+    label: 'AI Volume Bot',
+    svg: `<svg class="nav-svg" width="13" height="13" viewBox="0 0 13 13" fill="none">
+      <rect x="2" y="4" width="9" height="6.5" rx="1.5" stroke="currentColor" stroke-width="1.2"/>
+      <line x1="6.5" y1="1.5" x2="6.5" y2="4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+      <circle cx="6.5" cy="1.2" r="0.7" fill="currentColor"/>
+      <circle cx="4.5" cy="7" r="0.85" fill="currentColor"/>
+      <circle cx="8.5" cy="7" r="0.85" fill="currentColor"/>
+      <path d="M4.8 9h3.4" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+    </svg>`,
+  },
+  'wallets': {
+    label: 'Wallets',
+    svg: `<svg class="nav-svg" width="13" height="13" viewBox="0 0 13 13" fill="none">
+      <rect x="1" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+      <path d="M1 6h11" stroke="currentColor" stroke-width="1.2"/>
+      <path d="M4 2v2M9 2v2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+      <circle cx="9.5" cy="8.5" r="1.2" fill="currentColor"/>
+    </svg>`,
+  },
+};
+
+// ─────────────────────────────────────────
+// NAV LIST BUILDER
+// ─────────────────────────────────────────
+let _navDragId = null;
+
+function buildNavList() {
+  const navList = document.getElementById('nav-list');
+  if (!navList) return;
+
+  // Ensure toolOrder only contains valid tool ids (no sniper)
+  const validTools = Object.keys(TOOL_DEFS);
+  S.toolOrder = (S.toolOrder || validTools).filter(id => validTools.includes(id));
+  // Add any missing tools at end
+  validTools.forEach(id => { if (!S.toolOrder.includes(id)) S.toolOrder.push(id); });
+
+  const editing = S.navEditMode;
+
+  navList.innerHTML = S.toolOrder.map(toolId => {
+    const def    = TOOL_DEFS[toolId];
+    if (!def) return '';
+    const active = S.activeTool === toolId;
+    const color  = S.toolColors?.[toolId];
+    const style  = color ? `style="background:${color}20;border-left:2px solid ${color}"` : '';
+    const dotStyle = color ? `style="background:${color}"` : '';
+
+    if (editing) {
+      return `<li class="nav-item nav-item-edit" data-tool="${toolId}" draggable="true" ${style}>
+        <span class="nav-drag-handle">⠿</span>
+        ${def.svg}
+        <span class="nav-label">${def.label}</span>
+        <button class="nav-color-dot" data-tool="${toolId}" data-action="nav-pick-color" title="Pick colour" ${dotStyle}></button>
+      </li>`;
+    }
+
+    return `<li class="nav-item${active ? ' active' : ''}" data-tool="${toolId}" ${style}>
+      ${color ? `<span class="nav-color-indicator" ${dotStyle}></span>` : ''}
+      ${def.svg}
+      <span class="nav-label">${def.label}</span>
+    </li>`;
+  }).join('');
+
+  // Update the TOOLS section header edit button
+  const hdr = document.querySelector('.nav-section-label');
+  if (hdr) {
+    hdr.innerHTML = `TOOLS <button class="nav-edit-btn" id="nav-edit-btn">${editing ? '✓ Done' : 'Edit'}</button>`;
+    document.getElementById('nav-edit-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      S.navEditMode = !S.navEditMode;
+      saveState();
+      buildNavList();
+      attachNavHandlers();
+    });
+  }
+
+  attachNavHandlers();
+}
+
+function attachNavHandlers() {
+  const navList = document.getElementById('nav-list');
+  if (!navList) return;
+
+  // Tool click (non-edit mode)
+  if (!S.navEditMode) {
+    navList.querySelectorAll('.nav-item[data-tool]').forEach(el => {
+      el.onclick = () => { S.activeTool = el.dataset.tool; saveState(); render(); };
+    });
+    return;
+  }
+
+  // ── Edit mode: drag-to-reorder ─────────────────
+  navList.addEventListener('dragstart', (e) => {
+    const li = e.target.closest('.nav-item-edit');
+    if (!li) return;
+    _navDragId = li.dataset.tool;
+    li.style.opacity = '0.4';
+    e.dataTransfer.effectAllowed = 'move';
+  }, { once: false });
+
+  navList.addEventListener('dragend', (e) => {
+    const li = e.target.closest('.nav-item-edit');
+    if (li) li.style.opacity = '';
+    _navDragId = null;
+    navList.querySelectorAll('.nav-item-edit').forEach(x => x.classList.remove('nav-drag-over'));
+  });
+
+  navList.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    const li = e.target.closest('.nav-item-edit');
+    navList.querySelectorAll('.nav-item-edit').forEach(x => x.classList.remove('nav-drag-over'));
+    if (li && li.dataset.tool !== _navDragId) li.classList.add('nav-drag-over');
+  });
+
+  navList.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    if (!_navDragId) return;
+    const li = e.target.closest('.nav-item-edit');
+    if (!li || li.dataset.tool === _navDragId) return;
+    navList.querySelectorAll('.nav-item-edit').forEach(x => x.classList.remove('nav-drag-over'));
+
+    const from = S.toolOrder.indexOf(_navDragId);
+    const to   = S.toolOrder.indexOf(li.dataset.tool);
+    if (from === -1 || to === -1) return;
+
+    S.toolOrder.splice(from, 1);
+    S.toolOrder.splice(to, 0, _navDragId);
+    _navDragId = null;
+    await saveState();
+    buildNavList();
+    attachNavHandlers();
+  });
+}
+
+// ─────────────────────────────────────────
+// COLOUR PICKER OVERLAY
+// ─────────────────────────────────────────
+function openNavColorPicker(toolId, anchorEl) {
+  // Remove existing picker if any
+  document.getElementById('nav-color-overlay')?.remove();
+
+  const PRESETS = [
+    '#0d1f4a', '#3b82f6', '#22c55e', '#f59e0b',
+    '#ef4444', '#a855f7', '#ec4899', '#14b8a6',
+    '#f97316', '#6366f1', '#84cc16', '#e879f9',
+  ];
+
+  const overlay = document.createElement('div');
+  overlay.id = 'nav-color-overlay';
+  overlay.className = 'nav-color-overlay';
+  overlay.innerHTML = `
+    <div class="nav-color-box" id="nav-color-box">
+      <div class="nav-color-title">Pick colour for ${TOOL_DEFS[toolId]?.label || toolId}</div>
+      <div class="nav-color-presets">
+        ${PRESETS.map(c => `<button class="nav-color-swatch" data-color="${c}" style="background:${c}" title="${c}"></button>`).join('')}
+        <button class="nav-color-swatch nav-color-swatch-clear" data-color="" title="Reset to default">✕</button>
+      </div>
+      <div class="nav-color-custom-row">
+        <input type="color" id="nav-custom-color" value="${S.toolColors?.[toolId] || '#3b82f6'}" class="nav-custom-color-input"/>
+        <button class="btn btn-ghost btn-sm" id="nav-custom-apply">Apply</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  // Position near anchor
+  const rect = anchorEl.getBoundingClientRect();
+  const box  = overlay.querySelector('#nav-color-box');
+  box.style.left = Math.min(rect.right + 6, window.innerWidth - 180) + 'px';
+  box.style.top  = Math.max(rect.top - 10, 4) + 'px';
+
+  // Swatch clicks
+  overlay.querySelectorAll('.nav-color-swatch').forEach(sw => {
+    sw.onclick = async (e) => {
+      e.stopPropagation();
+      const color = sw.dataset.color;
+      if (!S.toolColors) S.toolColors = {};
+      if (color) S.toolColors[toolId] = color;
+      else delete S.toolColors[toolId];
+      await saveState();
+      overlay.remove();
+      buildNavList();
+      attachNavHandlers();
+    };
+  });
+
+  // Custom colour apply
+  document.getElementById('nav-custom-apply')?.addEventListener('click', async () => {
+    const color = document.getElementById('nav-custom-color')?.value;
+    if (!color) return;
+    if (!S.toolColors) S.toolColors = {};
+    S.toolColors[toolId] = color;
+    await saveState();
+    overlay.remove();
+    buildNavList();
+    attachNavHandlers();
+  });
+
+  // Dismiss on outside click
+  setTimeout(() => {
+    document.addEventListener('click', function dismiss(e) {
+      if (!overlay.contains(e.target)) {
+        overlay.remove();
+        document.removeEventListener('click', dismiss);
+      }
+    });
+  }, 50);
+}
+
 // ─────────────────────────────────────────
 function render() {
   const main = document.getElementById('main');
@@ -424,12 +659,8 @@ function render() {
   if (S.activeTool === 'token-splitting')  main.innerHTML = buildSplitPage();
   else if (S.activeTool === 'bundle-checker') main.innerHTML = buildBundlePage();
   else if (S.activeTool === 'volume-bot')    main.innerHTML = buildVolumeBotPage();
-  else if (S.activeTool === 'sniper') main.innerHTML = '<div class="empty-state" style="padding:60px 20px"><div class="empty-icon">🎯</div><div class="empty-text">Sniper Bot<br><span style="font-size:9.5px;color:var(--text-muted)">Coming soon</span></div></div>';
   else if (S.activeTool === 'wallets') main.innerHTML = buildWalletsPage();
   else if (S.activeTool === 'settings') main.innerHTML = buildSettingsPage();
-  else if (S.activeTool === 'volume-bot') {
-    main.innerHTML = buildVolumeBotPage();
-  }
 
   attachHandlers();
 
@@ -443,7 +674,6 @@ function render() {
   const scrollVal = S.activeTool === 'token-splitting' ? S.split.scroll
                   : S.activeTool === 'bundle-checker'  ? S.bundle.scroll
                   : S.activeTool === 'volume-bot'       ? 0
-                  : S.activeTool === 'sniper'            ? S.sniper.scroll
                   : S.activeTool === 'wallets'           ? (S.wallets?.scroll || 0)
                   : S.settings.scroll;
   if (sa && scrollVal) sa.scrollTop = scrollVal;
@@ -1453,7 +1683,6 @@ function attachHandlers() {
   if (sa) sa.addEventListener('scroll', () => {
     if (S.activeTool === 'token-splitting') S.split.scroll = sa.scrollTop;
     else if (S.activeTool === 'bundle-checker') S.bundle.scroll = sa.scrollTop;
-    else if (S.activeTool === 'sniper') S.sniper.scroll = sa.scrollTop;
     else if (S.activeTool === 'wallets') { S.wallets = S.wallets || {}; S.wallets.scroll = sa.scrollTop; }
     else S.settings.scroll = sa.scrollTop;
   });
@@ -1526,28 +1755,51 @@ function attachHandlers() {
     }
   }, { once: false, capture: false });
 
-  document.querySelectorAll('.nav-item:not(.disabled)').forEach(el => {
-    el.onclick = () => { S.activeTool = el.dataset.tool; saveState(); render(); };
+  // ── Dynamic nav rendering ─────────────────────────────────────────
+  buildNavList();
+
+  document.querySelectorAll('.nav-item').forEach(el => {
+    if (el.dataset.tool) {
+      el.onclick = () => { S.activeTool = el.dataset.tool; saveState(); render(); };
+    }
   });
 
-  // Pin to sidebar — calls sidePanel.open() directly from popup (user gesture context)
-  // Per Chrome docs: sidePanel.open() can be called from extension pages on user interaction
+  // Pin / Unpin sidebar — toggles between popup and side panel mode
   const pinBtn = document.getElementById('pin-btn');
-  if (pinBtn) pinBtn.onclick = async () => {
-    if (!chrome?.sidePanel?.open) {
-      showToast('Requires Chrome 116+');
-      return;
-    }
-    try {
-      const wins = await chrome.windows.getCurrent();
-      await chrome.sidePanel.open({ windowId: wins.id });
-      // Panel is now open — close the popup
-      window.close();
-    } catch (e) {
-      console.error('[UDT] sidePanel.open failed:', e);
-      showToast('Could not open sidebar: ' + (e.message || 'unknown error'));
-    }
-  };
+  if (pinBtn) {
+    // Update label based on current mode
+    chrome.storage.local.get('udt_sidebar_mode', (d) => {
+      const pinned = !!d.udt_sidebar_mode;
+      const label = pinBtn.querySelector('.pin-btn-label');
+      if (label) label.textContent = pinned ? 'Unpin Sidebar' : 'Pin Sidebar';
+    });
+
+    pinBtn.onclick = async () => {
+      const d = await chrome.storage.local.get('udt_sidebar_mode');
+      const currentlyPinned = !!d.udt_sidebar_mode;
+
+      if (currentlyPinned) {
+        // Unpin: switch back to popup mode
+        await chrome.storage.local.set({ udt_sidebar_mode: false });
+        try { await chrome.runtime.sendMessage({ action: 'setPopupMode' }); } catch {}
+        showToast('✓ Unpinned — use the extension icon to open');
+        const label = pinBtn.querySelector('.pin-btn-label');
+        if (label) label.textContent = 'Pin Sidebar';
+      } else {
+        // Pin: open as side panel
+        if (!chrome?.sidePanel?.open) { showToast('Requires Chrome 116+'); return; }
+        try {
+          await chrome.storage.local.set({ udt_sidebar_mode: true });
+          const wins = await chrome.windows.getCurrent();
+          await chrome.sidePanel.open({ windowId: wins.id });
+          window.close();
+        } catch (e) {
+          await chrome.storage.local.set({ udt_sidebar_mode: false });
+          showToast('Could not open sidebar: ' + (e.message || 'unknown error'));
+        }
+      }
+    };
+  }
   const sBtn = document.getElementById('settings-nav-btn');
   if (sBtn) sBtn.onclick = () => { S.activeTool = 'settings'; saveState(); render(); };
 
@@ -1877,6 +2129,9 @@ async function handleClick(e) {
     }
     await saveState(); render();
 
+  } else if (a === 'nav-pick-color') {
+    openNavColorPicker(el.dataset.tool, el);
+
   } else if (a === 'copy') {
     copyText(el.dataset.copy || el.textContent.trim());
 
@@ -1943,8 +2198,6 @@ async function handleClick(e) {
   } else if (a.startsWith('vb-')) {
     await handleVolumeBotAction(a, el);
 
-  } else if (a.startsWith('sniper-')) {
-    await handleSniperAction(a, el);
 
   } else if (a.startsWith('w-') || a.startsWith('wallets-')) {
     await handleWalletAction(a, el);
