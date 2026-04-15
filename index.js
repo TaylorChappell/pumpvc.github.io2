@@ -1,7 +1,3 @@
-/**
- * Ultimate Dev Tools — Railway Backend (FIXED v2)
- * Essor Studios
- */
 'use strict';
 
 const fetch = require('node-fetch');
@@ -25,24 +21,26 @@ const { nanoid } = require('nanoid');
 
 const app = express();
 
+// ─── Constants ──────────────────────────────────────────────────────────────
 const JWT_SECRET       = process.env.JWT_SECRET       || 'CHANGE_THIS_IN_PROD';
 const ADMIN_EMAIL      = process.env.ADMIN_EMAIL       || 'taylorchappell02@gmail.com';
-const PAYMENT_ADDR     = process.env.PAYMENT_ADDR      || '';
+const PAYMENT_ADDR     = 'CdmKRQMDT3HNrybjXJ1kPxGo9y4bXhm69MobM2sV4N8R';
 const SUBSCRIPTION_USD = parseFloat(process.env.SUBSCRIPTION_USD || '99');
 const PORT             = process.env.PORT              || 3000;
 const SOLANA_RPC       = process.env.SOLANA_RPC        || 'https://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007';
 const GOOGLE_CLIENT_ID = '218003563778-dljv6ld9c467r57p38a6m32gibrtfmld.apps.googleusercontent.com';
 
+// ─── DB ─────────────────────────────────────────────────────────────────────
 const db = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
 
-// ─── Solana connection (reused) ─────────────────────────────────────────────
+// ─── Solana connection ───────────────────────────────────────────────────────
 const solConn = new Connection(SOLANA_RPC, 'confirmed');
 
 app.use(helmet({ crossOriginEmbedderPolicy: false }));
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
-// ── DB ──────────────────────────────────────────────────────────────────────────
+// ─── DB init ─────────────────────────────────────────────────────────────────
 async function initDB() {
   await db.query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -92,6 +90,8 @@ async function initDB() {
       refund_sig      TEXT,
       swept           BOOLEAN DEFAULT false,
       swept_at        TIMESTAMPTZ,
+      sweep_attempts  INT DEFAULT 0,
+      sweep_last_err  TEXT,
       created_at      TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS whitelist (
@@ -112,7 +112,7 @@ async function initDB() {
   }
 }
 
-// ── Middleware ──────────────────────────────────────────────────────────────────
+// ─── Middleware ───────────────────────────────────────────────────────────────
 function authMiddleware(req, res, next) {
   const h = req.headers.authorization;
   if (!h?.startsWith('Bearer ')) return res.status(401).json({ error: 'No token' });
@@ -129,7 +129,7 @@ async function adminMiddleware(req, res, next) {
 const makeToken = (u) =>
   jwt.sign({ id: u.id, email: u.email, is_admin: u.is_admin }, JWT_SECRET, { expiresIn: '30d' });
 
-// ── Active sub check ───────────────────────────────────────────────────────────
+// ─── Active sub check ─────────────────────────────────────────────────────────
 async function getActiveSub(userId) {
   const ur = await db.query('SELECT is_admin, is_whitelisted FROM users WHERE id=$1', [userId]);
   const u  = ur.rows[0];
@@ -153,7 +153,7 @@ async function getActiveSub(userId) {
   return { active: false, expires_at: sub.expires_at };
 }
 
-// ── SOL price ──────────────────────────────────────────────────────────────────
+// ─── SOL price ────────────────────────────────────────────────────────────────
 let _priceCache = { usd: null, ts: 0 };
 
 async function fetchWithTimeout(url, timeoutMs = 5000, opts = {}) {
@@ -201,7 +201,7 @@ async function getSolPriceUSD() {
   return FALLBACK_PRICE;
 }
 
-// ── Keypair helpers (using @solana/web3.js throughout) ──────────────────────────
+// ─── Keypair helpers ──────────────────────────────────────────────────────────
 function genKeypair() {
   const kp = Keypair.generate();
   return {
@@ -211,26 +211,27 @@ function genKeypair() {
 }
 
 function keypairFromB58(privB58) {
-  const sk = bs58.decode(privB58);
-  return Keypair.fromSecretKey(sk);
+  // bs58 may expose .decode or .default.decode depending on version
+  const decode = bs58.decode ? bs58.decode.bind(bs58) : bs58.default.decode.bind(bs58.default);
+  const sk = decode(privB58);
+  return Keypair.fromSecretKey(sk instanceof Uint8Array ? sk : new Uint8Array(sk));
 }
 
-// ── Solana RPC (raw JSON-RPC, no SDK needed for reads) ──────────────────────────
+// ─── Raw RPC helper ───────────────────────────────────────────────────────────
 async function solRpc(method, params) {
   const r = await fetch(SOLANA_RPC, {
-    method: 'POST',
+    method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+    body:    JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
   });
   const j = await r.json();
   if (j.error) throw new Error(`RPC ${method}: ${j.error.message}`);
   return j.result;
 }
 
-// ── Build + sign + send a SOL transfer using @solana/web3.js SDK ────────────────
-// FIX: was using undefined `web3.*` references — now uses imported classes directly
+// ─── Build + sign + broadcast a SOL transfer ─────────────────────────────────
 async function sendSolTransfer(fromKeypair, toAddress, lamports) {
-  const toPubkey   = new PublicKey(toAddress);
+  const toPubkey      = new PublicKey(toAddress);
   const { blockhash } = await solConn.getLatestBlockhash('finalized');
 
   const tx = new Transaction({
@@ -238,62 +239,145 @@ async function sendSolTransfer(fromKeypair, toAddress, lamports) {
     feePayer:        fromKeypair.publicKey,
   });
 
-  tx.add(
-    SystemProgram.transfer({
-      fromPubkey: fromKeypair.publicKey,
-      toPubkey,
-      lamports,
-    })
-  );
+  tx.add(SystemProgram.transfer({
+    fromPubkey: fromKeypair.publicKey,
+    toPubkey,
+    lamports,
+  }));
 
   tx.sign(fromKeypair);
-  const raw = tx.serialize();
 
-  const sig = await solConn.sendRawTransaction(raw, {
-    skipPreflight:        false,
-    preflightCommitment:  'confirmed',
+  const sig = await solConn.sendRawTransaction(tx.serialize(), {
+    skipPreflight:       false,
+    preflightCommitment: 'confirmed',
   });
 
-  console.log(`[sendSolTransfer] ${fromKeypair.publicKey.toBase58()} → ${toAddress}: ${sig} (${lamports / LAMPORTS_PER_SOL} SOL)`);
+  console.log(`[transfer] ${fromKeypair.publicKey.toBase58()} → ${toAddress}: ${sig} (${(lamports / LAMPORTS_PER_SOL).toFixed(6)} SOL)`);
   return sig;
 }
 
-// ── Check if address received SOL after sinceTs ─────────────────────────────────
-// FIX: removed the `-120000` fudge that was incorrectly excluding recent txs
-async function checkSolReceived(addr, sinceTs) {
+// ─── Sweep with retry loop ────────────────────────────────────────────────────
+//
+// Strategy:
+//   1. Wait 8s after confirmation so the tx is fully finalized on-chain
+//      before we try to read the balance of the deposit wallet.
+//   2. Attempt up to MAX_ATTEMPTS times with exponential back-off.
+//   3. Log every attempt to the DB (sweep_attempts, sweep_last_err) so
+//      you can inspect failures in your admin panel.
+//   4. Minimum balance guard: only sweep if balance > TX_FEE so we never
+//      send a transaction that will fail due to insufficient rent/fees.
+//
+const SWEEP_MAX_ATTEMPTS  = 10;
+const SWEEP_BASE_DELAY    = 8000;   // ms — first retry delay (doubles each time)
+const TX_FEE_LAMPORTS     = 5000;   // ~0.000005 SOL — actual transfer fee
+const RENT_EXEMPT_MINIMUM = 890880; // lamports — minimum to keep account open
+// When draining a wallet we must reserve fee + rent-exempt minimum,
+// UNLESS we're sending the full balance (closing the account entirely).
+// Solana allows sending balance - fee - rent_minimum OR the full balance
+// if the account is being closed. We use the "close" approach: send everything
+// minus just the fee, which leaves the account with 0 + fee already deducted.
+
+async function sweepWallet(privKeyB58, paymentId) {
+  // Small initial pause to let the inbound tx finalize
+  await sleep(SWEEP_BASE_DELAY);
+
+  // Get the exact rent-exempt minimum for an empty account (0 bytes of data)
+  // This is ~890880 lamports but fetching it dynamically is more correct.
+  let rentExemptMin;
   try {
-    const sigs = await solRpc('getSignaturesForAddress', [addr, { limit: 20 }]);
-    if (!sigs?.length) return null;
-    for (const si of sigs) {
-      if (si.err) continue;
-      // Allow txs from up to 2 minutes before the payment was created
-      // (clock skew) but don't filter out txs that are very recent
-      if (si.blockTime && si.blockTime * 1000 < sinceTs - 120000) continue;
-      const tx = await solRpc('getTransaction', [si.signature, { encoding: 'json', maxSupportedTransactionVersion: 0 }]);
-      if (!tx?.meta) continue;
-      const keys = tx.transaction.message.accountKeys || [];
-      const idx  = keys.findIndex(k => k === addr);
-      if (idx === -1) continue;
-      const received = (tx.meta.postBalances[idx] || 0) - (tx.meta.preBalances[idx] || 0);
-      if (received > 0) return { sig: si.signature, receivedLamports: received };
+    rentExemptMin = await solConn.getMinimumBalanceForRentExemption(0);
+  } catch {
+    rentExemptMin = RENT_EXEMPT_MINIMUM;
+  }
+
+  for (let attempt = 1; attempt <= SWEEP_MAX_ATTEMPTS; attempt++) {
+    try {
+      const kp   = keypairFromB58(privKeyB58);
+      const addr = kp.publicKey.toBase58();
+
+      // Read current balance
+      const balance = await solConn.getBalance(kp.publicKey, 'confirmed');
+      console.log(`[sweep] attempt ${attempt}/${SWEEP_MAX_ATTEMPTS} — payment ${paymentId} — wallet ${addr} — balance ${balance} lamports — rentMin ${rentExemptMin}`);
+
+      // We need at least rent-exempt minimum + fee to send anything.
+      // The trick for fully draining a throwaway wallet:
+      //   sendLamports = balance - fee - rentExemptMin
+      // This leaves exactly rentExemptMin in the account, which Solana accepts.
+      // The remaining dust stays in the deposit wallet (tiny, ~0.00089 SOL).
+      //
+      // Alternative: if balance > rentExemptMin * 2, drain everything minus fee
+      // and the account will be below rent-exempt but since it's a throwaway
+      // wallet Solana will garbage-collect it — however this causes the
+      // "insufficient funds for rent" simulation error we're seeing.
+      // The safest approach is always: send = balance - fee - rentExemptMin.
+      const sendLamports = balance - TX_FEE_LAMPORTS - rentExemptMin;
+
+      if (sendLamports <= 0) {
+        const msg = `balance too low to sweep: ${balance} lamports (need > ${TX_FEE_LAMPORTS + rentExemptMin})`;
+        console.warn(`[sweep] ${paymentId}: ${msg}`);
+
+        if (attempt === SWEEP_MAX_ATTEMPTS) {
+          await db.query(
+            `UPDATE payments SET sweep_attempts=$1, sweep_last_err=$2 WHERE payment_id=$3`,
+            [attempt, msg, paymentId]
+          );
+          return;
+        }
+
+        await db.query(
+          `UPDATE payments SET sweep_attempts=$1, sweep_last_err=$2 WHERE payment_id=$3`,
+          [attempt, msg, paymentId]
+        );
+        await sleep(Math.min(SWEEP_BASE_DELAY * Math.pow(2, attempt), 120000));
+        continue;
+      }
+
+      const sig = await sendSolTransfer(kp, PAYMENT_ADDR, sendLamports);
+
+      // Mark swept in DB
+      await db.query(
+        `UPDATE payments SET swept=true, swept_at=NOW(), sweep_attempts=$1, sweep_last_err=NULL WHERE payment_id=$2`,
+        [attempt, paymentId]
+      );
+
+      console.log(`[sweep] ✅ ${paymentId} swept ${(sendLamports / LAMPORTS_PER_SOL).toFixed(6)} SOL → ${PAYMENT_ADDR} (sig: ${sig})`);
+      return; // success — exit loop
+
+    } catch (err) {
+      const msg = err.message || String(err);
+      console.error(`[sweep] attempt ${attempt} failed for ${paymentId}:`, msg);
+
+      await db.query(
+        `UPDATE payments SET sweep_attempts=$1, sweep_last_err=$2 WHERE payment_id=$3`,
+        [attempt, msg, paymentId]
+      ).catch(() => {});
+
+      if (attempt === SWEEP_MAX_ATTEMPTS) {
+        console.error(`[sweep] ❌ ${paymentId}: giving up after ${SWEEP_MAX_ATTEMPTS} attempts. Last error: ${msg}`);
+        return;
+      }
+
+      // Exponential back-off: 8s, 16s, 32s … capped at 2 minutes
+      await sleep(Math.min(SWEEP_BASE_DELAY * Math.pow(2, attempt), 120000));
     }
-    return null;
-  } catch (e) { console.error('[checkSolReceived]', e.message); return null; }
+  }
 }
 
-// ── Refund underpayment back to sender ─────────────────────────────────────────
+// ─── Refund underpayment back to sender ──────────────────────────────────────
 async function refundPaymentWallet(privKeyB58, senderAddr, paymentId) {
   try {
     const kp  = keypairFromB58(privKeyB58);
-    const bal = await solConn.getBalance(kp.publicKey);
-    const fee = 15000;
+    const bal = await solConn.getBalance(kp.publicKey, 'confirmed');
+    let rentMin = RENT_EXEMPT_MINIMUM;
+    try { rentMin = await solConn.getMinimumBalanceForRentExemption(0); } catch {}
 
-    if (bal <= fee) {
+    const sendLamports = bal - TX_FEE_LAMPORTS - rentMin;
+    if (sendLamports <= 0) {
       console.log(`[refund] ${paymentId}: balance too low (${bal} lamports)`);
       return;
     }
 
-    const sig = await sendSolTransfer(kp, senderAddr, bal - fee);
+    const sig = await sendSolTransfer(kp, senderAddr, sendLamports);
     await db.query(
       `UPDATE payments SET refunded=true, refunded_at=NOW(), refund_sig=$1 WHERE payment_id=$2`,
       [sig, paymentId]
@@ -304,51 +388,45 @@ async function refundPaymentWallet(privKeyB58, senderAddr, paymentId) {
   }
 }
 
-// ── Sweep payment wallet → PAYMENT_ADDR ────────────────────────────────────────
-// FIX: was calling buildTransferTx which referenced undefined `web3.*`
-async function sweepWallet(privKeyB58, paymentId) {
-  if (!PAYMENT_ADDR) {
-    console.warn('[sweep] PAYMENT_ADDR not set — skipping');
-    return;
-  }
-  try {
-    const kp  = keypairFromB58(privKeyB58);
-    const bal = await solConn.getBalance(kp.publicKey);
-    const fee = 15000;
-
-    if (bal <= fee) {
-      console.log(`[sweep] ${paymentId}: balance too low (${bal} lamports), skipping`);
-      return;
-    }
-
-    const sig = await sendSolTransfer(kp, PAYMENT_ADDR, bal - fee);
-    await db.query('UPDATE payments SET swept=true, swept_at=NOW() WHERE payment_id=$1', [paymentId]);
-    console.log(`[sweep] ${paymentId} → ${PAYMENT_ADDR}: ${sig}`);
-  } catch (e) {
-    console.error('[sweep]', e.message);
-  }
-}
-
-// ── Activate subscription + trigger sweep ──────────────────────────────────────
+// ─── Confirm payment + activate subscription + trigger sweep ─────────────────
 async function confirmAndActivate(paymentId) {
   const client = await db.connect();
   try {
     await client.query('BEGIN');
+
+    // Idempotency: if already confirmed, nothing to do
+    const existing = await client.query('SELECT confirmed FROM payments WHERE payment_id=$1', [paymentId]);
+    if (existing.rows[0]?.confirmed) {
+      await client.query('COMMIT');
+      return;
+    }
+
     await client.query('UPDATE payments SET confirmed=true, confirmed_at=NOW() WHERE payment_id=$1', [paymentId]);
-    const pr = await client.query('SELECT user_id, receive_privkey FROM payments WHERE payment_id=$1', [paymentId]);
-    const { user_id, receive_privkey } = pr.rows[0] || {};
-    if (!user_id) throw new Error('payment record missing user');
+
+    const pr = await client.query(
+      'SELECT user_id, receive_privkey, method FROM payments WHERE payment_id=$1',
+      [paymentId]
+    );
+    const { user_id, receive_privkey, method } = pr.rows[0] || {};
+    if (!user_id) throw new Error('payment record missing user_id');
+
     const exp = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     await client.query(`
       INSERT INTO subscriptions (user_id, active, trial, expires_at)
       VALUES ($1, true, false, $2)
       ON CONFLICT (user_id) DO UPDATE SET active=true, trial=false, expires_at=$2
     `, [user_id, exp]);
+
     await client.query('COMMIT');
-    // Sweep funds to your wallet after confirming
-    if (receive_privkey && PAYMENT_ADDR) {
+    console.log(`[confirm] ✅ payment ${paymentId} confirmed — user ${user_id} subbed until ${exp.toISOString()}`);
+
+    // Phantom payments go direct to PAYMENT_ADDR — no intermediate wallet to sweep.
+    // Manual payments land in a generated deposit wallet — sweep those funds out.
+    if (method !== 'phantom' && receive_privkey) {
+      // Run sweep in background — don't await so the HTTP response isn't blocked
       setImmediate(() => sweepWallet(receive_privkey, paymentId));
     }
+
   } catch (e) {
     await client.query('ROLLBACK');
     throw e;
@@ -357,8 +435,36 @@ async function confirmAndActivate(paymentId) {
   }
 }
 
+// ─── Utility ──────────────────────────────────────────────────────────────────
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ─── Check if address received SOL ───────────────────────────────────────────
+async function checkSolReceived(addr, sinceTs) {
+  try {
+    const sigs = await solRpc('getSignaturesForAddress', [addr, { limit: 20 }]);
+    if (!sigs?.length) return null;
+    for (const si of sigs) {
+      if (si.err) continue;
+      if (si.blockTime && si.blockTime * 1000 < sinceTs - 120000) continue;
+      const tx = await solRpc('getTransaction', [si.signature, {
+        encoding: 'json', maxSupportedTransactionVersion: 0,
+      }]);
+      if (!tx?.meta) continue;
+      const keys = tx.transaction.message.accountKeys || [];
+      const idx  = keys.findIndex(k => k === addr);
+      if (idx === -1) continue;
+      const received = (tx.meta.postBalances[idx] || 0) - (tx.meta.preBalances[idx] || 0);
+      if (received > 0) return { sig: si.signature, receivedLamports: received };
+    }
+    return null;
+  } catch (e) {
+    console.error('[checkSolReceived]', e.message);
+    return null;
+  }
+}
+
 // =============================================================================
-// ROUTES — all API routes MUST come before express.static
+// ROUTES
 // =============================================================================
 
 // GET /api/subscription/sol-price
@@ -389,13 +495,14 @@ app.post('/api/subscription/payment/init', authMiddleware, async (req, res) => {
       `INSERT INTO payments
          (user_id, payment_id, method, amount_sol, amount_usd, sol_price_usd, receive_address, receive_privkey)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [req.user.id, paymentId, method || 'manual', amountSol, SUBSCRIPTION_USD, priceUSD,
-       kp.publicKey, kp.privateKeyB58]
+      [req.user.id, paymentId, method || 'manual', amountSol, SUBSCRIPTION_USD,
+       priceUSD, kp.publicKey, kp.privateKeyB58]
     );
 
     res.json({
       payment_id:    paymentId,
       address:       kp.publicKey,
+      payment_addr:  PAYMENT_ADDR,
       amount_sol:    amountSol,
       amount_usd:    SUBSCRIPTION_USD,
       sol_price_usd: priceUSD,
@@ -421,15 +528,12 @@ app.post('/api/subscription/payment/sender', authMiddleware, async (req, res) =>
   }
 });
 
-// POST /api/subscription/payment/confirm — fast path: Phantom gives us the sig immediately
-// FIX: was returning 404 because express.static was likely catching it, or route wasn't reached.
-// Moved ALL api routes before express.static to guarantee they're registered first.
+// POST /api/subscription/payment/confirm — Phantom fast-path
 app.post('/api/subscription/payment/confirm', authMiddleware, async (req, res) => {
   try {
     const { payment_id, signature } = req.body;
-    if (!payment_id || !signature) {
+    if (!payment_id || !signature)
       return res.status(400).json({ error: 'Missing payment_id or signature' });
-    }
 
     const r = await db.query(
       'SELECT * FROM payments WHERE payment_id=$1 AND user_id=$2',
@@ -439,8 +543,7 @@ app.post('/api/subscription/payment/confirm', authMiddleware, async (req, res) =
     if (!pay) return res.status(404).json({ error: 'Payment not found' });
     if (pay.confirmed) return res.json({ confirmed: true });
 
-    // Poll on-chain up to 30s for the tx to land (Phantom sends it but it may not be
-    // indexed by RPC immediately — retry loop is far more reliable than a single check)
+    // Poll on-chain up to 30s for the tx to land
     let tx = null;
     for (let attempt = 0; attempt < 6; attempt++) {
       try {
@@ -451,13 +554,11 @@ app.post('/api/subscription/payment/confirm', authMiddleware, async (req, res) =
         }]);
         if (tx && !tx.meta?.err) break;
       } catch {}
-      await new Promise(r => setTimeout(r, 5000));
+      await sleep(5000);
     }
 
     if (!tx || tx.meta?.err) {
-      // TX not visible yet — return pending so the frontend keeps polling /check
-      // The /check poller will catch it via checkSolReceived
-      return res.json({ confirmed: false, pending: true, message: 'Transaction not yet confirmed on-chain — keep waiting' });
+      return res.json({ confirmed: false, pending: true, message: 'Transaction not yet confirmed — keep waiting' });
     }
 
     const addr = pay.receive_address;
@@ -514,7 +615,6 @@ app.get('/api/subscription/payment/check/:paymentId', authMiddleware, async (req
       return res.json({ confirmed: true, signature: sig });
     }
 
-    // Underpayment — refund if we have sender address
     const receivedSol = (receivedLamports / LAMPORTS_PER_SOL).toFixed(6);
     const requiredSol = parseFloat(pay.amount_sol).toFixed(6);
 
@@ -532,6 +632,28 @@ app.get('/api/subscription/payment/check/:paymentId', authMiddleware, async (req
     });
   } catch (e) {
     console.error('[payment/check]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Sweep retry endpoint (admin) ────────────────────────────────────────────
+// Allows manually re-triggering a sweep for a stuck payment
+app.post('/api/admin/payments/retry-sweep', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { payment_id } = req.body;
+    const r = await db.query('SELECT * FROM payments WHERE payment_id=$1', [payment_id]);
+    const pay = r.rows[0];
+    if (!pay)           return res.status(404).json({ error: 'Payment not found' });
+    if (!pay.confirmed) return res.status(400).json({ error: 'Payment not confirmed yet' });
+    if (pay.swept)      return res.status(400).json({ error: 'Already swept' });
+    if (!pay.receive_privkey) return res.status(400).json({ error: 'No private key on record' });
+
+    // Reset attempt counter so the retry loop runs fresh
+    await db.query('UPDATE payments SET sweep_attempts=0, sweep_last_err=NULL WHERE payment_id=$1', [payment_id]);
+    setImmediate(() => sweepWallet(pay.receive_privkey, payment_id));
+
+    res.json({ ok: true, message: 'Sweep re-triggered in background' });
+  } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -595,19 +717,18 @@ app.post('/api/auth/logout', authMiddleware, (req, res) => res.json({ ok:true })
 // =============================================================================
 // SUBSCRIPTION
 // =============================================================================
-app.get('/api/subscription/status',  authMiddleware, async (req,res) => { try{ res.json(await getActiveSub(req.user.id)); }catch(e){res.status(500).json({error:'Server error'});} });
-app.get('/api/subscription/verify',  authMiddleware, async (req,res) => { try{ res.json(await getActiveSub(req.user.id)); }catch(e){res.status(500).json({error:'Server error'});} });
+app.get('/api/subscription/status', authMiddleware, async (req,res) => { try{ res.json(await getActiveSub(req.user.id)); }catch(e){res.status(500).json({error:'Server error'});} });
+app.get('/api/subscription/verify', authMiddleware, async (req,res) => { try{ res.json(await getActiveSub(req.user.id)); }catch(e){res.status(500).json({error:'Server error'});} });
 
-// Promo code redemption
 app.post('/api/subscription/redeem-promo', authMiddleware, async (req, res) => {
   try {
     const { code } = req.body;
     if (!code) return res.status(400).json({ error: 'No code provided' });
     const cr = await db.query('SELECT * FROM promo_codes WHERE code=$1', [code.toUpperCase()]);
     const c  = cr.rows[0];
-    if (!c)              return res.status(404).json({ error: 'Code not found' });
-    if (c.disabled)      return res.status(400).json({ error: 'Code is disabled' });
-    if (c.redeemed_by)   return res.status(400).json({ error: 'Code already used' });
+    if (!c)            return res.status(404).json({ error: 'Code not found' });
+    if (c.disabled)    return res.status(400).json({ error: 'Code is disabled' });
+    if (c.redeemed_by) return res.status(400).json({ error: 'Code already used' });
     const exp = new Date(Date.now() + c.days * 24 * 60 * 60 * 1000);
     await db.query(`
       INSERT INTO subscriptions (user_id, active, trial, expires_at)
@@ -619,7 +740,6 @@ app.post('/api/subscription/redeem-promo', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: 'Server error' }); }
 });
 
-// Helius webhook
 app.post('/api/webhooks/helius', async (req, res) => {
   try {
     if (req.headers['x-helius-secret'] !== process.env.HELIUS_WEBHOOK_SECRET) return res.status(403).send('Forbidden');
@@ -659,34 +779,34 @@ aR.post('/admins/add', async (req,res)=>{ try{ const{email}=req.body; if(email.t
 aR.post('/admins/remove', async (req,res)=>{ try{ const{email}=req.body; if(email.toLowerCase()===ADMIN_EMAIL.toLowerCase())return res.status(400).json({error:'Cannot remove superadmin'}); if(email.toLowerCase()===req.user.email.toLowerCase())return res.status(400).json({error:'Cannot remove yourself'}); await db.query('UPDATE users SET is_admin=false WHERE email=$1',[email.toLowerCase()]); res.json({ok:true}); }catch(e){res.status(500).json({error:'Server error'});} });
 aR.get('/admins/list', async (req,res)=>{ try{ const r=await db.query('SELECT email,name,created_at FROM users WHERE is_admin=true ORDER BY created_at ASC'); res.json({admins:r.rows.map(x=>({...x,is_superadmin:x.email.toLowerCase()===ADMIN_EMAIL.toLowerCase()}))}); }catch(e){res.status(500).json({error:'Server error'});} });
 
-aR.get('/payments/pending', async (req,res)=>{ try{ const r=await db.query(`SELECT p.payment_id,p.method,p.amount_sol,p.amount_usd,p.receive_address,p.confirmed,p.swept,p.created_at,u.email FROM payments p JOIN users u ON p.user_id=u.id WHERE p.confirmed=false ORDER BY p.created_at DESC LIMIT 50`); res.json({payments:r.rows}); }catch(e){res.status(500).json({error:'Server error'});} });
+aR.get('/payments/pending', async (req,res)=>{ try{ const r=await db.query(`SELECT p.payment_id,p.method,p.amount_sol,p.amount_usd,p.receive_address,p.confirmed,p.swept,p.sweep_attempts,p.sweep_last_err,p.created_at,u.email FROM payments p JOIN users u ON p.user_id=u.id ORDER BY p.created_at DESC LIMIT 100`); res.json({payments:r.rows}); }catch(e){res.status(500).json({error:'Server error'});} });
 
 app.use('/api/admin', aR);
 
 // =============================================================================
 // STATE SYNC
 // =============================================================================
-async function ensureStateColumn() {
+async function ensureColumns() {
   console.log('[migration] Ensuring all columns exist...');
-  await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS state_data TEXT`).catch(() => {});
-  const paymentColumns = [
-    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS amount_sol NUMERIC`,
-    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS amount_usd NUMERIC`,
-    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS sol_price_usd NUMERIC`,
-    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS receive_address TEXT`,
-    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS receive_privkey TEXT`,
-    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS sender_address TEXT`,
-    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS confirmed BOOLEAN DEFAULT false`,
-    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ`,
-    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS refunded BOOLEAN DEFAULT false`,
-    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ`,
-    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS refund_sig TEXT`,
-    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS swept BOOLEAN DEFAULT false`,
-    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS swept_at TIMESTAMPTZ`,
+  const cols = [
+    `ALTER TABLE users       ADD COLUMN IF NOT EXISTS state_data      TEXT`,
+    `ALTER TABLE payments    ADD COLUMN IF NOT EXISTS amount_sol      NUMERIC`,
+    `ALTER TABLE payments    ADD COLUMN IF NOT EXISTS amount_usd      NUMERIC`,
+    `ALTER TABLE payments    ADD COLUMN IF NOT EXISTS sol_price_usd   NUMERIC`,
+    `ALTER TABLE payments    ADD COLUMN IF NOT EXISTS receive_address TEXT`,
+    `ALTER TABLE payments    ADD COLUMN IF NOT EXISTS receive_privkey TEXT`,
+    `ALTER TABLE payments    ADD COLUMN IF NOT EXISTS sender_address  TEXT`,
+    `ALTER TABLE payments    ADD COLUMN IF NOT EXISTS confirmed       BOOLEAN DEFAULT false`,
+    `ALTER TABLE payments    ADD COLUMN IF NOT EXISTS confirmed_at    TIMESTAMPTZ`,
+    `ALTER TABLE payments    ADD COLUMN IF NOT EXISTS refunded        BOOLEAN DEFAULT false`,
+    `ALTER TABLE payments    ADD COLUMN IF NOT EXISTS refunded_at     TIMESTAMPTZ`,
+    `ALTER TABLE payments    ADD COLUMN IF NOT EXISTS refund_sig      TEXT`,
+    `ALTER TABLE payments    ADD COLUMN IF NOT EXISTS swept           BOOLEAN DEFAULT false`,
+    `ALTER TABLE payments    ADD COLUMN IF NOT EXISTS swept_at        TIMESTAMPTZ`,
+    `ALTER TABLE payments    ADD COLUMN IF NOT EXISTS sweep_attempts  INT DEFAULT 0`,
+    `ALTER TABLE payments    ADD COLUMN IF NOT EXISTS sweep_last_err  TEXT`,
   ];
-  for (const sql of paymentColumns) {
-    try { await db.query(sql); } catch {}
-  }
+  for (const sql of cols) { try { await db.query(sql); } catch {} }
   console.log('[migration] Done.');
 }
 
@@ -759,9 +879,9 @@ app.get('/api/proxy/jupiter/quote', async (req, res) => {
 app.post('/api/proxy/jupiter/swap', async (req, res) => {
   try {
     const r = await fetch('https://api.jup.ag/swap/v1/swap', {
-      method: 'POST',
+      method:  'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify(req.body)
+      body:    JSON.stringify(req.body)
     });
     const d = await r.json();
     res.status(r.status).json(d);
@@ -769,7 +889,7 @@ app.post('/api/proxy/jupiter/swap', async (req, res) => {
 });
 
 // =============================================================================
-// STATIC — must come LAST so it never intercepts API routes
+// STATIC — must come LAST
 // =============================================================================
 app.use(express.static('public'));
 
@@ -778,7 +898,7 @@ app.use(express.static('public'));
 // =============================================================================
 initDB()
   .then(async () => {
-    await ensureStateColumn();
+    await ensureColumns();
     await ensureWalletsTable();
     app.listen(PORT, () => console.log(`UDT backend on port ${PORT}`));
   })
