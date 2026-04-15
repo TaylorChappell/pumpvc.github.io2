@@ -530,21 +530,20 @@
 <script src="auth.js"></script>
 <script src="bundle.js"></script>
 <script src="wallets.js"></script>
-<script src="popup.js"></script>
 <script src="volume-bot.js"></script>
 <script src="wallet-tracker.js"></script>
 <script src="sniper.js"></script>
 <script src="api.js"></script>
+<script src="popup.js"></script>
 
 <script>
 /* ═══════════════════════════════════════════════════════════════════════
    WEB INIT
 ═══════════════════════════════════════════════════════════════════════ */
 const BACKEND = 'https://ultimatedevtools-production.up.railway.app';
-
-let _webUser  = null;
-let _webSub   = null;
-let _webTool  = null;
+let _webUser = null;
+let _webSub = null;
+let _webTool = null;
 let _adminTab = 'users';
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -563,8 +562,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.location.replace('auth.html');
     return;
   }
-  _webUser = user;
 
+  _webUser = user;
   setBootMsg('Checking subscription…');
   let sub;
   try {
@@ -574,16 +573,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch { sub = { active: false }; }
   _webSub = sub;
 
-  // Auth stored in localStorage via api.js
+  if (typeof S === 'undefined') {
+    console.error("CRITICAL ERROR: S is not defined. popup.js failed to load.");
+    const main = document.getElementById('main');
+    if (main) main.innerHTML = `<div style="color:red;padding:30px">Error loading app. Please hard refresh (Ctrl+Shift+R).</div>`;
+    return;
+  }
 
   S.auth = { loggedIn: true, token, email: user.email||'', userId: user.id||0, is_admin: user.is_admin||false, cryptoKey: null };
   window.tryAutoLogin = async () => true;
 
-  const _origRender = window.render;
+  const _origRender = window.render || function(){};
   window.render = function() {
     if (!S.auth?.loggedIn) { window.location.replace('auth.html'); return; }
     if (_webTool === 'subscription') { renderSubPage(); _syncWebNav(); return; }
-    if (_webTool === 'admin-panel')  { renderAdminPage(); _syncWebNav(); return; }
+    if (_webTool === 'admin-panel') { renderAdminPage(); _syncWebNav(); return; }
     if (!_webSub?.active) {
       const main = document.getElementById('main');
       if (main) main.innerHTML = `
@@ -602,13 +606,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (user.is_admin) document.getElementById('nav-admin-item').style.display = '';
   const wbUser = document.getElementById('wb-user');
   if (wbUser) wbUser.textContent = user.email || '';
-  _updateSubChip();
 
+  _updateSubChip();
   document.getElementById('boot-screen').classList.add('hidden');
   document.getElementById('web-bar').style.display = '';
   document.getElementById('root').style.display = '';
 
-  const _origSaveState = window.saveState;
+  const _origSaveState = window.saveState || (async () => {});
   let _stateSyncTimer = null;
   window.saveState = async function() {
     await _origSaveState();
@@ -618,22 +622,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   setBootMsg('Loading your data…');
   await _pullStateFromServer(token);
-
-  if (typeof window.VB_JUP_QUOTE !== 'undefined') {
-    window.VB_JUP_QUOTE = BACKEND + '/api/proxy/jupiter/quote';
-    window.VB_JUP_SWAP  = BACKEND + '/api/proxy/jupiter/swap';
-  }
-  const _origVbJupFetch = window.vbJupFetch;
-  if (typeof _origVbJupFetch === 'function') {
-    window.vbJupFetch = async function(url, opts) {
-      url = url
-        .replace('https://api.jup.ag/swap/v1/quote', BACKEND + '/api/proxy/jupiter/quote')
-        .replace('https://api.jup.ag/swap/v1/swap',  BACKEND + '/api/proxy/jupiter/swap')
-        .replace('https://quote-api.jup.ag/v6/quote', BACKEND + '/api/proxy/jupiter/quote')
-        .replace('https://quote-api.jup.ag/v6/swap',  BACKEND + '/api/proxy/jupiter/swap');
-      return _origVbJupFetch(url, opts);
-    };
-  }
 
   if (typeof render === 'function') render();
   if (typeof checkRpc === 'function') checkRpc();
@@ -816,7 +804,7 @@ function renderSubPage() {
 
 async function redeemPromo() {
   const code = document.getElementById('promo-input')?.value?.trim().toUpperCase();
-  const msg  = document.getElementById('promo-msg');
+  const msg = document.getElementById('promo-msg');
   if (!code) { if (msg) msg.innerHTML = '<span style="color:var(--warn)">Enter a code.</span>'; return; }
   if (msg) msg.innerHTML = '<span style="color:var(--text-muted)">Redeeming…</span>';
   try {
@@ -869,10 +857,10 @@ async function _loadAdminTab() {
   const el = document.getElementById('admin-content');
   if (!el) return;
   try {
-    if (_adminTab === 'users')     await _loadUsers(el);
-    if (_adminTab === 'codes')     await _loadCodes(el);
+    if (_adminTab === 'users') await _loadUsers(el);
+    if (_adminTab === 'codes') await _loadCodes(el);
     if (_adminTab === 'whitelist') await _loadWhitelist(el);
-    if (_adminTab === 'admins')    await _loadAdmins(el);
+    if (_adminTab === 'admins') await _loadAdmins(el);
   } catch (e) { el.innerHTML = `<div class="admin-empty" style="color:var(--danger)">${e.message}</div>`; }
 }
 
@@ -1089,7 +1077,7 @@ function paySelect(method, el) {
 
 async function payGenerate() {
   if (!_payMethod) { showToast('Select Phantom or Manual SOL first'); return; }
-  const btn   = document.getElementById('pay-gen-btn');
+  const btn = document.getElementById('pay-gen-btn');
   const token = localStorage.getItem('udt_token');
   btn.disabled = true; btn.textContent = 'Creating…';
   try {
