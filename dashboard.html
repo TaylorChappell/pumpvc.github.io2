@@ -10,216 +10,79 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="popup.css">
 
-  <!--
-    BUFFER POLYFILL STRATEGY
-    ────────────────────────
-    @solana/web3.js internally uses Buffer.from(str, 'hex'), Buffer.alloc,
-    Buffer.concat, and Buffer.isBuffer — all need to exist on window.Buffer
-    BEFORE web3.js is parsed/executed.
+    <!-- Buffer polyfill — load VERY early -->
+  <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.min.js"></script>
 
-    CDN buffer packages are unreliable in browser IIFE context (version
-    mismatches, missing .from on the constructor, etc.).
-
-    Solution: inline a minimal but fully correct Buffer implementation built
-    on top of Uint8Array + TextEncoder. This is the same approach used by
-    @solana/web3.js's own browser bundle internally.
-  -->
-  <script>
-  (function installBuffer() {
-    'use strict';
-
-    // If a working Buffer already exists (e.g. from another script), keep it.
-    if (typeof window.Buffer === 'function' &&
-        typeof window.Buffer.from === 'function' &&
-        typeof window.Buffer.alloc === 'function') {
-      console.log('[buffer] Already present, keeping existing Buffer');
-      return;
-    }
-
-    // ── Hex helpers ────────────────────────────────────────────────────
-    const HEX = '0123456789abcdef';
-    function hexToBytes(s) {
-      const len = Math.floor(s.length / 2);
-      const out = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        const hi = parseInt(s[i * 2],     16);
-        const lo = parseInt(s[i * 2 + 1], 16);
-        out[i] = (hi << 4) | lo;
-      }
-      return out;
-    }
-    function bytesToHex(u8) {
-      let s = '';
-      for (let i = 0; i < u8.length; i++) {
-        s += HEX[u8[i] >> 4];
-        s += HEX[u8[i] & 0xf];
-      }
-      return s;
-    }
-    function base64ToBytes(s) {
-      const bin = atob(s);
-      const out = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-      return out;
-    }
-    function bytesToBase64(u8) {
-      let bin = '';
-      for (let i = 0; i < u8.length; i++) bin += String.fromCharCode(u8[i]);
-      return btoa(bin);
-    }
-    const enc = new TextEncoder();
-    const dec = new TextDecoder();
-
-    // ── Buffer class (extends Uint8Array) ──────────────────────────────
-    class Buffer extends Uint8Array {
-      // Static factory — mirrors Node's Buffer.from()
-      static from(value, encoding, length) {
-        if (typeof value === 'string') {
-          const e = (encoding || 'utf8').toLowerCase();
-          if (e === 'hex')    return new Buffer(hexToBytes(value));
-          if (e === 'base64') return new Buffer(base64ToBytes(value));
-          // utf8 / ascii / latin1
-          return new Buffer(enc.encode(value));
-        }
-        if (value instanceof Buffer)      return new Buffer(value);
-        if (value instanceof Uint8Array)  return new Buffer(value);
-        if (value instanceof ArrayBuffer) return new Buffer(new Uint8Array(value));
-        if (ArrayBuffer.isView(value))    return new Buffer(new Uint8Array(value.buffer, value.byteOffset, value.byteLength));
-        if (Array.isArray(value))         return new Buffer(new Uint8Array(value));
-        // Fallback
-        return new Buffer(new Uint8Array(value));
-      }
-
-      static alloc(size, fill, encoding) {
-        const b = new Buffer(size);
-        if (fill !== undefined) {
-          if (typeof fill === 'string') {
-            const fillBytes = Buffer.from(fill, encoding || 'utf8');
-            for (let i = 0; i < size; i++) b[i] = fillBytes[i % fillBytes.length] || 0;
-          } else {
-            b.fill(fill);
-          }
-        }
-        return b;
-      }
-
-      static allocUnsafe(size)     { return new Buffer(size); }
-      static allocUnsafeSlow(size) { return new Buffer(size); }
-
-      static isBuffer(obj) {
-        return obj instanceof Uint8Array;
-      }
-
-      static isEncoding(enc) {
-        return ['hex','utf8','utf-8','ascii','latin1','binary','base64',
-                'ucs2','ucs-2','utf16le','utf-16le'].includes(String(enc).toLowerCase());
-      }
-
-      static byteLength(str, encoding) {
-        const e = (encoding || 'utf8').toLowerCase();
-        if (e === 'hex')    return Math.floor(str.length / 2);
-        if (e === 'base64') return Math.floor(str.length * 3 / 4);
-        return enc.encode(str).length;
-      }
-
-      static concat(list, totalLength) {
-        const total = totalLength !== undefined
-          ? totalLength
-          : list.reduce((s, b) => s + b.length, 0);
-        const out = new Buffer(total);
-        let offset = 0;
-        for (const b of list) {
-          out.set(b, offset);
-          offset += b.length;
-          if (offset >= total) break;
-        }
-        return out;
-      }
-
-      static compare(a, b) {
-        for (let i = 0; i < Math.min(a.length, b.length); i++) {
-          if (a[i] < b[i]) return -1;
-          if (a[i] > b[i]) return 1;
-        }
-        return a.length - b.length;
-      }
-
-      // Instance methods
-      toString(encoding, start, end) {
-        const slice = (start !== undefined || end !== undefined)
-          ? this.slice(start, end)
-          : this;
-        const e = (encoding || 'utf8').toLowerCase();
-        if (e === 'hex')    return bytesToHex(slice);
-        if (e === 'base64') return bytesToBase64(slice);
-        return dec.decode(slice);
-      }
-
-      write(string, offset, length, encoding) {
-        const off = typeof offset === 'number' ? offset : 0;
-        const bytes = Buffer.from(string, encoding || 'utf8');
-        const len   = length !== undefined ? Math.min(length, bytes.length) : bytes.length;
-        this.set(bytes.subarray(0, len), off);
-        return len;
-      }
-
-      copy(target, targetStart, sourceStart, sourceEnd) {
-        const ts  = targetStart  || 0;
-        const ss  = sourceStart  || 0;
-        const se  = sourceEnd    !== undefined ? sourceEnd : this.length;
-        const src = this.subarray(ss, se);
-        target.set(src, ts);
-        return src.length;
-      }
-
-      slice(start, end) { return Buffer.from(super.slice(start, end)); }
-      subarray(start, end) { return Buffer.from(super.subarray(start, end)); }
-
-      readUInt32LE(offset) { return (this[offset] | this[offset+1]<<8 | this[offset+2]<<16 | this[offset+3]<<24) >>> 0; }
-      readUInt32BE(offset) { return (this[offset]<<24 | this[offset+1]<<16 | this[offset+2]<<8 | this[offset+3]) >>> 0; }
-      writeUInt32LE(v, o)  { this[o]=v; this[o+1]=v>>8; this[o+2]=v>>16; this[o+3]=v>>24; return o+4; }
-      writeUInt32BE(v, o)  { this[o]=v>>24; this[o+1]=v>>16; this[o+2]=v>>8; this[o+3]=v; return o+4; }
-      readUInt8(o)         { return this[o]; }
-      writeUInt8(v, o)     { this[o] = v; return o+1; }
-      readInt32LE(o)       { return this.readUInt32LE(o) | 0; }
-      readInt32BE(o)       { return this.readUInt32BE(o) | 0; }
-
-      get _isBuffer() { return true; }
-    }
-
-    window.Buffer = Buffer;
-    // Some modules check `global.Buffer` (browserify shim pattern)
-    try { if (typeof global !== 'undefined') global.Buffer = Buffer; } catch {}
-
-    console.log('[buffer] ✅ Inline Buffer installed');
-    console.log('[buffer] ✅ Buffer.from:', typeof Buffer.from);
-    console.log('[buffer] ✅ Buffer.alloc:', typeof Buffer.alloc);
-    console.log('[buffer] ✅ Buffer.isBuffer:', typeof Buffer.isBuffer);
-  })();
-  </script>
-
-  <!-- Solana web3.js — loads AFTER Buffer is patched -->
+  <!-- Solana web3.js -->
   <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.98.0/lib/index.iife.min.js"></script>
 
-  <!-- bs58 -->
+  <!-- bs58.js — ONLY ONCE in the whole file -->
   <script src="bs58.js"></script>
 
-  <script>
-  console.log('[init] solanaWeb3:', typeof window.solanaWeb3);
-  if (window.solanaWeb3) {
-    // Quick sanity check — make sure SystemProgram loaded
-    console.log('[init] SystemProgram:', typeof window.solanaWeb3.SystemProgram);
-    console.log('[init] Transaction:', typeof window.solanaWeb3.Transaction);
-  }
-  </script>
+  <!-- Full polyfill setup -->
+<script>
+  (function setupPolyfills() {
+    // Force Buffer global with ALL methods @solana/web3.js expects
+    if (typeof window.buffer !== 'undefined' && window.buffer.Buffer) {
+      window.Buffer = window.buffer.Buffer;
+    } else if (typeof window.Buffer === 'undefined') {
+      console.warn('[polyfill] Buffer not found on window — using fallback');
+    }
+
+    if (window.Buffer) {
+      // Core methods already present in buffer@6.0.3
+      if (!window.Buffer.from) {
+        window.Buffer.from = function (value, encoding) {
+          if (typeof value === 'string') {
+            return new window.Buffer(value, encoding || 'utf8');
+          }
+          return new window.Buffer(value);
+        };
+      }
+      if (!window.Buffer.isEncoding) {
+        window.Buffer.isEncoding = function (encoding) {
+          const valid = ['hex', 'utf8', 'utf-8', 'ascii', 'latin1', 'binary', 'base64', 'ucs2', 'ucs-2', 'utf16le', 'utf-16le'];
+          return valid.includes(String(encoding).toLowerCase());
+        };
+      }
+
+      // ← THIS WAS MISSING AND CAUSED THE CRASH
+      if (typeof window.Buffer.isBuffer !== 'function') {
+        window.Buffer.isBuffer = function isBuffer(obj) {
+          return !!(obj && (obj._isBuffer || obj instanceof window.Buffer));
+        };
+      }
+
+      // Extra safety for other Solana internals
+      if (!window.Buffer.alloc) {
+        window.Buffer.alloc = function (size, fill, encoding) {
+          return new window.Buffer(size).fill(fill || 0, encoding);
+        };
+      }
+    }
+
+    window.solanaWeb3 = window.solanaWeb3 || window.Web3;
+
+    window.bs58 = {
+      encode: typeof bs58encode === 'function' ? bs58encode : null,
+      decode: typeof bs58decode === 'function' ? bs58decode : null
+    };
+
+    console.log('[polyfill] ✅ Buffer.isBuffer ready:', typeof window.Buffer?.isBuffer);
+    console.log('[polyfill] ✅ Buffer.from ready:', typeof window.Buffer?.from);
+  })();
+</script>
 
   <style>
+    /* Remove 480px popup constraint */
     html { width:100% !important; height:100vh !important; }
     body { width:100% !important; height:100vh !important; }
     #root { height:calc(100vh - 40px) !important; }
     .shell { height:calc(100vh - 40px) !important; }
     .sidebar { width:172px !important; min-width:172px !important; }
 
+    /* Web-only nav items — identical styling to nav-item but NOT targeted by popup.js's
+       querySelectorAll('.nav-item') so their onclick handlers are never overwritten */
     .web-nav-item {
       display:flex; align-items:center; gap:8px; padding:5px 10px; border-radius:6px;
       cursor:pointer; font-size:11px; font-weight:500; color:var(--text-dim);
@@ -231,6 +94,7 @@
     .web-nav-item:hover .nav-svg, .web-nav-item.active .nav-svg { opacity:1; }
     .web-nav-item .nav-label { flex:1; }
 
+    /* Web topbar */
     #web-bar {
       height:40px; background:var(--bg2); border-bottom:1px solid var(--border-md);
       display:flex; align-items:center; justify-content:space-between; padding:0 12px;
@@ -256,6 +120,7 @@
     .wb-btn.primary { background:var(--navy); color:#fff; border-color:var(--navy); }
     .wb-btn.primary:hover { background:var(--navy-mid); }
 
+    /* Full-page loading/gate overlay */
     #boot-screen {
       position:fixed; inset:0; background:var(--bg); z-index:9999;
       display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
@@ -266,11 +131,16 @@
     .boot-logo-fb { width:40px; height:40px; border-radius:10px; background:var(--navy); display:flex; align-items:center; justify-content:center; }
     .boot-logo-fb svg { width:22px; height:22px; }
 
+    /* Sub-gate screen (shown inside #main when no sub) */
     .web-gate {
       display:flex; flex-direction:column; align-items:center; justify-content:center;
       height:100%; gap:14px; padding:30px 20px; text-align:center;
     }
-    .web-gate-icon { width:52px; height:52px; border-radius:12px; background:var(--danger-bg); border:1px solid rgba(220,38,38,0.18); display:flex; align-items:center; justify-content:center; }
+    .web-gate-icon {
+      width:52px; height:52px; border-radius:12px;
+      background:var(--danger-bg); border:1px solid rgba(220,38,38,0.18);
+      display:flex; align-items:center; justify-content:center;
+    }
     .web-gate-title { font-size:14px; font-weight:700; color:var(--navy); }
     .web-gate-desc  { font-size:11px; color:var(--text-muted); line-height:1.6; max-width:260px; }
 
@@ -280,11 +150,21 @@
       backdrop-filter:blur(5px); z-index:500; align-items:center; justify-content:center;
     }
     .pay-box { background:var(--surface); border:1px solid var(--border-md); border-radius:10px; padding:20px; width:340px; box-shadow:0 20px 50px rgba(13,31,74,0.22); }
-    .pay-opt { padding:10px 6px; background:var(--surface2); border:1px solid var(--border-md); border-radius:7px; cursor:pointer; text-align:center; transition:all 0.12s; }
+    .pay-title { font-size:13px; font-weight:700; color:var(--navy); margin-bottom:3px; }
+    .pay-sub   { font-size:10px; color:var(--text-muted); margin-bottom:14px; }
+    .pay-grid  { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:14px; }
+    .pay-opt   { padding:10px 6px; background:var(--surface2); border:1px solid var(--border-md); border-radius:7px; cursor:pointer; text-align:center; transition:all 0.12s; }
     .pay-opt:hover,.pay-opt.sel { border-color:var(--navy); background:var(--navy-ghost); }
+    .pay-opt svg { width:18px; height:18px; color:var(--navy); display:block; margin:0 auto 4px; }
+    .pay-opt-n { font-size:9.5px; font-weight:600; color:var(--text); }
+    .pay-addr  { background:var(--surface2); border:1px solid var(--border-md); border-radius:5px; padding:7px 9px; font-family:var(--mono); font-size:9.5px; word-break:break-all; cursor:pointer; margin:6px 0; color:var(--navy); }
+    .pay-addr:hover { border-color:var(--navy); }
+    .pay-amt   { font-size:17px; font-weight:700; color:var(--navy); font-family:var(--mono); }
     .pay-watch { display:flex; align-items:center; gap:5px; font-size:9px; color:var(--text-muted); margin-top:8px; }
     .pay-spin  { width:9px; height:9px; border:1.5px solid var(--border-md); border-top-color:var(--navy); border-radius:50%; animation:_spin 0.6s linear infinite; flex-shrink:0; }
     @keyframes _spin { to { transform:rotate(360deg); } }
+    .pay-foot  { display:flex; gap:7px; margin-top:12px; }
+    .pay-foot .btn { flex:1; }
 
     /* Subscription page */
     .sub-section { margin-bottom:16px; }
@@ -325,7 +205,11 @@
 </head>
 <body>
 
-<!-- BOOT SCREEN -->
+<!-- ═══════════════════════════════════════════════════════════════════════
+  BOOT SCREEN — shown while we verify auth + sub server-side.
+  Hidden once verified. Redirects to auth.html if checks fail.
+  This cannot be bypassed — the real check is server-side.
+════════════════════════════════════════════════════════════════════════ -->
 <div id="boot-screen">
   <div class="boot-logo">
     <img src="icon128.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
@@ -339,14 +223,20 @@
   </div>
 </div>
 
-<!-- CHROME SHIM -->
+<!-- ═══════════════════════════════════════════════════════════════════════
+  CHROME SHIM — maps chrome.* to web equivalents.
+  Must run before any extension JS.
+════════════════════════════════════════════════════════════════════════ -->
 <script>
 (function() {
   'use strict';
+
+  // localStorage-backed chrome.storage.local
   const MEM = {};
   const STORE_KEY = 'udt_web_store';
   try { const r = localStorage.getItem(STORE_KEY); if (r) Object.assign(MEM, JSON.parse(r)); } catch {}
   const flush = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(MEM)); } catch {} };
+
   window.chrome = window.chrome || {};
   chrome.storage = { local: {
     get(keys, cb) {
@@ -370,7 +260,7 @@
 })();
 </script>
 
-<!-- WEB TOPBAR -->
+<!-- Web topbar (hidden until boot completes) -->
 <div id="web-bar" style="display:none">
   <div class="wb-left">
     <a class="wb-logo" href="/">
@@ -388,9 +278,10 @@
   </div>
 </div>
 
-<!-- EXTENSION SHELL -->
+<!-- Extension shell (hidden until boot completes) -->
 <div id="root" style="display:none">
   <div class="shell">
+
     <nav class="sidebar" id="sidebar">
       <div class="brand-bar">
         <div class="brand-logo-slot" style="background:none;box-shadow:none;border-radius:0;overflow:visible">
@@ -408,6 +299,7 @@
 
       <div class="nav-section-label" style="margin-top:4px">ACCOUNT</div>
       <ul class="nav-list">
+        <!-- web-nav-item (not nav-item) so popup.js attachHandlers() never overwrites these onclick handlers -->
         <li class="web-nav-item" id="nav-subscription-item" onclick="setWebTool('subscription')">
           <svg class="nav-svg" width="13" height="13" viewBox="0 0 13 13" fill="none">
             <rect x="1" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.2"/>
@@ -449,11 +341,11 @@
   <div class="modal-overlay" id="emoji-modal" style="display:none"><div class="modal-box emoji-modal-box" id="emoji-modal-box"></div></div>
 </div>
 
-<!-- PAYMENT OVERLAY — method selection -->
+<!-- Payment overlay — method selection -->
 <div id="pay-overlay">
   <div class="pay-box">
-    <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:3px">Subscribe — $<span id="pay-usd-price">99</span> / month</div>
-    <div style="font-size:10px;color:var(--text-muted);margin-bottom:14px">Manual renewal. Price locked in SOL when you click Pay.</div>
+    <div class="pay-title">Subscribe — $<span id="pay-usd-price">99</span> / month</div>
+    <div class="pay-sub">Manual renewal. Price locked in SOL when you click Pay.</div>
 
     <div id="pay-price-loading" style="text-align:center;padding:16px 0;font-size:11px;color:var(--text-muted)">
       <div class="pay-spin" style="margin:0 auto 8px"></div>
@@ -488,14 +380,14 @@
       </div>
     </div>
 
-    <div style="display:flex;gap:7px;margin-top:12px">
+    <div class="pay-foot" style="margin-top:12px">
       <button class="btn btn-primary" id="pay-gen-btn" onclick="payGenerate()" style="display:none;flex:1">Pay Now</button>
       <button class="btn btn-ghost" onclick="closePayOverlay()" style="flex:1">Cancel</button>
     </div>
   </div>
 </div>
 
-<!-- FULL-SCREEN PAYMENT PANEL -->
+<!-- Full-screen payment panel (shown once payment is created) -->
 <div id="pay-panel" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:400;overflow-y:auto">
   <div style="max-width:460px;margin:0 auto;padding:28px 20px 40px">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px">
@@ -503,9 +395,10 @@
         <div style="font-size:16px;font-weight:800;color:var(--navy)" id="pp-title">Complete Payment</div>
         <div style="font-size:10px;color:var(--text-muted);margin-top:3px" id="pp-subtitle"></div>
       </div>
-      <button class="btn btn-ghost btn-sm" onclick="cancelPayPanel()" style="flex-shrink:0">✕ Cancel</button>
+      <button class="btn btn-ghost btn-sm" onclick="cancelPayPanel()" style="flex-shrink:0">&#x2715; Cancel</button>
     </div>
 
+    <!-- Amount card -->
     <div style="background:var(--surface);border:1px solid var(--border-md);border-radius:10px;padding:14px 16px;margin-bottom:12px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <span style="font-size:10px;color:var(--text-muted)">Subscription</span>
@@ -520,17 +413,21 @@
       </div>
     </div>
 
+    <!-- Countdown -->
     <div style="background:var(--surface2);border:1px solid var(--border-md);border-radius:8px;padding:9px 14px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between">
-      <span style="font-size:10px;color:var(--text-muted)">⏱ Time remaining</span>
+      <span style="font-size:10px;color:var(--text-muted)">&#x23F1; Time remaining</span>
       <span style="font-size:13px;font-weight:800;font-family:var(--mono);color:var(--navy);letter-spacing:0.04em" id="pp-timer">30:00</span>
     </div>
 
+    <!-- Method content -->
     <div id="pp-content"></div>
+
+    <!-- Status messages -->
     <div id="pp-status" style="margin-top:14px"></div>
   </div>
 </div>
 
-<script src="split.js" onerror="console.error('FATAL: split.js missing')"></script>
+<script src="split.js" onerror="console.error('FATAL: split.js 404 — deploy Split.js as split.js (lowercase) in Railway public/')"></script>
 <script src="auth.js"></script>
 <script src="bundle.js"></script>
 <script src="wallets.js"></script>
@@ -538,100 +435,196 @@
 <script src="volume-bot.js"></script>
 <script src="wallet-tracker.js"></script>
 <script src="sniper.js"></script>
+<!-- api.js: SubAPI, AdminAPI, Auth, AuthAPI for web calls -->
 <script src="api.js"></script>
 
 <script>
-/* ═══════════════════════════════════════════════════════════════════════
-   WEB INIT
-═══════════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════════
+  WEB INIT — runs after all extension JS is loaded.
+
+  Security model:
+  ─────────────────────────────────────────────────────────────────────────
+  • Auth check: GET /api/auth/me with the JWT. If 401 → auth.html.
+    This runs server-side — no client-side token forgery bypasses it.
+
+  • Sub check: GET /api/subscription/verify. If inactive → tool gate.
+    Gate is enforced server-side too (sub verified before every RPC action
+    that the extension makes). Even if someone edits JS in devtools to hide
+    the gate UI, the RPC signing happens with the user's own keys and the
+    subscription gate sits in front of every API call that needs it.
+
+  • Admin check: is_admin from /api/auth/me. Admin nav item only shown if true.
+    Admin API routes require is_admin on the server — hiding/showing the nav
+    item client-side is cosmetic only; the backend enforces it independently.
+  ─────────────────────────────────────────────────────────────────────────
+════════════════════════════════════════════════════════════════════════ */
+
 const BACKEND = 'https://ultimatedevtools-production.up.railway.app';
 
-let _webUser  = null;
-let _webSub   = null;
-let _webTool  = null;
-let _adminTab = 'users';
+// State set after boot
+let _webUser    = null;
+let _webSub     = null;
+let _webTool    = null;
+let _adminTab   = 'users';
 
+// ── Boot sequence ────────────────────────────────────────────────────────────
+// Runs immediately after DOMContentLoaded. No extension JS involved here.
 document.addEventListener('DOMContentLoaded', async () => {
+
+  // 1. Get token from localStorage (written there by auth.html via api.js)
   const token = localStorage.getItem('udt_token');
-  if (!token) { window.location.replace('auth.html'); return; }
+  if (!token) {
+    // Not logged in at all → redirect to login
+    window.location.replace('auth.html');
+    return;
+  }
 
   setBootMsg('Verifying session…');
+
+  // 2. Server-side auth check — cannot be bypassed client-side
   let user;
   try {
-    const r = await fetch(BACKEND + '/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } });
+    const r = await fetch(BACKEND + '/api/auth/me', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
     if (!r.ok) throw new Error('Unauthorized');
     user = await r.json();
   } catch {
+    // Token invalid or expired → clear and redirect
     localStorage.removeItem('udt_token');
     localStorage.removeItem('udt_user');
     window.location.replace('auth.html');
     return;
   }
-  _webUser = user;
 
+  _webUser = user;
   setBootMsg('Checking subscription…');
+
+  // 3. Server-side subscription check
   let sub;
   try {
-    const r = await fetch(BACKEND + '/api/subscription/verify', { headers: { 'Authorization': 'Bearer ' + token } });
+    const r = await fetch(BACKEND + '/api/subscription/verify', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
     if (!r.ok) throw new Error();
     sub = await r.json();
-  } catch { sub = { active: false }; }
+  } catch {
+    sub = { active: false };
+  }
   _webSub = sub;
 
+  // 4. Pre-populate chrome.storage so auth.js's tryAutoLogin() succeeds
+  //    without showing the login screen. We use a dummy encKeyB64 value —
+  //    the real PBKDF2 key is only needed for extension wallet decryption.
+  //    Web-only users don't have encrypted blobs to decrypt (wallets live
+  //    in the extension), so null is fine and syncWalletsFromServer silently
+  //    skips when cryptoKey is null.
   await chrome.storage.local.set({
-    udt_auth_v2: JSON.stringify({ token, email: user.email||'', userId: user.id||0, encKeyB64:'web-session-no-enc-key', ts: Date.now() })
+    udt_auth_v2: JSON.stringify({
+      token,
+      email:     user.email || '',
+      userId:    user.id    || 0,
+      encKeyB64: 'web-session-no-enc-key',  // non-null so tryAutoLogin passes
+      ts: Date.now()
+    })
   });
 
-  S.auth = { loggedIn: true, token, email: user.email||'', userId: user.id||0, is_admin: user.is_admin||false, cryptoKey: null };
-  window.tryAutoLogin = async () => true;
+  // 5. Set S.auth directly — this prevents render() from showing the
+  //    login screen. We override tryAutoLogin to skip the server verify
+  //    (we just did it above) and just set S.auth from what we already know.
+  S.auth = {
+    loggedIn:  true,
+    token:     token,
+    email:     user.email || '',
+    userId:    user.id    || 0,
+    is_admin:  user.is_admin || false,
+    cryptoKey: null   // no PBKDF2 key for web sessions
+  };
 
+  // 6. Override tryAutoLogin so popup.js's DOMContentLoaded doesn't hit
+  //    the server again (we already did it) and doesn't overwrite S.auth
+  window.tryAutoLogin = async () => {
+    // S.auth is already set — just return true
+    return true;
+  };
+
+  // 7. Override render() to:
+  //    (a) never show login screen
+  //    (b) show subscription gate if sub inactive (cosmetic — real gate is server)
+  //    (c) hand off to web-only tool pages
   const _origRender = window.render;
   window.render = function() {
     if (!S.auth?.loggedIn) { window.location.replace('auth.html'); return; }
     if (_webTool === 'subscription') { renderSubPage(); _syncWebNav(); return; }
     if (_webTool === 'admin-panel')  { renderAdminPage(); _syncWebNav(); return; }
+
+    // For regular tools: if no sub, show gate instead of tool content
     if (!_webSub?.active) {
       const main = document.getElementById('main');
       if (main) main.innerHTML = `
         <div class="web-gate">
-          <div class="web-gate-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" stroke="#dc2626" stroke-width="1.7"/><path d="M7 11V7a5 5 0 0110 0v4" stroke="#dc2626" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+          <div class="web-gate-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" stroke="#dc2626" stroke-width="1.7"/><path d="M7 11V7a5 5 0 0110 0v4" stroke="#dc2626" stroke-width="1.7" stroke-linecap="round"/></svg>
+          </div>
           <div class="web-gate-title">Subscription Required</div>
-          <div class="web-gate-desc">${_webSub?.expires_at ? 'Your subscription has expired.' : 'You need an active subscription to use these tools.'}<br><br>Subscribe to unlock all tools.</div>
+          <div class="web-gate-desc">
+            ${_webSub?.expires_at ? 'Your subscription has expired.' : 'You need an active subscription to use these tools.'}<br><br>
+            Subscribe to unlock all five professional tools.
+          </div>
           <button class="btn btn-primary" onclick="setWebTool('subscription')">View Subscription</button>
         </div>`;
-      _syncWebNav(); return;
+      _syncWebNav();
+      return;
     }
+
     _origRender();
     _syncWebNav();
   };
 
-  if (user.is_admin) document.getElementById('nav-admin-item').style.display = '';
+  // 8. Show admin nav item if admin
+  if (user.is_admin) {
+    document.getElementById('nav-admin-item').style.display = '';
+  }
+
+  // 9. Update topbar
   const wbUser = document.getElementById('wb-user');
   if (wbUser) wbUser.textContent = user.email || '';
   _updateSubChip();
 
+  // 10. Unhide UI now that checks passed
   document.getElementById('boot-screen').classList.add('hidden');
   document.getElementById('web-bar').style.display = '';
   document.getElementById('root').style.display = '';
 
+  // 11. Override saveState to also push state to the server (cross-device sync)
+  //     The original popup.js saveState writes to chrome.storage.local (localStorage on web).
+  //     We wrap it to also PUT the state blob to /api/state so any device that loads the
+  //     dashboard pulls the same wallets, settings, tool state etc.
   const _origSaveState = window.saveState;
   let _stateSyncTimer = null;
   window.saveState = async function() {
-    await _origSaveState();
+    await _origSaveState(); // write to localStorage as normal
+    // Debounce the server push so rapid saves don't spam the API
     clearTimeout(_stateSyncTimer);
     _stateSyncTimer = setTimeout(() => _pushStateToServer(), 1500);
   };
 
+  // 12. Load state from server first (so fresh browser sessions get the saved state)
   setBootMsg('Loading your data…');
   await _pullStateFromServer(token);
 
+  // 13. Override VB_JUP_QUOTE and VB_JUP_SWAP constants to use Railway proxy
+  //     api.jup.ag blocks browser requests with CORS — the proxy forwards them server-side
   if (typeof window.VB_JUP_QUOTE !== 'undefined') {
     window.VB_JUP_QUOTE = BACKEND + '/api/proxy/jupiter/quote';
     window.VB_JUP_SWAP  = BACKEND + '/api/proxy/jupiter/swap';
   }
+  // Also patch the module-level constants that volume-bot.js captured at parse time
+  // by overriding vbJupFetch to rewrite urls transparently
   const _origVbJupFetch = window.vbJupFetch;
   if (typeof _origVbJupFetch === 'function') {
     window.vbJupFetch = async function(url, opts) {
+      // Rewrite api.jup.ag URLs to go through our proxy
       url = url
         .replace('https://api.jup.ag/swap/v1/quote', BACKEND + '/api/proxy/jupiter/quote')
         .replace('https://api.jup.ag/swap/v1/swap',  BACKEND + '/api/proxy/jupiter/swap')
@@ -641,10 +634,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
   }
 
+  // 14. Trigger render
   if (typeof render === 'function') render();
   if (typeof checkRpc === 'function') checkRpc();
   if (typeof buildNavList === 'function') buildNavList();
 
+  // 15. Refresh sub status every 3 min
   setInterval(_refreshSubServer, 3 * 60 * 1000);
 });
 
@@ -653,27 +648,40 @@ function setBootMsg(msg) {
   if (el) el.textContent = msg;
 }
 
+// ── Server state push/pull ────────────────────────────────────────────────────
 async function _pushStateToServer() {
   const token = localStorage.getItem('udt_token');
   if (!token || typeof S === 'undefined') return;
   try {
+    // We push the full state including privateKey fields.
+    // The /api/state endpoint is auth-protected (JWT required) so only this
+    // user can read it back. This mirrors how chrome.storage.local works in
+    // the extension — it stores private keys unencrypted locally too.
+    // The encrypted /wallets endpoint (auth.js) is a separate, stronger-security
+    // path for users who set a password; this is the lightweight state sync path.
     const safeState = { ...S };
+    // Only strip the in-memory cryptoKey object (not serialisable anyway) and auth token
     if (safeState.auth) safeState.auth = { ...safeState.auth, cryptoKey: undefined };
     await fetch(BACKEND + '/api/state', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({ state: safeState })
     });
-  } catch {}
+  } catch {} // non-critical
 }
 
 async function _pullStateFromServer(token) {
   if (!token) return;
   try {
-    const r = await fetch(BACKEND + '/api/state', { headers: { 'Authorization': 'Bearer ' + token } });
+    const r = await fetch(BACKEND + '/api/state', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
     if (!r.ok) return;
     const { state } = await r.json();
     if (!state || typeof state !== 'object') return;
+
+    // Build a map of private keys from whatever is currently in localStorage
+    // BEFORE we overwrite S with server state
     const localPrivKeys = {};
     (S.savedWallets || []).forEach(w => {
       if (w.privateKey) {
@@ -681,6 +689,8 @@ async function _pullStateFromServer(token) {
         if (w.id)         localPrivKeys['id:' + w.id] = w.privateKey;
       }
     });
+
+    // Deep-merge server state into S — never overwrite auth or in-memory crypto
     const safeMerge = (target, source) => {
       if (!source || typeof source !== 'object') return;
       for (const key of Object.keys(source)) {
@@ -688,21 +698,35 @@ async function _pullStateFromServer(token) {
         if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
           if (!target[key] || typeof target[key] !== 'object') target[key] = {};
           safeMerge(target[key], source[key]);
-        } else { target[key] = source[key]; }
+        } else {
+          target[key] = source[key];
+        }
       }
     };
     safeMerge(S, state);
+
+    // Restore private keys: server state may have them (if previously pushed with keys)
+    // or may not (if pushed from an older version). Either way, prefer the server value
+    // then fall back to what was in localStorage.
     if (state.savedWallets?.length) {
       S.savedWallets = state.savedWallets.map(w => ({
         ...w,
-        privateKey: w.privateKey || localPrivKeys[w.publicKey] || localPrivKeys['id:' + w.id] || ''
+        privateKey: w.privateKey
+          || localPrivKeys[w.publicKey]
+          || localPrivKeys['id:' + w.id]
+          || ''
       }));
     }
+
+    // Persist the merged state back to localStorage so popup.js loadState picks it up
     await chrome.storage.local.set({ udt_v3: S });
     console.log(`[state pull] restored ${S.savedWallets?.length || 0} wallets`);
-  } catch (e) { console.warn('[state pull]', e.message); }
+  } catch (e) {
+    console.warn('[state pull]', e.message);
+  }
 }
 
+// ── Server sub refresh (also used after payment) ─────────────────────────────
 async function _refreshSubServer() {
   const token = localStorage.getItem('udt_token') || S.auth?.token;
   if (!token) return;
@@ -718,8 +742,10 @@ function _updateSubChip() {
   const txt  = document.getElementById('wb-sub-txt');
   const btn  = document.getElementById('wb-subscribe-btn');
   if (!chip) return;
+
   const sub  = _webSub;
   const days = sub?.expires_at ? Math.max(0, Math.ceil((new Date(sub.expires_at) - Date.now()) / 86400000)) : null;
+
   if (sub?.active) {
     chip.className = 'wb-sub active';
     dot.className  = 'status-dot online';
@@ -728,7 +754,9 @@ function _updateSubChip() {
     else txt.textContent = days !== null ? `${days}d left` : (sub.trial ? 'Trial' : 'Active');
     if (btn) btn.style.display = 'none';
     const badge = document.getElementById('sub-days-badge');
-    if (badge && days !== null && days <= 3 && !sub.admin && !sub.whitelisted) { badge.textContent = `${days}d`; badge.style.display = ''; }
+    if (badge && days !== null && days <= 3 && !sub.admin && !sub.whitelisted) {
+      badge.textContent = `${days}d`; badge.style.display = '';
+    }
   } else {
     chip.className = 'wb-sub inactive';
     dot.className  = 'status-dot offline';
@@ -737,6 +765,7 @@ function _updateSubChip() {
   }
 }
 
+// ── Nav helpers ──────────────────────────────────────────────────────────────
 function setWebTool(tool) {
   _webTool = tool;
   if (tool === 'subscription') renderSubPage();
@@ -744,20 +773,25 @@ function setWebTool(tool) {
   _syncWebNav();
 }
 
+// Clear web tool override when clicking a regular tool
 document.addEventListener('click', (e) => {
   const item = e.target.closest('#nav-list .nav-item');
   if (item && item.dataset.tool) _webTool = null;
 });
 
 function _syncWebNav() {
+  // Regular tool items (inside #nav-list, built by popup.js buildNavList)
   document.querySelectorAll('#nav-list .nav-item[data-tool]').forEach(el => {
     el.classList.toggle('active', !_webTool && el.dataset.tool === S?.activeTool);
   });
+  // Settings button
   document.getElementById('settings-nav-btn')?.classList.toggle('active', !_webTool && S?.activeTool === 'settings');
+  // Web-only items (subscription / admin) — keyed by id, not class
   document.getElementById('nav-subscription-item')?.classList.toggle('active', _webTool === 'subscription');
   document.getElementById('nav-admin-item')?.classList.toggle('active', _webTool === 'admin-panel');
 }
 
+// ── Sign out ─────────────────────────────────────────────────────────────────
 async function webSignOut() {
   try {
     const token = localStorage.getItem('udt_token');
@@ -770,43 +804,52 @@ async function webSignOut() {
   window.location.replace('auth.html');
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   SUBSCRIPTION PAGE
-═══════════════════════════════════════════════════════════════════════ */
+// ── Subscription page ────────────────────────────────────────────────────────
 function renderSubPage() {
   const main = document.getElementById('main');
   if (!main) return;
-  const sub   = _webSub;
-  const fmtD  = iso => iso ? new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
-  const days  = sub?.expires_at ? Math.max(0, Math.ceil((new Date(sub.expires_at) - Date.now()) / 86400000)) : null;
-  const isFree = sub?.admin || sub?.whitelisted;
+  const sub  = _webSub;
+  const fmtD = iso => iso ? new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
+  const days = sub?.expires_at ? Math.max(0, Math.ceil((new Date(sub.expires_at) - Date.now()) / 86400000)) : null;
+  const isFree = sub?.admin || sub?.whitelisted; // free access, no payment needed
 
   main.innerHTML = `
-    <div class="tool-header"><div class="tool-title-row"><span class="tool-title">Subscription</span></div></div>
+    <div class="tool-header">
+      <div class="tool-title-row"><span class="tool-title">Subscription</span></div>
+    </div>
     <div class="scroll-area" id="scroll-area">
+
       <div class="sub-section">
         <div class="sub-section-label">Current Status</div>
         <div class="sub-card ${sub?.active ? 'active' : 'inactive'}">
           <div class="sub-row">
             <div class="sub-badge">
               <span class="status-dot ${sub?.active ? 'online' : 'offline'}"></span>
-              ${sub?.active ? (isFree ? (sub.admin ? 'Admin — Full Access' : 'Whitelisted — Full Access') : (sub.trial ? 'Trial Active' : 'Pro Active')) : 'No Active Subscription'}
+              ${sub?.active
+                ? (isFree
+                    ? (sub.admin ? 'Admin — Full Access' : 'Whitelisted — Full Access')
+                    : (sub.trial ? 'Trial Active' : 'Pro Active'))
+                : 'No Active Subscription'}
             </div>
             ${sub?.active ? `<span style="font-size:9.5px;color:var(--text-muted)">${isFree ? 'Free' : sub.trial ? 'Trial' : 'Pro'}</span>` : ''}
           </div>
           ${!isFree && sub?.active ? `
             <div class="sub-meta"><span>Expires</span><span class="sub-meta-val">${fmtD(sub.expires_at)}</span></div>
             <div class="sub-meta"><span>Days remaining</span><span class="sub-meta-val" style="${days !== null && days <= 3 ? 'color:var(--danger)' : ''}">${days !== null ? `${days} days` : '—'}</span></div>
-          ` : !isFree ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;line-height:1.5">Subscribe to unlock all tools.</div>` : ''}
+          ` : !isFree ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;line-height:1.5">Subscribe to unlock all five professional tools.</div>` : ''}
           ${isFree ? `<div style="font-size:10px;color:var(--green-dim);margin-top:4px">No subscription required — you have full access.</div>` : ''}
         </div>
       </div>
+
       ${!isFree ? `
         <div class="sub-section">
           <div class="sub-section-label">${sub?.active ? 'Renew' : 'Subscribe'} — $99 / month</div>
-          <p style="font-size:10px;color:var(--text-muted);margin-bottom:10px;line-height:1.6">Manual renewal. Pay with Phantom or direct SOL transfer. Price locked at current rate when you pay.</p>
+          <p style="font-size:10px;color:var(--text-muted);margin-bottom:10px;line-height:1.6">
+            Manual renewal. Pay with Phantom or direct SOL transfer. Price is converted to SOL at the current rate and locked at the time you pay.
+          </p>
           <button class="btn btn-primary btn-full" onclick="openPayOverlay()">${sub?.active ? 'Renew Subscription' : 'Subscribe Now'}</button>
         </div>
+
         <div class="sub-section">
           <div class="sub-section-label">Promo Code</div>
           <p style="font-size:10px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">Apply a promo code to activate a free trial. Single-use, one per account.</p>
@@ -817,6 +860,7 @@ function renderSubPage() {
           <div id="promo-msg" style="font-size:10px;margin-top:6px"></div>
         </div>
       ` : ''}
+
     </div>`;
 }
 
@@ -836,12 +880,12 @@ async function redeemPromo() {
     if (msg) msg.innerHTML = `<span style="color:var(--green-dim)">✓ Applied! ${d.days}-day trial activated.</span>`;
     await _refreshSubServer();
     renderSubPage();
-  } catch (e) { if (msg) msg.innerHTML = `<span style="color:var(--danger)">${e.message}</span>`; }
+  } catch (e) {
+    if (msg) msg.innerHTML = `<span style="color:var(--danger)">${e.message}</span>`;
+  }
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   ADMIN PANEL
-═══════════════════════════════════════════════════════════════════════ */
+// ── Admin panel ───────────────────────────────────────────────────────────────
 function renderAdminPage() {
   const main = document.getElementById('main');
   if (!main) return;
@@ -864,7 +908,8 @@ function switchAdminTab(tab) { _adminTab = tab; renderAdminPage(); }
 async function _adminFetch(path, opts={}) {
   const token = localStorage.getItem('udt_token');
   const r = await fetch(BACKEND + '/api' + path, {
-    ...opts, headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+token, ...(opts.headers||{}) }
+    ...opts,
+    headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+token, ...(opts.headers||{}) }
   });
   const d = await r.json();
   if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
@@ -882,6 +927,7 @@ async function _loadAdminTab() {
   } catch (e) { el.innerHTML = `<div class="admin-empty" style="color:var(--danger)">${e.message}</div>`; }
 }
 
+// Users
 let _usersPage=1, _usersSearch='';
 async function _loadUsers(el) {
   const d = await _adminFetch(`/admin/users?page=${_usersPage}&search=${encodeURIComponent(_usersSearch)}`);
@@ -921,6 +967,7 @@ window.adminRevokeSub = async (id,email) => {
   showToast('Revoked'); _loadUsers(document.getElementById('admin-content'));
 };
 
+// Codes
 async function _loadCodes(el) {
   const d = await _adminFetch('/admin/promo/list');
   const fmtD = iso => iso ? new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'}) : '—';
@@ -928,7 +975,7 @@ async function _loadCodes(el) {
     <div class="admin-sec-lbl">Generate Code</div>
     <div class="admin-input-row">
       <input type="number" id="c-days" value="5" min="1" max="90" style="width:60px" placeholder="Days"/>
-      <input type="text" id="c-label" placeholder="Label (optional)" style="flex:1"/>
+      <input type="text"   id="c-label" placeholder="Label (optional)" style="flex:1"/>
       <button class="btn btn-primary btn-sm" onclick="_genCode()">Generate</button>
     </div>
     <div id="code-result" style="margin-bottom:10px"></div>
@@ -963,6 +1010,7 @@ window._disableCode = async (code) => {
   showToast('Disabled'); _loadCodes(document.getElementById('admin-content'));
 };
 
+// Whitelist
 async function _loadWhitelist(el) {
   const d = await _adminFetch('/admin/whitelist/list');
   const fmtD = iso => iso ? new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'}) : '—';
@@ -993,10 +1041,12 @@ window._removeWl = async (email) => {
   showToast('Removed'); _loadWhitelist(document.getElementById('admin-content'));
 };
 
+// Admins
 async function _loadAdmins(el) {
   const d = await _adminFetch('/admin/admins/list');
   el.innerHTML = `
     <div class="admin-sec-lbl">Grant Admin</div>
+    <p style="font-size:10px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">Admins have full access to this panel. Only grant to trusted accounts.</p>
     <div class="admin-input-row">
       <input type="email" id="adm-input" placeholder="user@example.com" style="flex:1"/>
       <button class="btn btn-primary btn-sm" onclick="_grantAdmin()">Grant</button>
@@ -1023,28 +1073,12 @@ window._removeAdmin = async (email) => {
   showToast('Removed'); _loadAdmins(document.getElementById('admin-content'));
 };
 
-/* ═══════════════════════════════════════════════════════════════════════
-   PAYMENT SYSTEM
-   ─────────────────────────────────────────────────────────────────────
-   Phantom flow:
-     1. Connect Phantom (get sender pubkey)
-     2. Build Transaction using SystemProgram.transfer() — SDK only, no raw bytes
-     3. Set feePayer + recentBlockhash BEFORE passing to signAndSendTransaction
-     4. Call phantom.signAndSendTransaction(tx) — Phantom signs + broadcasts
-     5. Fire /confirm with the sig (fast path, retries up to 30s on-chain)
-     6. Always run /check poller every 5s as safety net
-     7. On confirmed → activate sub + backend sweeps to PAYMENT_ADDR
-
-   Manual flow:
-     1. Show unique deposit address
-     2. Poll /check every 5s
-     3. On SOL received → confirmAndActivate + sweep to PAYMENT_ADDR
-═══════════════════════════════════════════════════════════════════════ */
-let _payMethod = null;
-let _payData   = null;
-let _payPoll   = null;
-let _payTimer  = null;
-let _payExpiry = null;
+// ── Payment state ──────────────────────────────────────────────────────────────
+let _payMethod  = null;
+let _payData    = null;
+let _payPoll    = null;
+let _payTimer   = null;
+let _payExpiry  = null;
 
 function openPayOverlay() {
   _payMethod = null;
@@ -1061,7 +1095,9 @@ function openPayOverlay() {
   _loadPayPrice();
 }
 
-function closePayOverlay() { document.getElementById('pay-overlay').style.display = 'none'; }
+function closePayOverlay() {
+  document.getElementById('pay-overlay').style.display = 'none';
+}
 
 function cancelPayPanel() {
   if (_payPoll)  { clearInterval(_payPoll);  _payPoll  = null; }
@@ -1072,7 +1108,9 @@ function cancelPayPanel() {
 async function _loadPayPrice() {
   const token = localStorage.getItem('udt_token');
   try {
-    const r = await fetch(BACKEND + '/api/subscription/sol-price', { headers: { 'Authorization': 'Bearer ' + token } });
+    const r = await fetch(BACKEND + '/api/subscription/sol-price', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
     if (!r.ok) throw new Error();
     const d = await r.json();
     document.getElementById('pay-sol-amount').textContent = `${d.sol} SOL`;
@@ -1083,7 +1121,8 @@ async function _loadPayPrice() {
     const btn = document.getElementById('pay-gen-btn');
     if (btn) btn.style.display = '';
   } catch {
-    document.getElementById('pay-price-loading').innerHTML = '<span style="color:var(--danger);font-size:10px">Could not fetch SOL price. Try again.</span>';
+    document.getElementById('pay-price-loading').innerHTML =
+      '<span style="color:var(--danger);font-size:10px">Could not fetch SOL price. Please try again.</span>';
   }
 }
 
@@ -1098,14 +1137,16 @@ async function payGenerate() {
   const btn   = document.getElementById('pay-gen-btn');
   const token = localStorage.getItem('udt_token');
   btn.disabled = true; btn.textContent = 'Creating…';
+
   try {
     if (_payMethod === 'phantom') {
-      const phantom = window.phantom?.solana || window.solana;
+      const phantom = window.solana || window.phantom?.solana;
       if (!phantom?.isPhantom) {
         showToast('Phantom not found — install from phantom.app or use Manual SOL');
         btn.disabled = false; btn.textContent = 'Pay Now'; return;
       }
     }
+
     const r = await fetch(BACKEND + '/api/subscription/payment/init', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -1114,23 +1155,29 @@ async function payGenerate() {
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || `Server error ${r.status}`);
     _payData = d;
+
     document.getElementById('pay-overlay').style.display = 'none';
     _openPayPanel(d, token);
+
   } catch (e) {
     showToast(e.message || 'Payment setup failed');
     btn.disabled = false; btn.textContent = 'Pay Now';
   }
 }
 
+// ── Full-screen payment panel ──────────────────────────────────────────────────
 function _openPayPanel(payData, token) {
   document.getElementById('pp-sol-amount').textContent = `${payData.amount_sol} SOL`;
   document.getElementById('pp-usd-amount').textContent = `≈ $${payData.amount_usd} USD`;
   document.getElementById('pp-status').innerHTML = '';
   document.getElementById('pp-content').innerHTML = '';
+
   _payExpiry = Date.now() + 30 * 60 * 1000;
   _startCountdown();
+
   document.getElementById('pay-panel').style.display = 'block';
   document.getElementById('pay-panel').scrollTop = 0;
+
   if (_payMethod === 'phantom') {
     document.getElementById('pp-title').textContent    = 'Confirm in Phantom';
     document.getElementById('pp-subtitle').textContent = 'Approve the transaction in your Phantom wallet';
@@ -1149,28 +1196,38 @@ function _startCountdown() {
     const m = Math.floor(left / 60000);
     const s = Math.floor((left % 60000) / 1000);
     const el = document.getElementById('pp-timer');
-    if (el) { el.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`; el.style.color = left < 5*60000 ? 'var(--danger)' : 'var(--navy)'; }
+    if (el) {
+      el.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      el.style.color = left < 5 * 60000 ? 'var(--danger)' : 'var(--navy)';
+    }
     if (left === 0) {
       clearInterval(_payTimer); _payTimer = null;
       if (_payPoll) { clearInterval(_payPoll); _payPoll = null; }
-      const s = document.getElementById('pp-status');
-      if (s) s.innerHTML = `<div style="background:var(--danger-bg);border:1px solid rgba(220,38,38,0.2);border-radius:8px;padding:14px 16px;text-align:center"><div style="font-size:13px;font-weight:700;color:var(--danger);margin-bottom:4px">Payment window expired</div><div style="font-size:10px;color:var(--text-muted);margin-bottom:12px">The 30-minute window has closed.</div><button class="btn btn-primary btn-sm" onclick="cancelPayPanel();openPayOverlay()">Start New Payment</button></div>`;
+      const statusEl = document.getElementById('pp-status');
+      if (statusEl) statusEl.innerHTML = `
+        <div style="background:var(--danger-bg);border:1px solid rgba(220,38,38,0.2);border-radius:8px;padding:14px 16px;text-align:center">
+          <div style="font-size:13px;font-weight:700;color:var(--danger);margin-bottom:4px">Payment window expired</div>
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:12px">The 30-minute window has closed. Please start a new payment.</div>
+          <button class="btn btn-primary btn-sm" onclick="cancelPayPanel();openPayOverlay()">Start New Payment</button>
+        </div>`;
     }
   };
   tick();
   _payTimer = setInterval(tick, 1000);
 }
 
-/* ─── PHANTOM PANEL ───────────────────────────────────────────────── */
+// ── Phantom panel ──────────────────────────────────────────────────────────────
 function _buildPhantomPanel(payData, token) {
+  const content = document.getElementById('pp-content');
   window._ppPayData = payData;
   window._ppToken   = token;
-  document.getElementById('pp-content').innerHTML = `
+
+  content.innerHTML = `
     <div style="background:var(--surface);border:1px solid var(--border-md);border-radius:10px;padding:16px;margin-bottom:12px">
       <div style="font-size:10px;font-weight:700;color:var(--navy);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.06em">Transaction details</div>
       <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:6px">
-        <span>To (deposit address)</span>
-        <span style="font-family:var(--mono);font-size:9.5px">${(payData.payment_addr||payData.address).slice(0,8)}…${(payData.payment_addr||payData.address).slice(-8)}</span>
+        <span>To (payment address)</span>
+        <span style="font-family:var(--mono);font-size:9.5px">${payData.address.slice(0,6)}…${payData.address.slice(-6)}</span>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:10px;padding-top:8px;border-top:1px solid var(--border)">
         <span style="color:var(--text-muted)">Amount</span>
@@ -1178,122 +1235,90 @@ function _buildPhantomPanel(payData, token) {
       </div>
     </div>
     <button class="btn btn-primary btn-full" id="pp-phantom-btn" onclick="_triggerPhantomTx()" style="padding:12px;font-size:12px;font-weight:700">
-      Open Phantom &amp; Pay →
+      Open Phantom &amp; Confirm Payment →
     </button>
     <div style="font-size:9px;color:var(--text-muted);margin-top:8px;text-align:center;line-height:1.5">
-      Phantom will prompt you to approve the transaction. No need to sign anything manually.
+      Phantom will connect and show the transaction for you to approve.
     </div>`;
 }
 
 window._triggerPhantomTx = async function() {
-  const payData  = window._ppPayData;
-  const token    = window._ppToken;
-  const phantom  = window.phantom?.solana || window.solana;
-  const btn      = document.getElementById('pp-phantom-btn');
-  const statusEl = document.getElementById('pp-status');
+  const payData   = window._ppPayData;
+  const token     = window._ppToken;
+  const phantom   = window.solana || window.phantom?.solana;
+  const btn       = document.getElementById('pp-phantom-btn');
+  const statusEl  = document.getElementById('pp-status');
 
   if (!phantom?.isPhantom) {
-    if (statusEl) statusEl.innerHTML = `<div style="color:var(--warn);font-size:11px">⚠ Phantom wallet not detected. Install it from <a href="https://phantom.app" target="_blank">phantom.app</a>.</div>`;
+    if (statusEl) statusEl.innerHTML = `<div style="color:var(--warn)">Phantom wallet not detected.</div>`;
     return;
   }
 
-  // Guard: prevent double-clicks
-  if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
-
   try {
-    // ── STEP 1: Get sender public key from Phantom ───────────────────
-    // If already connected use the existing session directly — do NOT
-    // disconnect/reconnect. Disconnecting then reconnecting causes Phantom
-    // to show a "Connect" popup instead of a transaction approval popup.
-    let senderPubkey = phantom.publicKey;
+    if (btn) { btn.disabled = true; btn.textContent = 'Connecting to Phantom...'; }
 
-    if (!senderPubkey) {
-      // Not yet connected — request connection once
-      if (btn) btn.textContent = 'Connecting to Phantom…';
-      const connectResp = await phantom.connect({ onlyIfTrusted: false });
-      senderPubkey = connectResp?.publicKey || phantom.publicKey;
-    }
-
-    if (!senderPubkey) throw new Error('Could not get wallet public key from Phantom.');
+    await phantom.disconnect().catch(() => {});
+    const connectResp  = await phantom.connect({ onlyIfTrusted: false });
+    const senderPubkey = connectResp.publicKey;
+    if (!senderPubkey) throw new Error('Failed to get wallet public key');
 
     const senderAddress = senderPubkey.toString();
-    console.log('[phantom] using wallet:', senderAddress);
+    if (btn) btn.textContent = 'Building transaction...';
 
-    if (btn) btn.textContent = 'Building transaction…';
-
-    // ── STEP 2: Verify solanaWeb3 is loaded ──────────────────────────
-    // The IIFE bundle at window.solanaWeb3 exposes Connection, Transaction, etc.
-    const web3 = window.solanaWeb3;
-    if (!web3?.Transaction || !web3?.SystemProgram || !web3?.Connection || !web3?.PublicKey) {
-      throw new Error('Solana web3.js not loaded correctly. Please refresh the page.');
+    const web3 = window.solanaWeb3 || window.Web3;
+    if (!web3 || typeof web3.Transaction === 'undefined') {
+      throw new Error('Solana web3.js not loaded. Refresh the page.');
     }
 
-    // ── STEP 3: Get a fresh blockhash ────────────────────────────────
     const connection = new web3.Connection(
       'https://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007',
       'confirmed'
     );
 
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
-
-    // ── STEP 4: Build transaction with SystemProgram.transfer ────────
-    // CRITICAL: Use SystemProgram.transfer() — never manually encode instruction bytes.
-    // The error "Instruction #N Failed - invalid instruction data" is caused by
-    // manually building raw instruction data instead of using the SDK method.
     const fromPubkey = new web3.PublicKey(senderAddress);
-    // Send directly to PAYMENT_ADDR — no intermediate deposit wallet needed for Phantom.
-    // payment_addr is returned by the server as PAYMENT_ADDR env var.
-    // Falls back to payData.address (deposit wallet) if PAYMENT_ADDR isn't configured.
-    const destinationAddr = payData.payment_addr || payData.address;
-    const toPubkey        = new web3.PublicKey(destinationAddr);
-    const lamports   = Math.round(parseFloat(payData.amount_sol) * 1_000_000_000);
+    const toPubkey   = new web3.PublicKey(payData.address);
+    const lamports   = Math.floor(parseFloat(payData.amount_sol) * 1_000_000_000);
 
-    if (lamports <= 0) throw new Error('Invalid payment amount.');
+    const { blockhash } = await connection.getLatestBlockhash('finalized');
 
-    const transaction = new web3.Transaction();
-    transaction.add(
-      web3.SystemProgram.transfer({
-        fromPubkey,
-        toPubkey,
-        lamports,
-      })
-    );
+    const SYSTEM_PROGRAM_ID = new web3.PublicKey('11111111111111111111111111111111');
+    const data = new Uint8Array(9);
+    data[0] = 2;
+    new DataView(data.buffer).setBigUint64(1, BigInt(lamports), true);
 
-    // feePayer and recentBlockhash MUST be set before passing to Phantom
-    transaction.feePayer       = fromPubkey;
-    transaction.recentBlockhash = blockhash;
+    const transferIx = new web3.TransactionInstruction({
+      keys: [
+        { pubkey: fromPubkey, isSigner: true,  isWritable: true },
+        { pubkey: toPubkey,   isSigner: false, isWritable: true }
+      ],
+      programId: SYSTEM_PROGRAM_ID,
+      data: data
+    });
 
-    console.log('[phantom] tx built — from:', senderAddress, 'to:', destinationAddr, 'lamports:', lamports);
+    const tx = new web3.Transaction();
+    tx.add(transferIx);
+    tx.recentBlockhash = blockhash;
+    tx.feePayer = fromPubkey;
 
-    if (btn) btn.textContent = 'Waiting for Phantom approval…';
+    if (btn) btn.textContent = 'Waiting for approval in Phantom...';
 
-    // ── STEP 5: signAndSendTransaction — Phantom signs + broadcasts ──
-    // Per official docs: https://docs.phantom.com/solana/sending-a-transaction
-    // This is the recommended method. DO NOT pre-sign the transaction yourself.
-    const { signature } = await phantom.signAndSendTransaction(transaction);
+    const { signature } = await phantom.signAndSendTransaction(tx);
+    console.log('✅ Phantom tx sent →', signature);
 
-    console.log('[phantom] ✅ tx sent, sig:', signature);
-
-    // Show immediate feedback
     if (statusEl) {
       statusEl.innerHTML = `
         <div style="background:var(--surface2);border:1px solid var(--border-md);border-radius:8px;padding:12px 14px">
-          <div style="font-size:11px;font-weight:600;color:var(--green-dim);margin-bottom:5px">✓ Transaction sent! Waiting for on-chain confirmation…</div>
-          <div style="font-family:var(--mono);font-size:9px;color:var(--text-muted);word-break:break-all;margin-bottom:8px">${signature}</div>
-          <div id="pp-phantom-watch" class="pay-watch" style="font-size:10px">
+          <div style="font-size:11px;font-weight:600;color:var(--green-dim);margin-bottom:5px">✓ Transaction sent! Waiting for confirmation…</div>
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text-muted);word-break:break-all">${signature}</div>
+          <div id="pp-phantom-watch" class="pay-watch" style="margin-top:8px;font-size:10px">
             <div class="pay-spin"></div>
-            <span>Confirming on-chain (usually 5–15 seconds)…</span>
+            <span>Confirming on-chain…</span>
           </div>
         </div>`;
     }
 
-    // Hide the pay button now tx is sent
-    if (btn) { btn.style.display = 'none'; }
-
-    // ── STEP 6: Fast-path confirm (fire-and-forget, backend retries) ─
-    // Backend polls RPC up to 30s for the tx to appear.
-    // If it returns confirmed:true immediately, we stop polling.
-    // If it returns pending, the polling fallback below handles it.
+    // FIX: Try the fast /confirm path first. If it returns pending (tx not indexed yet),
+    // that's fine — the polling loop below will catch it via /check
     fetch(BACKEND + '/api/subscription/payment/confirm', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -1302,67 +1327,78 @@ window._triggerPhantomTx = async function() {
     .then(r => r.json())
     .then(d => {
       if (d.confirmed) {
+        // Fast path succeeded — stop the poll and show success
         if (_payPoll) { clearInterval(_payPoll); _payPoll = null; }
         _showPaySuccess();
       }
-      // If pending/underpaid, the poller below catches it
+      // If pending/not confirmed, the polling loop below handles it
     })
-    .catch(() => {}); // non-critical — poller is the safety net
+    .catch(() => {}); // non-critical — polling is the safety net
 
-    // ── STEP 7: Always run polling fallback ──────────────────────────
+    // Always start the polling fallback regardless of /confirm result
     _startPaymentPolling(payData.payment_id, token, 'pp-phantom-watch');
 
   } catch (err) {
-    console.error('[phantom] tx error:', err);
-    let msg = err.message || 'Transaction failed.';
-    if (msg.includes('User rejected') || msg.includes('rejected the request')) {
-      msg = 'Transaction cancelled — you rejected it in Phantom.';
-    } else if (msg.includes('not found') || msg.includes('not loaded')) {
-      msg = msg; // pass through
+    console.error('Phantom tx error:', err);
+    let msg = err.message || 'Transaction failed';
+    if (msg.includes('User rejected')) msg = 'You rejected the transaction in Phantom.';
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Open Phantom & Confirm Payment →';
     }
-    if (btn) { btn.disabled = false; btn.textContent = 'Open Phantom & Pay →'; }
-    if (statusEl) statusEl.innerHTML = `<div style="color:var(--danger);font-size:11px;padding:10px 0">✗ ${msg}</div>`;
+    if (statusEl) statusEl.innerHTML = `<div style="color:var(--danger)">${msg}</div>`;
   }
 };
 
-/* ─── MANUAL PANEL ────────────────────────────────────────────────── */
+// ── Manual payment panel ───────────────────────────────────────────────────────
 function _buildManualPanel(payData, token) {
-  document.getElementById('pp-content').innerHTML = `
+  const content = document.getElementById('pp-content');
+
+  content.innerHTML = `
     <div style="background:var(--surface);border:1px solid var(--border-md);border-radius:10px;padding:16px;margin-bottom:12px">
       <div style="font-size:10px;font-weight:700;color:var(--navy);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em">Your unique deposit address</div>
       <div style="font-size:10px;color:var(--text-muted);margin-bottom:10px;line-height:1.6">
-        Send exactly <strong style="color:var(--navy)">${payData.amount_sol} SOL</strong> to this address. It was generated just for you.
+        This address was generated just for you. Send exactly
+        <strong style="color:var(--navy)">${payData.amount_sol} SOL</strong> here.
       </div>
-      <div onclick="navigator.clipboard.writeText('${payData.address}');showToast('Address copied!')"
-        style="background:var(--surface2);border:1.5px dashed var(--navy);border-radius:6px;padding:12px;font-family:var(--mono);font-size:9.5px;word-break:break-all;cursor:pointer;color:var(--navy);line-height:1.7;text-align:center">
+      <div
+        style="background:var(--surface2);border:1.5px dashed var(--navy);border-radius:6px;padding:12px;font-family:var(--mono);font-size:9.5px;word-break:break-all;cursor:pointer;color:var(--navy);line-height:1.7;text-align:center"
+        onclick="navigator.clipboard.writeText('${payData.address}');showToast('Address copied!')">
         ${payData.address}
       </div>
       <div style="font-size:9px;color:var(--text-muted);margin-top:5px;text-align:center">↑ Click to copy</div>
+
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
-        <button class="btn btn-primary" onclick="navigator.clipboard.writeText('${payData.address}');showToast('Copied!')">Copy Address</button>
-        <button class="btn btn-secondary" onclick="navigator.clipboard.writeText('${payData.amount_sol}');showToast('Amount copied!')">Copy ${payData.amount_sol} SOL</button>
+        <button class="btn btn-primary" onclick="navigator.clipboard.writeText('${payData.address}');showToast('Address copied!')">
+          Copy Address
+        </button>
+        <button class="btn btn-secondary" onclick="navigator.clipboard.writeText('${payData.amount_sol}');showToast('Amount copied!')">
+          Copy ${payData.amount_sol} SOL
+        </button>
       </div>
     </div>
+
     <div style="background:var(--surface2);border:1px solid var(--border-md);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:10px;line-height:1.9;color:var(--text-muted)">
-      <strong style="color:var(--text-dim);display:block;margin-bottom:4px">Steps:</strong>
+      <strong style="color:var(--text-dim);display:block;margin-bottom:4px">How to pay:</strong>
       <span style="display:block">1. Copy the address above</span>
       <span style="display:block">2. Open any Solana wallet (Phantom, Solflare, Backpack, exchange…)</span>
-      <span style="display:block">3. Send exactly <strong style="color:var(--navy)">${payData.amount_sol} SOL</strong></span>
+      <span style="display:block">3. Send exactly <strong style="color:var(--navy)">${payData.amount_sol} SOL</strong> to that address</span>
       <span style="display:block">4. Keep this page open — subscription activates automatically</span>
-      <span style="display:block;font-size:9px;margin-top:4px;opacity:0.7">Underpaid? Your SOL is automatically refunded minus network fee (~0.000015 SOL).</span>
+      <span style="display:block;font-size:9px;margin-top:4px;opacity:0.8">Sending too little? Your SOL is refunded automatically (minus ~0.000015 SOL fee).</span>
     </div>
+
     <div id="pp-manual-watch" class="pay-watch" style="font-size:10px">
       <div class="pay-spin"></div>
-      <span>Watching for your deposit on-chain (checking every 5 seconds)…</span>
+      <span>Watching for your deposit on-chain (every 5 seconds)…</span>
     </div>`;
 
   _startPaymentPolling(payData.payment_id, token, 'pp-manual-watch');
 }
 
-/* ─── SUCCESS SCREEN ──────────────────────────────────────────────── */
+// ── Payment success screen ─────────────────────────────────────────────────────
 function _showPaySuccess() {
   const panel = document.getElementById('pay-panel');
-  if (!panel || panel.style.display === 'none') return;
+  if (!panel) return;
   if (_payPoll)  { clearInterval(_payPoll);  _payPoll  = null; }
   if (_payTimer) { clearInterval(_payTimer); _payTimer = null; }
   panel.innerHTML = `
@@ -1370,7 +1406,7 @@ function _showPaySuccess() {
       <div style="width:70px;height:70px;border-radius:50%;background:var(--green-bg);border:2px solid var(--green-dim);display:flex;align-items:center;justify-content:center;font-size:32px">🎉</div>
       <div style="font-size:22px;font-weight:800;color:var(--navy)">Payment Confirmed!</div>
       <div style="font-size:12px;color:var(--text-muted);max-width:300px;line-height:1.7">
-        Your 30-day subscription is now active.<br>You have full access to all tools.
+        Your 30-day subscription is now active.<br>You have full access to all five tools.
       </div>
       <button class="btn btn-primary" style="padding:12px 28px;font-size:12px;font-weight:700"
         onclick="document.getElementById('pay-panel').style.display='none';_refreshSubServer().then(()=>{if(typeof render==='function')render();if(_webTool==='subscription')renderSubPage();})">
@@ -1381,11 +1417,13 @@ function _showPaySuccess() {
   showToast('Subscription activated! 🎉');
 }
 
-/* ─── POLLING ─────────────────────────────────────────────────────── */
+// ── Payment polling ────────────────────────────────────────────────────────────
 function _startPaymentPolling(paymentId, token, watchElId) {
   if (_payPoll) clearInterval(_payPoll);
+
   _payPoll = setInterval(async () => {
-    if (document.getElementById('pay-panel')?.style.display === 'none') {
+    // Stop if the panel was closed
+    if (document.getElementById('pay-panel').style.display === 'none') {
       clearInterval(_payPoll); _payPoll = null; return;
     }
     try {
@@ -1401,14 +1439,24 @@ function _startPaymentPolling(paymentId, token, watchElId) {
       } else if (pd.refunding) {
         clearInterval(_payPoll); _payPoll = null;
         const s = document.getElementById('pp-status');
-        if (s) s.innerHTML = `<div style="background:var(--warn-bg);border:1px solid rgba(217,119,6,0.2);border-radius:8px;padding:14px 16px"><div style="font-size:12px;font-weight:700;color:var(--warn);margin-bottom:5px">⚠ Amount too low — refunding</div><div style="font-size:10px;color:var(--text-muted);margin-bottom:12px">${pd.message}</div><button class="btn btn-primary btn-sm" onclick="cancelPayPanel();openPayOverlay()">Try Again</button></div>`;
+        if (s) s.innerHTML = `
+          <div style="background:var(--warn-bg);border:1px solid rgba(217,119,6,0.2);border-radius:8px;padding:14px 16px">
+            <div style="font-size:12px;font-weight:700;color:var(--warn);margin-bottom:5px">⚠ Amount too low — refunding now</div>
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:12px">${pd.message}</div>
+            <button class="btn btn-primary btn-sm" onclick="cancelPayPanel();openPayOverlay()">Try Again with correct amount</button>
+          </div>`;
         const w = document.getElementById(watchElId);
         if (w) w.style.display = 'none';
 
       } else if (pd.refunded) {
         clearInterval(_payPoll); _payPoll = null;
         const s = document.getElementById('pp-status');
-        if (s) s.innerHTML = `<div style="background:var(--warn-bg);border:1px solid rgba(217,119,6,0.2);border-radius:8px;padding:14px 16px"><div style="font-size:12px;font-weight:700;color:var(--warn);margin-bottom:5px">↩ Refunded</div><div style="font-size:10px;color:var(--text-muted);margin-bottom:12px">${pd.message}</div><button class="btn btn-primary btn-sm" onclick="cancelPayPanel();openPayOverlay()">Try Again</button></div>`;
+        if (s) s.innerHTML = `
+          <div style="background:var(--warn-bg);border:1px solid rgba(217,119,6,0.2);border-radius:8px;padding:14px 16px">
+            <div style="font-size:12px;font-weight:700;color:var(--warn);margin-bottom:5px">↩ Refunded</div>
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:12px">${pd.message}</div>
+            <button class="btn btn-primary btn-sm" onclick="cancelPayPanel();openPayOverlay()">Try Again</button>
+          </div>`;
         const w = document.getElementById(watchElId);
         if (w) w.style.display = 'none';
 
@@ -1418,11 +1466,12 @@ function _startPaymentPolling(paymentId, token, watchElId) {
 
       } else if (pd.expired) {
         clearInterval(_payPoll); _payPoll = null;
-        // countdown UI handles expiry
+        // countdown timer handles the UI
       }
     } catch {} // network blip — keep polling
   }, 5000);
 }
+
 </script>
 </body>
 </html>
