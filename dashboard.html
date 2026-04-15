@@ -10,25 +10,32 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="popup.css">
 
-  <!-- Buffer polyfill FIRST -->
+  <!-- 1. Buffer polyfill — MUST be first -->
   <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.min.js"></script>
 
-  <!-- Solana web3.js -->
+  <!-- 2. Solana web3.js browser build -->
   <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.98.0/lib/index.iife.min.js"></script>
 
-  <!-- Your custom bs58.js -->
+  <!-- 3. Your custom bs58.js (keep only ONE copy) -->
   <script src="bs58.js"></script>
 
-  <!-- Make everything globally available for browser -->
+  <!-- 4. Make everything globally available + fix Buffer -->
   <script>
+    // Fix Buffer for @solana/web3.js
     window.Buffer = window.Buffer || window.buffer?.Buffer;
-    window.solanaWeb3 = window.Web3 || window.solanaWeb3;
-    
-    // Expose bs58 functions
+    if (typeof window.Buffer.from !== 'function') {
+      console.error('Buffer polyfill failed to load properly');
+    }
+
+    // Expose solanaWeb3 and bs58 safely
+    window.solanaWeb3 = window.solanaWeb3 || window.Web3;
+
     window.bs58 = {
       encode: typeof bs58encode === 'function' ? bs58encode : null,
       decode: typeof bs58decode === 'function' ? bs58decode : null
     };
+
+    console.log('[polyfill] Buffer, web3, bs58 ready');
   </script>
 
   <style>
@@ -1214,78 +1221,67 @@ function _buildPhantomPanel(payData, token) {
 }
 
 window._triggerPhantomTx = async function() {
-  const payData  = window._ppPayData;
-  const token    = window._ppToken;
-  const phantom  = window.solana || window.phantom?.solana;
-  const btn      = document.getElementById('pp-phantom-btn');
+  const payData = window._ppPayData;
+  const token = window._ppToken;
+  const phantom = window.solana || window.phantom?.solana;
+  const btn = document.getElementById('pp-phantom-btn');
   const statusEl = document.getElementById('pp-status');
 
   if (!phantom?.isPhantom) {
-    if (statusEl) statusEl.innerHTML = `<div style="background:var(--warn-bg);border:1px solid rgba(217,119,6,0.2);border-radius:8px;padding:10px 14px;font-size:10px;color:var(--warn)">Phantom not detected. <a href="https://phantom.app" target="_blank" style="color:var(--warn);font-weight:700">Install Phantom →</a></div>`;
+    if (statusEl) statusEl.innerHTML = `<div style="color:var(--warn)">Phantom wallet not detected. Install from phantom.app</div>`;
     return;
   }
 
-  if (btn) { btn.disabled = true; btn.textContent = 'Connecting to Phantom…'; }
-  if (statusEl) statusEl.innerHTML = '';
-
   try {
-    // Step 1: Connect wallet (shows Phantom connect popup if not already connected)
-    const connectResp = await phantom.connect({ onlyIfTrusted: false });
-    const senderAddress = connectResp?.publicKey?.toString() || phantom.publicKey?.toString();
-    if (!senderAddress) throw new Error('Could not read wallet address from Phantom');
+    if (btn) { btn.disabled = true; btn.textContent = 'Connecting...'; }
 
-    if (btn) btn.textContent = 'Building transaction…';
+    // Force fresh connection to ensure confirmation popup appears
+    await phantom.disconnect().catch(() => {});
+    await phantom.connect({ onlyIfTrusted: false });
 
-    // Step 2: Build transaction with @solana/web3.js
+    const senderAddress = phantom.publicKey?.toString();
+    if (!senderAddress) throw new Error('Failed to get wallet address');
+
+    if (btn) btn.textContent = 'Building tx...';
+
     const web3 = window.solanaWeb3;
-    if (!web3) throw new Error('@solana/web3.js not loaded — please refresh the page');
+    if (!web3 || typeof web3.Transaction !== 'function') throw new Error('web3.js not ready');
 
-    const conn       = new web3.Connection('https://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007', 'confirmed');
+    const conn = new web3.Connection('https://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007', 'confirmed');
     const fromPubkey = new web3.PublicKey(senderAddress);
-    const toPubkey   = new web3.PublicKey(payData.address);
-    const lamports   = Math.floor(payData.amount_sol * 1e9);
+    const toPubkey = new web3.PublicKey(payData.address);
+    const lamports = Math.floor(payData.amount_sol * 1_000_000_000);
 
     const { blockhash } = await conn.getLatestBlockhash('finalized');
+
     const tx = new web3.Transaction({ recentBlockhash: blockhash, feePayer: fromPubkey });
     tx.add(web3.SystemProgram.transfer({ fromPubkey, toPubkey, lamports }));
 
-    if (btn) btn.textContent = 'Waiting for approval in Phantom…';
+    if (btn) btn.textContent = 'Approve in Phantom...';
 
-    // Step 3: Send — this opens the Phantom confirmation popup
     const { signature } = await phantom.signAndSendTransaction(tx);
-    if (!signature) throw new Error('No signature returned from Phantom');
 
-    // Step 4: Update sender_address on the server for potential refunds
+    // Optional: tell server the sender address for refunds
     fetch(BACKEND + '/api/subscription/payment/sender', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({ payment_id: payData.payment_id, sender_address: senderAddress })
-    }).catch(() => {}); // non-critical
+    }).catch(() => {});
 
-    if (btn) { btn.disabled = true; btn.textContent = '✓ Sent — confirming on-chain…'; btn.style.opacity = '0.7'; }
-    if (statusEl) statusEl.innerHTML = `
-      <div style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.25);border-radius:8px;padding:12px 14px">
-        <div style="font-size:11px;font-weight:600;color:var(--green-dim);margin-bottom:5px">✓ Transaction submitted</div>
-        <div style="font-size:9.5px;color:var(--text-muted);margin-bottom:5px">Waiting for on-chain confirmation…</div>
-        <div style="font-family:var(--mono);font-size:8.5px;color:var(--text-muted);word-break:break-all">Sig: ${signature}</div>
-        <div class="pay-watch" id="pp-phantom-watch" style="margin-top:8px">
-          <div class="pay-spin"></div><span>Checking every 5 seconds…</span>
-        </div>
-      </div>`;
+    if (statusEl) {
+      statusEl.innerHTML = `
+        <div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);padding:12px;border-radius:8px">
+          ✓ Transaction sent — confirming on-chain...<br>
+          <small style="font-family:monospace">Sig: ${signature}</small>
+        </div>`;
+    }
 
     _startPaymentPolling(payData.payment_id, token, 'pp-phantom-watch');
 
   } catch (e) {
-    const cancelled = e.code === 4001
-      || e.message?.includes('User rejected')
-      || e.message?.includes('rejected the request')
-      || e.message?.includes('Transaction cancelled')
-      || e.message?.includes('user rejected');
-    if (btn) { btn.disabled = false; btn.textContent = 'Open Phantom & Confirm Payment →'; }
-    if (statusEl) statusEl.innerHTML = `
-      <div style="background:${cancelled?'var(--warn-bg)':'var(--danger-bg)'};border:1px solid ${cancelled?'rgba(217,119,6,0.2)':'rgba(220,38,38,0.2)'};border-radius:8px;padding:10px 14px;font-size:10px;color:${cancelled?'var(--warn)':'var(--danger)'}">
-        ${cancelled ? '⚠ Cancelled — click the button above to try again.' : '✕ Error: ' + e.message}
-      </div>`;
+    console.error(e);
+    if (btn) { btn.disabled = false; btn.textContent = 'Open Phantom & Confirm →'; }
+    if (statusEl) statusEl.innerHTML = `<div style="color:var(--danger)">${e.message || 'Transaction failed'}</div>`;
   }
 };
 
