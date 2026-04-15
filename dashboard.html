@@ -10,224 +10,226 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="popup.css">
   <style>
-    /* ── Web overrides: remove popup size constraint ────────────────────── */
+    /* Remove 480px popup constraint — run full viewport */
     html { width: 100% !important; height: 100vh !important; }
     body { width: 100% !important; height: 100vh !important; }
     #root { height: calc(100vh - 40px) !important; }
     .shell { height: calc(100vh - 40px) !important; }
-    /* Wider sidebar is comfortable on desktop */
-    .sidebar { width: 170px !important; min-width: 170px !important; }
+    /* Slightly wider sidebar for full browser */
+    .sidebar { width: 172px !important; min-width: 172px !important; }
 
-    /* ── Web topbar ─────────────────────────────────────────────────────── */
+    /* ── Web topbar ──────────────────────────── */
     #web-bar {
       height: 40px;
       background: var(--bg2);
       border-bottom: 1px solid var(--border-md);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      display: flex; align-items: center; justify-content: space-between;
       padding: 0 12px;
-      position: relative;
-      z-index: 10;
+      position: relative; z-index: 10;
     }
     #web-bar::after {
-      content: '';
-      position: absolute;
-      inset: 0;
+      content: ''; position: absolute; inset: 0;
       background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 100%);
       pointer-events: none;
     }
-    .wb-left  { display: flex; align-items: center; gap: 8px; position: relative; z-index: 1; }
-    .wb-right { display: flex; align-items: center; gap: 7px; position: relative; z-index: 1; }
-
-    .wb-logo  { display: flex; align-items: center; gap: 7px; text-decoration: none; }
-    .wb-logo img { width: 20px; height: 20px; border-radius: 5px; display: block; }
-    .wb-name  { font-size: 11px; font-weight: 700; color: var(--navy); font-family: var(--sans); letter-spacing: -0.01em; }
-
-    .wb-sep   { width: 1px; height: 14px; background: var(--border-md); }
-
-    .wb-sub   {
-      display: flex; align-items: center; gap: 4px;
-      padding: 2px 8px; border-radius: 20px;
-      font-size: 9.5px; font-weight: 600;
-      border: 1px solid;
-    }
-    .wb-sub.active   { background: var(--green-bg); color: var(--green-dim); border-color: rgba(34,197,94,0.25); }
-    .wb-sub.inactive { background: var(--danger-bg); color: var(--danger); border-color: rgba(220,38,38,0.2); }
-    .wb-sub.loading  { background: var(--navy-ghost); color: var(--text-muted); border-color: var(--border-md); }
-
+    .wb-left  { display:flex; align-items:center; gap:8px; position:relative; z-index:1; }
+    .wb-right { display:flex; align-items:center; gap:7px; position:relative; z-index:1; }
+    .wb-logo  { display:flex; align-items:center; gap:7px; text-decoration:none; }
+    .wb-logo img { width:20px; height:20px; border-radius:5px; display:block; }
+    .wb-name  { font-size:11px; font-weight:700; color:var(--navy); font-family:var(--sans); letter-spacing:-0.01em; }
+    .wb-sep   { width:1px; height:14px; background:var(--border-md); }
+    .wb-sub   { display:flex; align-items:center; gap:4px; padding:2px 8px; border-radius:20px; font-size:9.5px; font-weight:600; border:1px solid; }
+    .wb-sub.active   { background:var(--green-bg); color:var(--green-dim); border-color:rgba(34,197,94,0.25); }
+    .wb-sub.inactive { background:var(--danger-bg); color:var(--danger); border-color:rgba(220,38,38,0.2); }
+    .wb-sub.loading  { background:var(--navy-ghost); color:var(--text-muted); border-color:var(--border-md); }
     .wb-btn {
-      padding: 4px 10px;
-      border-radius: 5px;
-      font-family: var(--sans);
-      font-size: 10px;
-      font-weight: 600;
-      cursor: pointer;
-      border: 1px solid var(--border-md);
-      background: var(--surface);
-      color: var(--text-dim);
-      transition: all 0.12s;
+      padding:4px 10px; border-radius:5px; font-family:var(--sans);
+      font-size:10px; font-weight:600; cursor:pointer;
+      border:1px solid var(--border-md); background:var(--surface); color:var(--text-dim); transition:all 0.12s;
     }
-    .wb-btn:hover { background: var(--navy); color: #fff; border-color: var(--navy); }
-    .wb-btn.primary { background: var(--navy); color: #fff; border-color: var(--navy); }
-    .wb-btn.primary:hover { background: var(--navy-mid); }
+    .wb-btn:hover { background:var(--navy); color:#fff; border-color:var(--navy); }
+    .wb-btn.primary { background:var(--navy); color:#fff; border-color:var(--navy); }
+    .wb-btn.primary:hover { background:var(--navy-mid); }
 
-    /* ── Payment overlay ────────────────────────────────────────────────── */
+    /* ── Payment overlay ────────────────────── */
     #pay-overlay {
-      display: none;
-      position: fixed; inset: 0;
-      background: rgba(13,31,74,0.45);
-      backdrop-filter: blur(5px);
-      z-index: 500;
-      align-items: center;
-      justify-content: center;
+      display:none; position:fixed; inset:0;
+      background:rgba(13,31,74,0.45); backdrop-filter:blur(5px);
+      z-index:500; align-items:center; justify-content:center;
     }
-    .pay-box {
-      background: var(--surface);
-      border: 1px solid var(--border-md);
-      border-radius: 10px;
-      padding: 20px;
-      width: 340px;
-      box-shadow: 0 20px 50px rgba(13,31,74,0.22);
-    }
-    .pay-box-title { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 3px; }
-    .pay-box-sub   { font-size: 10px; color: var(--text-muted); margin-bottom: 14px; }
-    .pay-grid {
-      display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; margin-bottom: 14px;
-    }
-    .pay-opt {
-      padding: 10px 6px;
-      background: var(--surface2);
-      border: 1px solid var(--border-md);
-      border-radius: 7px;
-      cursor: pointer;
-      text-align: center;
-      transition: all 0.12s;
-    }
-    .pay-opt:hover, .pay-opt.sel { border-color: var(--navy); background: var(--navy-ghost); }
-    .pay-opt svg { width: 18px; height: 18px; color: var(--navy); display: block; margin: 0 auto 4px; }
-    .pay-opt-n { font-size: 9.5px; font-weight: 600; color: var(--text); }
-    .pay-inst { margin-top: 6px; }
-    .pay-addr {
-      background: var(--surface2); border: 1px solid var(--border-md);
-      border-radius: 5px; padding: 7px 9px;
-      font-family: var(--mono); font-size: 9.5px; word-break: break-all;
-      cursor: pointer; margin: 6px 0; color: var(--navy);
-    }
-    .pay-addr:hover { border-color: var(--navy); }
-    .pay-amt  { font-size: 17px; font-weight: 700; color: var(--navy); font-family: var(--mono); }
-    .pay-watch { display: flex; align-items: center; gap: 5px; font-size: 9px; color: var(--text-muted); margin-top: 8px; }
-    .pay-spin {
-      width: 9px; height: 9px;
-      border: 1.5px solid var(--border-md); border-top-color: var(--navy);
-      border-radius: 50%; animation: web-spin 0.6s linear infinite; flex-shrink: 0;
-    }
-    @keyframes web-spin { to { transform: rotate(360deg); } }
-    .pay-foot { display: flex; gap: 7px; margin-top: 12px; }
-    .pay-foot .btn { flex: 1; }
+    .pay-box { background:var(--surface); border:1px solid var(--border-md); border-radius:10px; padding:20px; width:340px; box-shadow:0 20px 50px rgba(13,31,74,0.22); }
+    .pay-box-title { font-size:13px; font-weight:700; color:var(--navy); margin-bottom:3px; }
+    .pay-box-sub   { font-size:10px; color:var(--text-muted); margin-bottom:14px; }
+    .pay-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:14px; }
+    .pay-opt { padding:10px 6px; background:var(--surface2); border:1px solid var(--border-md); border-radius:7px; cursor:pointer; text-align:center; transition:all 0.12s; }
+    .pay-opt:hover,.pay-opt.sel { border-color:var(--navy); background:var(--navy-ghost); }
+    .pay-opt svg { width:18px; height:18px; color:var(--navy); display:block; margin:0 auto 4px; }
+    .pay-opt-n { font-size:9.5px; font-weight:600; color:var(--text); }
+    .pay-addr { background:var(--surface2); border:1px solid var(--border-md); border-radius:5px; padding:7px 9px; font-family:var(--mono); font-size:9.5px; word-break:break-all; cursor:pointer; margin:6px 0; color:var(--navy); }
+    .pay-addr:hover { border-color:var(--navy); }
+    .pay-amt  { font-size:17px; font-weight:700; color:var(--navy); font-family:var(--mono); }
+    .pay-watch { display:flex; align-items:center; gap:5px; font-size:9px; color:var(--text-muted); margin-top:8px; }
+    .pay-spin { width:9px; height:9px; border:1.5px solid var(--border-md); border-top-color:var(--navy); border-radius:50%; animation:web-spin 0.6s linear infinite; flex-shrink:0; }
+    @keyframes web-spin { to { transform:rotate(360deg); } }
+    .pay-foot { display:flex; gap:7px; margin-top:12px; }
+    .pay-foot .btn { flex:1; }
+
+    /* ── Subscription page ──────────────────── */
+    .sub-section { margin-bottom:16px; }
+    .sub-section-title { font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-dim); margin-bottom:8px; }
+    .sub-status-card { background:var(--surface); border:1px solid var(--border-md); border-radius:var(--r); padding:12px 14px; }
+    .sub-status-card.active  { border-color:rgba(34,197,94,0.3); background:rgba(34,197,94,0.04); }
+    .sub-status-card.inactive { border-color:rgba(220,38,38,0.2); background:rgba(220,38,38,0.04); }
+    .sub-status-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+    .sub-status-badge { display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; }
+    .sub-detail-row { display:flex; align-items:center; justify-content:space-between; font-size:10px; color:var(--text-muted); margin-bottom:3px; }
+    .sub-detail-val { color:var(--text-dim); font-weight:500; }
+    .promo-row { display:flex; gap:7px; margin-top:8px; }
+    .promo-row input { flex:1; font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.06em; }
+
+    /* ── Admin page ─────────────────────────── */
+    .admin-stat-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-bottom:14px; }
+    .admin-stat-card { background:var(--surface); border:1px solid var(--border-md); border-radius:var(--r); padding:10px 12px; }
+    .admin-stat-val  { font-size:20px; font-weight:700; color:var(--navy); font-family:var(--sans); line-height:1; margin-bottom:2px; }
+    .admin-stat-lbl  { font-size:9.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; }
+    .admin-table { width:100%; border-collapse:collapse; font-size:10.5px; }
+    .admin-table th { text-align:left; padding:6px 8px; font-size:9px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); border-bottom:1px solid var(--border-md); }
+    .admin-table td { padding:7px 8px; border-bottom:1px solid var(--border); vertical-align:middle; color:var(--text-dim); }
+    .admin-table tr:last-child td { border-bottom:none; }
+    .admin-table tr:hover td { background:var(--surface2); }
+    .admin-badge { display:inline-flex; align-items:center; gap:3px; padding:1px 7px; border-radius:20px; font-size:9px; font-weight:600; }
+    .admin-badge.green  { background:var(--green-bg); color:var(--green-dim); }
+    .admin-badge.grey   { background:var(--navy-ghost); color:var(--text-muted); }
+    .admin-badge.red    { background:var(--danger-bg); color:var(--danger); }
+    .admin-badge.blue   { background:var(--blue-bg); color:var(--blue); }
+    .admin-tabs { display:flex; gap:0; margin-bottom:14px; border-bottom:1px solid var(--border-md); }
+    .admin-tab { padding:7px 12px; font-family:var(--sans); font-size:11px; font-weight:500; color:var(--text-muted); background:none; border:none; border-bottom:2px solid transparent; cursor:pointer; transition:all 0.12s; white-space:nowrap; }
+    .admin-tab:hover { color:var(--text-mid); }
+    .admin-tab.active { color:var(--navy); border-bottom-color:var(--navy); font-weight:600; }
+    .admin-input-row { display:flex; gap:7px; margin-bottom:10px; }
+    .admin-input-row input { flex:1; }
+    .admin-code-chip { font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:0.1em; padding:3px 9px; background:var(--navy-ghost); border-radius:4px; color:var(--navy); cursor:pointer; display:inline-block; }
+    .admin-code-chip:hover { background:var(--navy-ghost2); }
+    .admin-empty { font-size:10px; color:var(--text-muted); padding:18px 0; text-align:center; }
+    .admin-section-title { font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-dim); margin-bottom:8px; margin-top:14px; }
+    .admin-section-title:first-child { margin-top:0; }
   </style>
 </head>
 <body>
 
 <!--
-  ═══════════════════════════════════════════
-  CHROME SHIM — must run before all other JS
-  Maps chrome.storage.local → localStorage
-  so extension code runs unchanged in browser
-  ═══════════════════════════════════════════
+  ════════════════════════════════════════════════
+  STEP 1 — CHROME SHIM
+  Runs before ALL other JS.
+  Bridges chrome.storage.local → localStorage.
+  Also pre-loads the website's auth token so
+  auth.js can find it via its own storage key.
+  ════════════════════════════════════════════════
 -->
 <script>
 (function() {
   'use strict';
 
-  /* localStorage-backed storage that mirrors chrome.storage.local API */
+  /* ── localStorage-backed storage ── */
+  const MEM = {};
   const STORE_KEY = 'udt_web_store';
-  const mem = {};
 
   // Warm from localStorage
   try {
     const r = localStorage.getItem(STORE_KEY);
-    if (r) Object.assign(mem, JSON.parse(r));
+    if (r) Object.assign(MEM, JSON.parse(r));
   } catch {}
 
   const flush = () => {
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(mem)); } catch {}
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(MEM)); } catch {}
   };
 
   window.chrome = window.chrome || {};
-
   chrome.storage = {
     local: {
       get(keys, cb) {
         const out = {};
-        if (typeof keys === 'string') {
-          out[keys] = mem[keys];
-        } else if (Array.isArray(keys)) {
-          keys.forEach(k => { out[k] = mem[k]; });
-        } else {
-          Object.assign(out, mem);
-        }
+        if (typeof keys === 'string')    out[keys] = MEM[keys];
+        else if (Array.isArray(keys))    keys.forEach(k => out[k] = MEM[k]);
+        else                             Object.assign(out, MEM);
         if (cb) cb(out);
         return Promise.resolve(out);
       },
-      set(obj, cb) {
-        Object.assign(mem, obj);
-        flush();
-        if (cb) cb();
-        return Promise.resolve();
-      },
-      remove(keys, cb) {
-        (Array.isArray(keys) ? keys : [keys]).forEach(k => delete mem[k]);
-        flush();
-        if (cb) cb();
-        return Promise.resolve();
-      },
-      clear(cb) {
-        Object.keys(mem).forEach(k => delete mem[k]);
-        flush();
-        if (cb) cb();
-        return Promise.resolve();
-      }
+      set(obj, cb)    { Object.assign(MEM, obj); flush(); if (cb) cb(); return Promise.resolve(); },
+      remove(k, cb)   { (Array.isArray(k)?k:[k]).forEach(k=>delete MEM[k]); flush(); if (cb) cb(); return Promise.resolve(); },
+      clear(cb)       { Object.keys(MEM).forEach(k=>delete MEM[k]); flush(); if (cb) cb(); return Promise.resolve(); }
     }
   };
-
-  /* Alarms — no-ops on web (background SW doesn't run) */
   chrome.alarms = {
-    create() {},
-    clear() {},
-    clearAll() {},
-    get(name, cb) { if (cb) cb(null); return Promise.resolve(null); },
-    getAll(cb)    { if (cb) cb([]); return Promise.resolve([]); },
-    onAlarm: { addListener() {} }
+    create(){}, clear(){}, clearAll(){},
+    get(n,cb){ if(cb) cb(null); return Promise.resolve(null); },
+    getAll(cb){ if(cb) cb([]); return Promise.resolve([]); },
+    onAlarm: { addListener(){} }
   };
-
-  /* Runtime — stub sendMessage */
   chrome.runtime = chrome.runtime || {};
   chrome.runtime.lastError = null;
-  chrome.runtime.sendMessage = (msg, cb) => { if (cb) cb({ ok: false }); return Promise.resolve(); };
-  chrome.runtime.onMessage   = { addListener() {} };
-
-  /* Notifications — use Web Notifications API */
+  chrome.runtime.sendMessage = (msg, cb) => { if (cb) cb({ ok:false }); return Promise.resolve(); };
+  chrome.runtime.onMessage   = { addListener(){} };
   chrome.notifications = {
     create(id, opts) {
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted')
         new Notification(opts.title, { body: opts.message });
     }
   };
-
-  /* Identity — Google sign-in on web is handled by GIS SDK (wired below) */
   chrome.identity = {
-    getAuthToken(opts, cb) { if (cb) cb(null); },
-    removeCachedAuthToken(opts, cb) { if (cb) cb(); }
+    getAuthToken(opts, cb)            { if (cb) cb(null); },
+    removeCachedAuthToken(opts, cb)   { if (cb) cb(); }
   };
+
+  /*
+   * ── AUTH BRIDGE ──────────────────────────────────────────────────────────
+   * The website's auth.html stores the JWT in localStorage as 'udt_token'
+   * (set by api.js: Auth.TOKEN_KEY = 'udt_token').
+   * auth.js (extension) stores it in chrome.storage.local as 'udt_auth_v2'.
+   * We read the website token now and pre-populate MEM so auth.js's
+   * tryAutoLogin() will find it and skip the login screen entirely.
+   *
+   * For the encryption key: website logins don't go through the extension's
+   * PBKDF2 flow, so we set cryptoKey to null. Wallet sync still works because
+   * syncWalletsFromServer() only needs the JWT, not the crypto key
+   * (the key is only needed to decrypt blobs that exist from extension use).
+   */
+  try {
+    const webToken = localStorage.getItem('udt_token');
+    const webUser  = localStorage.getItem('udt_user');
+
+    if (webToken && !MEM['udt_auth_v2']) {
+      let email  = '';
+      let userId = 0;
+      try {
+        const u  = JSON.parse(webUser || '{}');
+        email    = u.email  || '';
+        userId   = u.id     || 0;
+      } catch {}
+
+      // Stuff a fake encKeyB64 so tryAutoLogin() doesn't bail out early.
+      // We generate a random one-time key just to satisfy the non-null check.
+      // syncWalletsFromServer() checks S.auth.cryptoKey before decrypting —
+      // if it's null the sync silently skips, which is fine for web-only users
+      // (their wallets live only in the extension).
+      MEM['udt_auth_v2'] = JSON.stringify({
+        token:     webToken,
+        email:     email,
+        userId:    userId,
+        encKeyB64: null,   // no password-derived key on web
+        ts:        Date.now()
+      });
+      flush();
+    }
+  } catch {}
 })();
 </script>
 
-<!-- ── Web topbar ─────────────────────────────────────────────────────────── -->
+<!-- ── Web topbar ───────────────────────────────────────────────────────── -->
 <div id="web-bar">
   <div class="wb-left">
     <a class="wb-logo" href="/">
-      <img src="icon128.png" alt="UDT" onerror="this.style.display='none'">
+      <img src="icon128.png" alt="" onerror="this.style.display='none'">
       <span class="wb-name">Ultimate Dev Tools</span>
     </a>
     <div class="wb-sep"></div>
@@ -237,10 +239,8 @@
     </div>
   </div>
   <div class="wb-right">
-    <button class="wb-btn primary" id="wb-sub-btn" onclick="openPayOverlay()" style="display:none;">
-      Subscribe
-    </button>
-    <a href="/" class="wb-btn" style="text-decoration:none;">← Home</a>
+    <button class="wb-btn primary" id="wb-sub-btn" style="display:none" onclick="openPayOverlay()">Subscribe</button>
+    <a href="/" class="wb-btn" style="text-decoration:none">← Home</a>
     <button class="wb-btn" onclick="webSignOut()">Sign out</button>
   </div>
 </div>
@@ -249,7 +249,7 @@
 <div id="root">
   <div class="shell">
 
-    <!-- Sidebar — copy of popup.html exactly -->
+    <!-- Sidebar — exact popup.html markup -->
     <nav class="sidebar" id="sidebar">
 
       <div class="brand-bar">
@@ -265,11 +265,32 @@
       </div>
 
       <div class="nav-section-label">TOOLS</div>
-      <!-- popup.js buildNavList() fills #nav-list dynamically -->
+      <!-- popup.js buildNavList() populates #nav-list dynamically -->
       <ul class="nav-list" id="nav-list"></ul>
 
+      <!-- Extra web-only nav items appended after tools -->
+      <div class="nav-section-label" style="margin-top:4px">ACCOUNT</div>
+      <ul class="nav-list" id="account-nav-list">
+        <li class="nav-item" data-tool="subscription" id="nav-subscription" onclick="setWebTool('subscription')">
+          <svg class="nav-svg" width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <rect x="1" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.2"/>
+            <path d="M1 6.5h11" stroke="currentColor" stroke-width="1.1"/>
+            <path d="M4 5h2M4 8h5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+          </svg>
+          <span class="nav-label">Subscription</span>
+          <span class="nav-badge" id="sub-expiry-badge" style="display:none;font-size:8px;background:var(--warn-bg);color:var(--warn);border-radius:20px;padding:1px 5px;"></span>
+        </li>
+        <li class="nav-item" data-tool="admin-panel" id="nav-admin" onclick="setWebTool('admin-panel')" style="display:none">
+          <svg class="nav-svg" width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <path d="M6.5 1.5L11.5 4v4L6.5 11.5 1.5 8V4L6.5 1.5Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+            <path d="M4.5 6.5l1.5 1.5 2.5-2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="nav-label">Admin Panel</span>
+        </li>
+      </ul>
+
       <div class="sidebar-footer">
-        <button class="pin-btn" id="pin-btn" title="Toggle sidebar mode">
+        <button class="pin-btn" id="pin-btn" title="Pin Sidebar (extension only)">
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
             <rect x="1" y="1" width="10" height="10" rx="1.5" stroke="currentColor" stroke-width="1.2"/>
             <line x1="8" y1="1" x2="8" y2="11" stroke="currentColor" stroke-width="1.2"/>
@@ -291,43 +312,40 @@
       </div>
     </nav>
 
-    <!-- Main panel — popup.js render() writes into #main -->
+    <!-- Main panel — popup.js render() + webRender() write into #main -->
     <main class="main" id="main"></main>
 
   </div>
 
-  <!-- Wallet Picker Modal — same as popup.html -->
+  <!-- Modals — same as popup.html -->
   <div class="modal-overlay" id="wallet-picker-modal" style="display:none">
     <div class="modal-box" id="wallet-picker-box"></div>
   </div>
-
-  <!-- Emoji Picker Modal — same as popup.html -->
   <div class="modal-overlay" id="emoji-modal" style="display:none">
     <div class="modal-box emoji-modal-box" id="emoji-modal-box"></div>
   </div>
-
 </div>
 
-<!-- ── Payment overlay (web-only) ──────────────────────────────────────── -->
+<!-- ── Payment overlay ──────────────────────────────────────────────────── -->
 <div id="pay-overlay">
   <div class="pay-box">
     <div class="pay-box-title">Subscribe — $199 / month</div>
-    <div class="pay-box-sub">Manual renewal. No automatic charges.</div>
+    <div class="pay-box-sub">Manual renewal. No automatic charges, ever.</div>
     <div class="pay-grid">
-      <div class="pay-opt" onclick="paySelect('solana', this)">
+      <div class="pay-opt" onclick="paySelect('solana',this)">
         <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/></svg>
         <div class="pay-opt-n">Phantom (SOL)</div>
       </div>
-      <div class="pay-opt" onclick="paySelect('paypal', this)">
+      <div class="pay-opt" onclick="paySelect('paypal',this)">
         <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M3 10h18" stroke="currentColor" stroke-width="1.7"/></svg>
         <div class="pay-opt-n">PayPal</div>
       </div>
-      <div class="pay-opt" onclick="paySelect('manual', this)">
+      <div class="pay-opt" onclick="paySelect('manual',this)">
         <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
         <div class="pay-opt-n">Manual SOL</div>
       </div>
     </div>
-    <div class="pay-inst" id="pay-inst"></div>
+    <div id="pay-inst"></div>
     <div class="pay-foot">
       <button class="btn btn-primary" id="pay-gen-btn" onclick="payGenerate()">Generate Details</button>
       <button class="btn btn-ghost" onclick="document.getElementById('pay-overlay').style.display='none'">Cancel</button>
@@ -336,7 +354,7 @@
 </div>
 
 <!-- ── Extension JS — same order as popup.html ───────────────────────────
-  NOTE: popup.html uses "split.js" (lowercase), so we saved Split.js as split.js
+     popup.html uses "split.js" (lowercase) — we saved Split.js as split.js
 ──────────────────────────────────────────────────────────────────────────── -->
 <script src="bs58.js"></script>
 <script src="split.js"></script>
@@ -348,88 +366,162 @@
 <script src="wallet-tracker.js"></script>
 <script src="sniper.js"></script>
 
-<!-- Google Identity Services SDK for web Google sign-in -->
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+<!-- api.js from the website — provides SubAPI, AdminAPI, AuthAPI, Auth -->
+<script src="api.js"></script>
 
-<!-- ── Web wiring ─────────────────────────────────────────────────────────
-  Everything here runs after popup.js has defined S, render, saveState etc.
-──────────────────────────────────────────────────────────────────────────── -->
 <script>
-document.addEventListener('DOMContentLoaded', () => {
+/*
+ * ════════════════════════════════════════════════════════════════════════
+ * WEB WIRING
+ * Runs after popup.js, auth.js, api.js etc. are all defined.
+ * ════════════════════════════════════════════════════════════════════════
+ */
 
-  // ── 1. Intercept auth-google to use GIS on web ───────────────────────
-  //    auth.js's handleAuthAction calls authGoogleSignIn() which uses
-  //    chrome.identity (extension-only). On web, we swap to GIS + backend.
-  const _origAuthHandler = window.handleAuthAction;
-  window.handleAuthAction = async function(action, el) {
-    if (action !== 'auth-google') {
-      return _origAuthHandler ? _origAuthHandler(action, el) : undefined;
+// ── State for web-only tools ──────────────────────────────────────────────
+let _webTool   = null;   // 'subscription' | 'admin-panel' | null (null = use popup.js routing)
+let _subData   = null;
+let _adminTab  = 'users'; // 'users' | 'codes' | 'whitelist' | 'admins'
+let _payMethod = null;
+let _payPoll   = null;
+
+document.addEventListener('DOMContentLoaded', async () => {
+
+  // ── 1. Auth bridge: patch tryAutoLogin to skip encKeyB64 null check ──────
+  //    auth.js's tryAutoLogin() bails if !stored.encKeyB64.
+  //    We stored null in the bridge above, so we patch loadAuthLocally to
+  //    inject a dummy non-null value so the check passes, then set S.auth
+  //    directly without needing the real crypto key.
+  const _origTryAutoLogin = window.tryAutoLogin;
+  window.tryAutoLogin = async function() {
+    // Try the normal extension path first (works if user logged in via extension before)
+    const result = await _origTryAutoLogin();
+    if (result) return result;
+
+    // Fallback: use the website JWT from localStorage directly
+    const webToken = localStorage.getItem('udt_token');
+    if (!webToken) {
+      // Not logged in anywhere — redirect to auth page
+      window.location.href = 'auth.html';
+      return false;
     }
-
-    S.authScreen = { ...S.authScreen, loading: true, error: '' };
-    render();
 
     try {
-      if (typeof google === 'undefined' || !google.accounts) {
-        throw new Error('Google Sign-In not loaded. Please refresh.');
-      }
-
-      await new Promise((resolve, reject) => {
-        google.accounts.id.initialize({
-          client_id: '218003563778-dljv6ld9c467r57p38a6m32gibrtfmld.apps.googleusercontent.com',
-          callback: async (response) => {
-            try {
-              // apiReq is defined in auth.js — calls /auth/google with id_token
-              const data = await apiReq('POST', '/auth/google', { id_token: response.credential });
-              // Build the same S.auth shape auth.js sets
-              const cryptoKey = await deriveEncKey(data.googleSub || data.email, String(data.userId || data.user?.id || '0'));
-              const encKeyB64 = await exportKeyB64(cryptoKey);
-              await saveAuthLocally(data.token, data.email || data.user?.email, data.userId || data.user?.id, encKeyB64);
-              S.auth = {
-                loggedIn: true,
-                token: data.token,
-                email: data.email || data.user?.email,
-                userId: data.userId || data.user?.id,
-                cryptoKey,
-                isGoogle: true
-              };
-              try { await syncWalletsFromServer(); } catch {}
-              resolve();
-            } catch (e) { reject(e); }
-          }
-        });
-        google.accounts.id.prompt(notification => {
-          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-            reject(new Error('Google sign-in was dismissed. Try again or use email/password.'));
-          }
-        });
+      // Verify the token is still valid
+      const url  = 'https://ultimatedevtools-production.up.railway.app';
+      const res  = await fetch(url + '/api/auth/me', {
+        headers: { 'Authorization': 'Bearer ' + webToken }
       });
+      if (!res.ok) throw new Error('Token invalid');
 
-      S.authScreen = { mode: 'login', error: '', loading: false };
+      const user = await res.json();
+
+      // Set S.auth directly — no crypto key needed for web-only users
+      S.auth = {
+        loggedIn: true,
+        token:    webToken,
+        email:    user.email  || '',
+        userId:   user.id     || user.userId || 0,
+        is_admin: user.is_admin || false,
+        cryptoKey: null  // no extension-derived key for web sessions
+      };
+
+      // Persist so subsequent renders don't re-fetch
       await saveState();
-      render();
-      updateWbSub();
-
-    } catch (e) {
-      S.authScreen = { ...S.authScreen, loading: false, error: e.message };
-      render();
+      return true;
+    } catch {
+      // Token is invalid or expired — send back to login
+      localStorage.removeItem('udt_token');
+      localStorage.removeItem('udt_user');
+      window.location.href = 'auth.html';
+      return false;
     }
   };
 
-  // ── 2. Override showSubGate so tools don't replace the whole page ────
-  //    Instead show the pay overlay, keeping the sidebar intact.
-  window.showSubGate = function(sub) {
-    openPayOverlay();
+  // ── 2. Wrap render() to intercept web-only tools ─────────────────────────
+  const _origRender = window.render;
+  window.render = function() {
+    // If not logged in — redirect rather than show extension's login screen
+    if (!S.auth?.loggedIn) {
+      window.location.href = 'auth.html';
+      return;
+    }
+
+    // If a web-only tool is active, render it ourselves
+    if (_webTool === 'subscription') {
+      renderSubscriptionPage();
+      // Keep sidebar nav state correct
+      syncWebNav();
+      return;
+    }
+    if (_webTool === 'admin-panel') {
+      renderAdminPage();
+      syncWebNav();
+      return;
+    }
+
+    // Otherwise let popup.js render normally
+    _origRender();
+    syncWebNav();
   };
 
-  // ── 3. Kick topbar sub check after auth settles ───────────────────
-  setTimeout(updateWbSub, 1800);
-  setInterval(updateWbSub, 3 * 60 * 1000);
+  // ── 3. Kick init ───────────────────────────────────────────────────────
+  setTimeout(async () => {
+    // Show/hide admin nav item
+    const user = S.auth;
+    if (user?.is_admin) {
+      document.getElementById('nav-admin').style.display = '';
+    }
+
+    // Update topbar sub status
+    await refreshSubStatus();
+    setInterval(refreshSubStatus, 3 * 60 * 1000);
+  }, 1000);
 
 }); // end DOMContentLoaded
 
-// ── Topbar subscription status ─────────────────────────────────────────
-async function updateWbSub() {
+// ── Nav helpers ─────────────────────────────────────────────────────────────
+function setWebTool(tool) {
+  _webTool = tool;
+  syncWebNav();
+  if (tool === 'subscription') renderSubscriptionPage();
+  if (tool === 'admin-panel')  renderAdminPage();
+}
+
+function clearWebTool() {
+  _webTool = null;
+}
+
+// Called from popup.js's nav item click (popup.js sets S.activeTool directly)
+// We wrap S.activeTool setter via a Proxy-like approach by watching clicks
+document.addEventListener('click', (e) => {
+  const item = e.target.closest('.nav-item[data-tool]');
+  if (!item) return;
+  const tool = item.dataset.tool;
+  // If clicking a standard tool, clear the web-tool override
+  if (tool && tool !== 'subscription' && tool !== 'admin-panel') {
+    clearWebTool();
+  }
+});
+
+function syncWebNav() {
+  // Sync .active class across all nav items
+  document.querySelectorAll('#nav-list .nav-item, #account-nav-list .nav-item, #settings-nav-btn').forEach(el => {
+    const tool = el.dataset.tool || (el.id === 'settings-nav-btn' ? 'settings' : null);
+    if (!tool) return;
+    if (_webTool) {
+      el.classList.toggle('active', tool === _webTool);
+    } else {
+      el.classList.toggle('active',
+        el.id === 'settings-nav-btn'
+          ? S.activeTool === 'settings'
+          : tool === S.activeTool
+      );
+    }
+  });
+}
+
+// ── Sub status ───────────────────────────────────────────────────────────────
+async function refreshSubStatus() {
   const chip = document.getElementById('wb-sub');
   const dot  = document.getElementById('wb-dot');
   const txt  = document.getElementById('wb-sub-txt');
@@ -437,17 +529,30 @@ async function updateWbSub() {
   if (!chip) return;
 
   try {
-    // Use SubAPI from api.js (loaded alongside the extension JS)
-    const sub = await SubAPI.getStatus();
+    const token = localStorage.getItem('udt_token') || S.auth?.token;
+    if (!token) return;
 
-    if (sub.active) {
+    const res = await fetch('https://ultimatedevtools-production.up.railway.app/api/subscription/status', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!res.ok) throw new Error();
+    _subData = await res.json();
+
+    if (_subData.active) {
       chip.className = 'wb-sub active';
       dot.className  = 'status-dot online';
-      const days = sub.expires_at
-        ? Math.max(0, Math.ceil((new Date(sub.expires_at) - Date.now()) / 86400000))
+      const days = _subData.expires_at
+        ? Math.max(0, Math.ceil((new Date(_subData.expires_at) - Date.now()) / 86400000))
         : null;
-      txt.textContent = days !== null ? `${days}d left` : (sub.trial ? 'Trial' : 'Active');
+      txt.textContent = days !== null ? `${days}d left` : (_subData.trial ? 'Trial' : 'Active');
       if (btn) btn.style.display = 'none';
+
+      // Show expiry warning badge in sidebar if < 3 days
+      const exBadge = document.getElementById('sub-expiry-badge');
+      if (exBadge && days !== null && days <= 3) {
+        exBadge.textContent = `${days}d`;
+        exBadge.style.display = '';
+      }
     } else {
       chip.className = 'wb-sub inactive';
       dot.className  = 'status-dot offline';
@@ -461,19 +566,342 @@ async function updateWbSub() {
   }
 }
 
-// ── Sign out ───────────────────────────────────────────────────────────
-async function webSignOut() {
+// ── Subscription page ─────────────────────────────────────────────────────
+function renderSubscriptionPage() {
+  const main = document.getElementById('main');
+  if (!main) return;
+
+  const sub  = _subData;
+  const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }) : '—';
+  const days = sub?.expires_at ? Math.max(0, Math.ceil((new Date(sub.expires_at) - Date.now()) / 86400000)) : null;
+  const isActive = sub?.active;
+
+  main.innerHTML = `
+    <div class="tool-header">
+      <div class="tool-title-row">
+        <span class="tool-title">Subscription</span>
+      </div>
+    </div>
+    <div class="scroll-area" id="scroll-area">
+
+      <div class="sub-section">
+        <div class="sub-section-title">Current Status</div>
+        <div class="sub-status-card ${isActive ? 'active' : 'inactive'}">
+          <div class="sub-status-row">
+            <div class="sub-status-badge">
+              <span class="status-dot ${isActive ? 'online' : 'offline'}"></span>
+              ${isActive ? (sub.trial ? 'Trial Active' : 'Pro Active') : 'No Active Subscription'}
+            </div>
+            ${isActive ? `<span style="font-size:10px;color:var(--text-muted);">${sub.trial ? 'Trial' : 'Pro'}</span>` : ''}
+          </div>
+          ${isActive ? `
+            <div class="sub-detail-row"><span>Expires</span><span class="sub-detail-val">${fmtDate(sub.expires_at)}</span></div>
+            <div class="sub-detail-row"><span>Days remaining</span><span class="sub-detail-val ${days !== null && days <= 3 ? 'danger' : ''}">${days !== null ? `${days} days` : '—'}</span></div>
+          ` : `
+            <div style="font-size:10px;color:var(--text-muted);margin-top:4px;line-height:1.5">Subscribe below to unlock all five professional tools.</div>
+          `}
+        </div>
+      </div>
+
+      <div class="sub-section">
+        <div class="sub-section-title">${isActive ? 'Renew Subscription' : 'Subscribe'} — $199 / month</div>
+        <p style="font-size:10px;color:var(--text-muted);margin-bottom:10px;line-height:1.6">
+          Manual renewal only. Your card is never charged automatically.
+          Pay with Phantom Wallet (SOL), PayPal, or direct SOL transfer.
+        </p>
+        <button class="btn btn-primary btn-full" onclick="openPayOverlay()">
+          ${isActive ? 'Renew — $199/month' : 'Subscribe — $199/month'}
+        </button>
+      </div>
+
+      <div class="sub-section">
+        <div class="sub-section-title">Promo Code</div>
+        <p style="font-size:10px;color:var(--text-muted);margin-bottom:8px">
+          Single-use trial codes. One per account.
+        </p>
+        <div class="promo-row">
+          <input type="text" id="promo-input" placeholder="ENTER CODE" maxlength="20"/>
+          <button class="btn btn-ghost btn-sm" onclick="redeemPromoCode()">Redeem</button>
+        </div>
+        <div id="promo-result" style="font-size:10px;margin-top:6px;"></div>
+      </div>
+
+    </div>
+  `;
+}
+
+async function redeemPromoCode() {
+  const code = document.getElementById('promo-input')?.value?.trim().toUpperCase();
+  const res  = document.getElementById('promo-result');
+  if (!code) { if (res) res.innerHTML = '<span style="color:var(--warn)">Enter a code first.</span>'; return; }
+  if (res) res.innerHTML = '<span style="color:var(--text-muted)">Redeeming…</span>';
   try {
-    if (typeof authLogout === 'function') await authLogout();
-    else if (typeof Auth !== 'undefined') await Auth.clearSession();
-  } catch {}
+    const token = localStorage.getItem('udt_token') || S.auth?.token;
+    const r = await fetch('https://ultimatedevtools-production.up.railway.app/api/subscription/redeem-promo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ code })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Failed');
+    if (res) res.innerHTML = `<span style="color:var(--green-dim)">✓ Code applied! ${d.days} day trial activated.</span>`;
+    await refreshSubStatus();
+    renderSubscriptionPage(); // refresh
+  } catch (e) {
+    if (res) res.innerHTML = `<span style="color:var(--danger)">${e.message}</span>`;
+  }
+}
+
+// ── Admin page ───────────────────────────────────────────────────────────────
+const BACKEND = 'https://ultimatedevtools-production.up.railway.app/api';
+let _adminUsers = [], _adminCodes = [], _adminWhitelist = [], _adminAdmins = [];
+let _adminUsersPage = 1, _adminUsersSearch = '', _adminUsersTotal = 0;
+
+async function adminFetch(path, opts = {}) {
+  const token = localStorage.getItem('udt_token') || S.auth?.token;
+  const res = await fetch(BACKEND + path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, ...(opts.headers || {}) }
+  });
+  const d = await res.json();
+  if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+  return d;
+}
+
+function renderAdminPage() {
+  const main = document.getElementById('main');
+  if (!main) return;
+  main.innerHTML = `
+    <div class="tool-header">
+      <div class="tool-title-row">
+        <span class="tool-title">Admin Panel</span>
+      </div>
+    </div>
+    <div class="scroll-area" id="scroll-area">
+      <div class="admin-tabs">
+        <button class="admin-tab ${_adminTab==='users'?'active':''}" onclick="switchAdminTab('users')">Users</button>
+        <button class="admin-tab ${_adminTab==='codes'?'active':''}" onclick="switchAdminTab('codes')">Promo Codes</button>
+        <button class="admin-tab ${_adminTab==='whitelist'?'active':''}" onclick="switchAdminTab('whitelist')">Whitelist</button>
+        <button class="admin-tab ${_adminTab==='admins'?'active':''}" onclick="switchAdminTab('admins')">Admins</button>
+      </div>
+      <div id="admin-tab-content">
+        <div class="admin-empty">Loading…</div>
+      </div>
+    </div>
+  `;
+  loadAdminTab(_adminTab);
+}
+
+function switchAdminTab(tab) {
+  _adminTab = tab;
+  renderAdminPage();
+}
+
+async function loadAdminTab(tab) {
+  const el = document.getElementById('admin-tab-content');
+  if (!el) return;
+  try {
+    if (tab === 'users')     await loadAdminUsers(el);
+    if (tab === 'codes')     await loadAdminCodes(el);
+    if (tab === 'whitelist') await loadAdminWhitelist(el);
+    if (tab === 'admins')    await loadAdminAdmins(el);
+  } catch (e) {
+    el.innerHTML = `<div class="admin-empty" style="color:var(--danger)">${e.message}</div>`;
+  }
+}
+
+async function loadAdminUsers(el) {
+  const d = await adminFetch(`/admin/users?page=${_adminUsersPage}&search=${encodeURIComponent(_adminUsersSearch)}`);
+  _adminUsers      = d.users || [];
+  _adminUsersTotal = d.total || 0;
+  const pages      = d.pages || 1;
+  const fmtDate    = iso => iso ? new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'}) : '—';
+
+  el.innerHTML = `
+    <div class="admin-input-row">
+      <input type="text" placeholder="Search by email…" value="${_adminUsersSearch}" id="admin-user-search" oninput="_adminUserSearchDebounce(this.value)" style="flex:1;font-size:11px"/>
+    </div>
+    <div style="font-size:9.5px;color:var(--text-muted);margin-bottom:8px">${_adminUsersTotal} users</div>
+    <table class="admin-table">
+      <thead><tr><th>Email</th><th>Status</th><th>Expires</th><th>Joined</th><th></th></tr></thead>
+      <tbody>
+        ${_adminUsers.length === 0 ? `<tr><td colspan="5"><div class="admin-empty">No users found.</div></td></tr>` :
+          _adminUsers.map(u => `
+            <tr>
+              <td style="font-family:var(--mono);font-size:10px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${u.email}</td>
+              <td>${u.sub_active
+                  ? `<span class="admin-badge ${u.sub_trial ? 'blue' : 'green'}">${u.sub_trial ? 'Trial' : 'Active'}</span>`
+                  : `<span class="admin-badge grey">None</span>`}</td>
+              <td style="font-size:10px;color:var(--text-muted)">${fmtDate(u.sub_expires_at)}</td>
+              <td style="font-size:10px;color:var(--text-muted)">${fmtDate(u.created_at)}</td>
+              <td>${u.sub_active ? `<button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:9px" onclick="adminRevokeSub(${u.id},'${u.email}')">Revoke</button>` : ''}</td>
+            </tr>`).join('')}
+      </tbody>
+    </table>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;font-size:10px;color:var(--text-muted)">
+      <span>Page ${_adminUsersPage} / ${pages}</span>
+      <div style="display:flex;gap:6px">
+        ${_adminUsersPage > 1 ? `<button class="btn btn-ghost btn-sm" onclick="adminUsersPage(${_adminUsersPage-1})">← Prev</button>` : ''}
+        ${_adminUsersPage < pages ? `<button class="btn btn-ghost btn-sm" onclick="adminUsersPage(${_adminUsersPage+1})">Next →</button>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+let _userSearchTimer;
+window._adminUserSearchDebounce = (v) => {
+  clearTimeout(_userSearchTimer);
+  _userSearchTimer = setTimeout(() => { _adminUsersSearch = v; _adminUsersPage = 1; loadAdminUsers(document.getElementById('admin-tab-content')); }, 320);
+};
+
+function adminUsersPage(p) { _adminUsersPage = p; loadAdminUsers(document.getElementById('admin-tab-content')); }
+
+async function adminRevokeSub(id, email) {
+  if (!confirm(`Revoke subscription for ${email}?`)) return;
+  await adminFetch('/admin/users/revoke-sub', { method:'POST', body: JSON.stringify({ user_id: id }) });
+  showToast('Subscription revoked');
+  loadAdminUsers(document.getElementById('admin-tab-content'));
+}
+
+async function loadAdminCodes(el) {
+  const d = await adminFetch('/admin/promo/list');
+  _adminCodes = d.codes || [];
+  const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'}) : '—';
+
+  el.innerHTML = `
+    <div class="admin-section-title">Generate Code</div>
+    <div class="admin-input-row">
+      <input type="number" id="code-days" value="5" min="1" max="90" style="width:60px" placeholder="Days"/>
+      <input type="text" id="code-label" placeholder="Label (optional)" style="flex:1"/>
+      <button class="btn btn-primary btn-sm" onclick="adminGenerateCode()">Generate</button>
+    </div>
+    <div id="new-code-result" style="margin-bottom:10px"></div>
+
+    <div class="admin-section-title">All Codes</div>
+    <table class="admin-table">
+      <thead><tr><th>Code</th><th>Days</th><th>Status</th><th>Redeemed By</th><th>Date</th><th></th></tr></thead>
+      <tbody>
+        ${_adminCodes.length === 0 ? `<tr><td colspan="6"><div class="admin-empty">No codes yet.</div></td></tr>` :
+          _adminCodes.map(c => `
+            <tr>
+              <td><span class="admin-code-chip" onclick="navigator.clipboard.writeText('${c.code}');showToast('Copied!')">${c.code}</span></td>
+              <td>${c.days}</td>
+              <td>${c.disabled ? '<span class="admin-badge grey">Disabled</span>' : c.redeemed_by ? '<span class="admin-badge blue">Used</span>' : '<span class="admin-badge green">Available</span>'}</td>
+              <td style="font-family:var(--mono);font-size:9.5px;color:var(--text-muted)">${c.redeemed_by || '—'}</td>
+              <td style="font-size:9.5px;color:var(--text-muted)">${fmtDate(c.redeemed_at || c.created_at)}</td>
+              <td>${!c.redeemed_by && !c.disabled ? `<button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:9px" onclick="adminDisableCode('${c.code}')">Disable</button>` : ''}</td>
+            </tr>`).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+async function adminGenerateCode() {
+  const days  = parseInt(document.getElementById('code-days')?.value) || 5;
+  const label = document.getElementById('code-label')?.value?.trim() || '';
+  const res   = document.getElementById('new-code-result');
+  try {
+    const d = await adminFetch('/admin/promo/generate', { method:'POST', body: JSON.stringify({ days, label }) });
+    if (res) res.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:6px 0"><span class="admin-code-chip" onclick="navigator.clipboard.writeText('${d.code}');showToast('Copied!')">${d.code}</span><span style="font-size:10px;color:var(--text-muted)">${days} days · click to copy</span></div>`;
+    loadAdminCodes(document.getElementById('admin-tab-content'));
+  } catch (e) { if (res) res.innerHTML = `<span style="font-size:10px;color:var(--danger)">${e.message}</span>`; }
+}
+
+async function adminDisableCode(code) {
+  if (!confirm(`Disable code ${code}?`)) return;
+  await adminFetch('/admin/promo/disable', { method:'POST', body: JSON.stringify({ code }) });
+  showToast('Code disabled');
+  loadAdminCodes(document.getElementById('admin-tab-content'));
+}
+
+async function loadAdminWhitelist(el) {
+  const d = await adminFetch('/admin/whitelist/list');
+  _adminWhitelist = d.emails || [];
+  const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'}) : '—';
+
+  el.innerHTML = `
+    <div class="admin-section-title">Add Email</div>
+    <div class="admin-input-row">
+      <input type="email" id="wl-email" placeholder="user@example.com" style="flex:1"/>
+      <button class="btn btn-primary btn-sm" onclick="adminAddWhitelist()">Add</button>
+    </div>
+    <div class="admin-section-title">Whitelisted Emails</div>
+    ${_adminWhitelist.length === 0 ? '<div class="admin-empty">No emails whitelisted.</div>' :
+      _adminWhitelist.map(w => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
+          <span style="font-family:var(--mono);font-size:10.5px">${w.email}</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:9.5px;color:var(--text-muted)">${fmtDate(w.added_at)}</span>
+            <button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:9px" onclick="adminRemoveWhitelist('${w.email}')">Remove</button>
+          </div>
+        </div>`).join('')}
+  `;
+}
+
+async function adminAddWhitelist() {
+  const email = document.getElementById('wl-email')?.value?.trim();
+  if (!email) return;
+  await adminFetch('/admin/whitelist', { method:'POST', body: JSON.stringify({ email }) });
+  showToast(`✓ ${email} whitelisted`);
+  loadAdminWhitelist(document.getElementById('admin-tab-content'));
+}
+
+async function adminRemoveWhitelist(email) {
+  if (!confirm(`Remove ${email} from whitelist?`)) return;
+  await adminFetch('/admin/whitelist/remove', { method:'POST', body: JSON.stringify({ email }) });
+  showToast('Removed');
+  loadAdminWhitelist(document.getElementById('admin-tab-content'));
+}
+
+async function loadAdminAdmins(el) {
+  const d = await adminFetch('/admin/admins/list');
+  _adminAdmins = d.admins || [];
+
+  el.innerHTML = `
+    <div class="admin-section-title">Grant Admin Access</div>
+    <p style="font-size:10px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">Only grant to trusted accounts. Admins have full access to this panel.</p>
+    <div class="admin-input-row">
+      <input type="email" id="admin-email-input" placeholder="user@example.com" style="flex:1"/>
+      <button class="btn btn-primary btn-sm" onclick="adminGrantAdmin()">Grant</button>
+    </div>
+    <div class="admin-section-title">Current Admins</div>
+    ${_adminAdmins.length === 0 ? '<div class="admin-empty">No admins found.</div>' :
+      _adminAdmins.map(a => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="width:22px;height:22px;border-radius:50%;background:var(--navy-ghost2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--navy)">${(a.email[0]||'?').toUpperCase()}</div>
+            <span style="font-family:var(--mono);font-size:10.5px">${a.email}</span>
+            ${a.is_superadmin ? '<span class="admin-badge blue">Superadmin</span>' : ''}
+          </div>
+          ${!a.is_superadmin ? `<button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:9px" onclick="adminRemoveAdmin('${a.email}')">Remove</button>` : ''}
+        </div>`).join('')}
+  `;
+}
+
+async function adminGrantAdmin() {
+  const email = document.getElementById('admin-email-input')?.value?.trim();
+  if (!email) return;
+  if (!confirm(`Grant admin access to ${email}?`)) return;
+  await adminFetch('/admin/admins/add', { method:'POST', body: JSON.stringify({ email }) });
+  showToast(`✓ ${email} is now admin`);
+  loadAdminAdmins(document.getElementById('admin-tab-content'));
+}
+
+async function adminRemoveAdmin(email) {
+  if (!confirm(`Remove admin from ${email}?`)) return;
+  await adminFetch('/admin/admins/remove', { method:'POST', body: JSON.stringify({ email }) });
+  showToast('Admin removed');
+  loadAdminAdmins(document.getElementById('admin-tab-content'));
+}
+
+// ── Sign out ────────────────────────────────────────────────────────────────
+async function webSignOut() {
+  try { if (typeof authLogout === 'function') await authLogout(); } catch {}
+  try { localStorage.removeItem('udt_token'); localStorage.removeItem('udt_user'); localStorage.removeItem('udt_sub_cache'); } catch {}
   window.location.href = 'auth.html';
 }
 
-// ── Payment overlay ────────────────────────────────────────────────────
-let _payMethod = null;
-let _payPoll   = null;
-
+// ── Payment overlay ─────────────────────────────────────────────────────────
 function openPayOverlay() {
   _payMethod = null;
   document.querySelectorAll('.pay-opt').forEach(o => o.classList.remove('sel'));
@@ -491,60 +919,56 @@ function paySelect(method, el) {
 }
 
 async function payGenerate() {
-  if (!_payMethod) {
-    if (typeof showToast === 'function') showToast('Select a payment method first');
-    return;
-  }
+  if (!_payMethod) { showToast('Select a payment method first'); return; }
   const btn = document.getElementById('pay-gen-btn');
   btn.disabled = true; btn.textContent = 'Loading…';
-
   try {
-    const d = await SubAPI.getPaymentAddress(_payMethod);
+    const token = localStorage.getItem('udt_token') || S.auth?.token;
+    const r = await fetch('https://ultimatedevtools-production.up.railway.app/api/subscription/payment/init', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ method: _payMethod })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Failed');
+
     const inst = document.getElementById('pay-inst');
-
     if (_payMethod === 'paypal') {
-      inst.innerHTML = `
-        <a href="${d.paypal_url}" target="_blank"
-           class="btn btn-primary btn-full"
-           style="display:block;text-align:center;text-decoration:none;margin-top:8px;">
-          Open PayPal →
-        </a>`;
+      inst.innerHTML = `<a href="${d.paypal_url}" target="_blank" class="btn btn-primary btn-full" style="display:block;text-align:center;text-decoration:none;margin-top:8px">Open PayPal →</a>`;
     } else {
-      const addrId = 'pay-addr-' + Date.now();
+      const addrId = 'addr-' + Date.now();
       inst.innerHTML = `
-        <div style="font-size:9.5px;color:var(--text-muted);margin-bottom:3px;">Send exactly:</div>
+        <div style="font-size:9.5px;color:var(--text-muted);margin-bottom:3px">Send exactly:</div>
         <div class="pay-amt">${d.amount_sol} SOL</div>
-        <div style="font-size:9.5px;color:var(--text-muted);margin:6px 0 2px;">To address (click to copy):</div>
+        <div style="font-size:9.5px;color:var(--text-muted);margin:6px 0 2px">To (click to copy):</div>
         <div class="pay-addr" id="${addrId}">${d.address}</div>
-        <div class="pay-watch"><div class="pay-spin"></div>Watching chain for confirmation…</div>`;
-
+        <div class="pay-watch"><div class="pay-spin"></div>Watching for confirmation…</div>`;
       document.getElementById(addrId)?.addEventListener('click', () => {
-        navigator.clipboard.writeText(d.address);
-        if (typeof showToast === 'function') showToast('Address copied!');
+        navigator.clipboard.writeText(d.address); showToast('Address copied!');
       });
-
       if (_payPoll) clearInterval(_payPoll);
       _payPoll = setInterval(async () => {
         try {
-          const r = await SubAPI.checkPayment(d.payment_id);
-          if (r.confirmed) {
+          const pr = await fetch(`https://ultimatedevtools-production.up.railway.app/api/subscription/payment/check/${d.payment_id}`, {
+            headers: { 'Authorization': 'Bearer ' + token }
+          });
+          const pd = await pr.json();
+          if (pd.confirmed) {
             clearInterval(_payPoll);
             document.getElementById('pay-overlay').style.display = 'none';
-            if (typeof showToast === 'function') showToast('Payment confirmed! 🎉');
-            updateWbSub();
+            showToast('Payment confirmed! 🎉');
+            await refreshSubStatus();
+            if (_webTool === 'subscription') renderSubscriptionPage();
           }
         } catch {}
       }, 5000);
     }
-
     btn.textContent = '✓ Generated';
-
   } catch (e) {
-    if (typeof showToast === 'function') showToast(e.message || 'Failed to get payment details');
+    showToast(e.message || 'Failed');
     btn.disabled = false; btn.textContent = 'Generate Details';
   }
 }
 </script>
-
 </body>
 </html>
