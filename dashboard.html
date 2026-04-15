@@ -569,12 +569,21 @@ async function _pushStateToServer() {
   const token = localStorage.getItem('udt_token');
   if (!token || typeof S === 'undefined') return;
   try {
+    // We push the full state including privateKey fields.
+    // The /api/state endpoint is auth-protected (JWT required) so only this
+    // user can read it back. This mirrors how chrome.storage.local works in
+    // the extension — it stores private keys unencrypted locally too.
+    // The encrypted /wallets endpoint (auth.js) is a separate, stronger-security
+    // path for users who set a password; this is the lightweight state sync path.
+    const safeState = { ...S };
+    // Only strip the in-memory cryptoKey object (not serialisable anyway) and auth token
+    if (safeState.auth) safeState.auth = { ...safeState.auth, cryptoKey: undefined };
     await fetch(BACKEND + '/api/state', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ state: S })
+      body: JSON.stringify({ state: safeState })
     });
-  } catch {} // non-critical — state is also in localStorage
+  } catch {} // non-critical
 }
 
 async function _pullStateFromServer(token) {
@@ -587,11 +596,21 @@ async function _pullStateFromServer(token) {
     const { state } = await r.json();
     if (!state || typeof state !== 'object') return;
 
-    // Deep-merge server state into S, but never overwrite auth or crypto keys
+    // Build a map of private keys from whatever is currently in localStorage
+    // BEFORE we overwrite S with server state
+    const localPrivKeys = {};
+    (S.savedWallets || []).forEach(w => {
+      if (w.privateKey) {
+        if (w.publicKey)  localPrivKeys[w.publicKey] = w.privateKey;
+        if (w.id)         localPrivKeys['id:' + w.id] = w.privateKey;
+      }
+    });
+
+    // Deep-merge server state into S — never overwrite auth or in-memory crypto
     const safeMerge = (target, source) => {
       if (!source || typeof source !== 'object') return;
       for (const key of Object.keys(source)) {
-        if (key === 'auth' || key === 'cryptoKey') continue; // never overwrite auth
+        if (key === 'auth' || key === 'cryptoKey') continue;
         if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
           if (!target[key] || typeof target[key] !== 'object') target[key] = {};
           safeMerge(target[key], source[key]);
@@ -602,19 +621,22 @@ async function _pullStateFromServer(token) {
     };
     safeMerge(S, state);
 
-    // Wallets from server state have no private keys (stripped before saving).
-    // Merge with existing local wallets to restore private keys where we have them.
+    // Restore private keys: server state may have them (if previously pushed with keys)
+    // or may not (if pushed from an older version). Either way, prefer the server value
+    // then fall back to what was in localStorage.
     if (state.savedWallets?.length) {
-      const localMap = {};
-      (S.savedWallets || []).forEach(w => { if (w.privateKey) localMap[w.publicKey] = w.privateKey; });
       S.savedWallets = state.savedWallets.map(w => ({
         ...w,
-        privateKey: w.privateKey || localMap[w.publicKey] || ''
+        privateKey: w.privateKey
+          || localPrivKeys[w.publicKey]
+          || localPrivKeys['id:' + w.id]
+          || ''
       }));
     }
 
-    // Persist merged state to localStorage
+    // Persist the merged state back to localStorage so popup.js loadState picks it up
     await chrome.storage.local.set({ udt_v3: S });
+    console.log(`[state pull] restored ${S.savedWallets?.length || 0} wallets`);
   } catch (e) {
     console.warn('[state pull]', e.message);
   }

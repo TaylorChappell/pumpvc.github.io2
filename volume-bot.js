@@ -215,17 +215,33 @@ async function vbSendBundle(txsB58) {
   throw new Error('All Jito endpoints failed');
 }
 async function vbConfirmBundle(bundleId) {
-  const base = VB_JITO_ENDPOINTS[0].replace('/api/v1/bundles','');
-  for (let i=0;i<12;i++) {
-    await new Promise(r=>setTimeout(r,2500));
+  // Jito bundle status: POST getBundleStatuses (NOT a GET with ?ids= query param)
+  // The GET endpoint returns 405 Method Not Allowed — must use the JSON-RPC POST form.
+  for (let i = 0; i < 12; i++) {
+    await new Promise(r => setTimeout(r, 2500));
+    // Try each endpoint in round-robin so a single overloaded node doesn't block us
+    const ep = VB_JITO_ENDPOINTS[i % VB_JITO_ENDPOINTS.length];
     try {
-      const r=await fetch(`${base}/api/v1/bundles?ids=${bundleId}`);
-      const j=await r.json(); const b=j?.[0];
-      if (b?.status==='Landed') return {landed:true,slot:b.landedSlot};
-      if (b?.status==='Failed') return {landed:false,reason:'Bundle failed'};
+      const r = await fetch(ep, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0', id: 1,
+          method: 'getBundleStatuses',
+          params: [[bundleId]]
+        }),
+      });
+      if (!r.ok) continue; // 429 / 5xx — try next poll
+      const j = await r.json();
+      const b = j?.result?.value?.[0];
+      if (!b) continue; // null means bundle not yet seen — keep polling
+      if (b.confirmation_status === 'confirmed' || b.confirmation_status === 'finalized')
+        return { landed: true, slot: b.slot };
+      if (b.err && Object.keys(b.err).length > 0)
+        return { landed: false, reason: 'Bundle failed on-chain' };
     } catch {}
   }
-  return {landed:false,reason:'Timeout'};
+  return { landed: false, reason: 'Timeout' };
 }
 
 // ── AI ───────────────────────────────────────
@@ -747,11 +763,12 @@ async function vbJupiterCycle(wallet, bal) {
       vbRecordSuccess(wallet.publicKey, sol, fees, bundleId, 'Jupiter');
       vbLog(`✓ [Jupiter] Landed slot ${conf.slot || '?'} | +${(sol * 2).toFixed(4)} SOL vol`, 'success');
     } else {
-      // FIXED: pass the sell quote params to the fallback so it can re-fetch
-      // a fresh sell quote rather than reusing the potentially-stale signed tx.
       vbLog(`ℹ Bundle didn't land (${conf.reason}) — falling back to separate txs…`, 'warn');
+      // Pass the raw buy quote (not the signed tx) so the fallback can re-fetch
+      // Jupiter and get a fresh blockhash. The signed tx from the bundle path has
+      // an expired blockhash by the time the ~30s confirmation window ends.
       await vbJupiterSeparate(
-        wallet, signedBuyB64, sol, fees,
+        wallet, buyQuote, sol, fees,
         vb.targetCA, sellInputTokens, sellSlip
       );
     }
@@ -768,17 +785,12 @@ async function vbJupiterCycle(wallet, bal) {
 
 // ── Jupiter fallback: sequential buy then sell ─
 //
-// FIXED: Instead of reusing the pre-built sell tx (which carries the quote
-// from before the buy landed, so price has moved), we:
-//  1. Send the buy.
-//  2. Wait 600ms for it to confirm and pool state to update.
-//  3. Re-fetch a fresh sell quote at the current on-chain price.
-//  4. Build + sign a new sell tx with the fresh quote.
-//  5. If the sell fails with a slippage error, retry once with +500 bps.
-//  6. A slippage failure does NOT trigger the circuit breaker — it's a
-//     market condition, not a code error.
+// Accepts the raw buyQuote object (not a pre-signed tx) so it can call
+// Jupiter /swap again to get a transaction with a fresh, valid blockhash.
+// The bundle path pre-signs with a blockhash that expires ~30s later, so
+// any signed tx from that path is always stale by the time the bundle times out.
 //
-async function vbJupiterSeparate(wallet, signedBuyB64, sol, fees, tokenMint, sellInputTokens, sellSlip) {
+async function vbJupiterSeparate(wallet, buyQuote, sol, fees, tokenMint, sellInputTokens, sellSlip) {
   const vb = S.volumeBot;
 
   // ── send helper ───────────────────────────────
@@ -803,13 +815,9 @@ async function vbJupiterSeparate(wallet, signedBuyB64, sol, fees, tokenMint, sel
 
   // ── slippage error detector ───────────────────
   const isSlippageError = (msg) =>
-    msg.includes('0x1789') ||         // Jupiter SlippageToleranceExceeded
-    msg.includes('0x1788') ||         // Raydium slippage / insufficient output
-    msg.includes('0x1771') ||         // Raydium AMM insufficient output amount
-    msg.includes('SlippageTolerance') ||
-    msg.includes('slippage') ||
-    msg.includes('6001') ||           // Orca/Whirlpool slippage
-    msg.includes('ExceededSlippage') ||
+    msg.includes('0x1789') || msg.includes('0x1788') || msg.includes('0x1771') ||
+    msg.includes('SlippageTolerance') || msg.includes('slippage') ||
+    msg.includes('6001') || msg.includes('ExceededSlippage') ||
     msg.includes('insufficient output');
 
   // ── build a fresh sell tx ─────────────────────
@@ -820,7 +828,6 @@ async function vbJupiterSeparate(wallet, signedBuyB64, sol, fees, tokenMint, sel
     );
     const solBack = parseInt(sq.outAmount || '0') / 1e9;
     vbLog(`  ↳ Fresh sell quote: ~${solBack.toFixed(4)} SOL at ${slip}bps`, 'info');
-
     const ss = await vbJupFetch(VB_JUP_SWAP, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -837,29 +844,41 @@ async function vbJupiterSeparate(wallet, signedBuyB64, sol, fees, tokenMint, sel
   };
 
   try {
-    // 1. Send buy
-    const buySig = await sendTx(signedBuyB64);
+    // 1. Re-fetch the buy transaction with a FRESH blockhash from Jupiter.
+    //    We reuse the same buyQuote object (prices/amounts are still valid
+    //    for a few seconds) but get a new swapTransaction from Jupiter which
+    //    will contain the current blockhash. This avoids the "already been
+    //    processed" / "blockhash not found" error that occurs when reusing the
+    //    pre-signed tx from the bundle path after the 30s confirmation window.
+    vbLog('  ↳ Rebuilding buy tx with fresh blockhash…', 'info');
+    const freshBuySwap = await vbJupFetch(VB_JUP_SWAP, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        quoteResponse:            buyQuote,
+        userPublicKey:            wallet.publicKey,
+        wrapAndUnwrapSol:         true,
+        dynamicComputeUnitLimit:  true,
+        skipUserAccountsRpcCalls: true,
+        prioritizationFeeLamports:'auto',
+      }),
+    });
+    if (!freshBuySwap.swapTransaction) throw new Error('Jupiter returned no fresh buy transaction');
+    const freshSignedBuyB64 = await vbSignJupTx(freshBuySwap.swapTransaction, wallet.privateKey);
+
+    // 2. Send the fresh buy
+    const buySig = await sendTx(freshSignedBuyB64);
     const sellDelay = Math.max(200, parseInt(vb.sellDelayMs) || 600);
     vbLog(`  ↳ Buy sent: ${buySig.slice(0, 10)}… waiting ${sellDelay}ms…`, 'info');
-
-    // IMPROVED: sellDelay is configurable (default 600ms).
-    // Higher values = more time for buy confirmation before sell; lower = faster volume.
     await new Promise(r => setTimeout(r, sellDelay));
 
-    // FIXED: query actual ATA balance after buy lands — this is the ground truth.
-    // Unlike the 98.5% estimate, this reflects exactly what the wallet received
-    // after pool fees, rounding, and any on-chain deductions.
-    // We subtract 1 raw token unit as dust insurance.
-    let actualSellTokens = sellInputTokens; // fallback to passed estimate
+    // 3. Query actual ATA balance after buy lands
+    let actualSellTokens = sellInputTokens;
     try {
       const ata = await vbAta(wallet.publicKey, tokenMint);
       if (ata && ata.amount > 0n) {
         const ataAmt = Number(ata.amount);
         actualSellTokens = Math.max(1, ataAmt - 1);
-        vbLog(
-          `  ↳ ATA balance: ${ataAmt.toLocaleString()} tokens → selling ${actualSellTokens.toLocaleString()} (100%)`,
-          'info'
-        );
+        vbLog(`  ↳ ATA balance: ${ataAmt.toLocaleString()} tokens → selling ${actualSellTokens.toLocaleString()} (100%)`, 'info');
       } else {
         vbLog(`  ↳ ATA not found yet — using quote estimate (${sellInputTokens.toLocaleString()})`, 'warn');
       }
@@ -867,7 +886,7 @@ async function vbJupiterSeparate(wallet, signedBuyB64, sol, fees, tokenMint, sel
       vbLog(`  ↳ ATA query failed (${ataErr.message}) — using estimate`, 'warn');
     }
 
-    // 2. First sell attempt with fresh quote using actual balance
+    // 4. First sell attempt with fresh quote
     let sellSig;
     try {
       const freshSell = await buildSellTx(actualSellTokens, sellSlip);
@@ -875,45 +894,33 @@ async function vbJupiterSeparate(wallet, signedBuyB64, sol, fees, tokenMint, sel
       vbLog(`  ↳ Sell sent: ${sellSig.slice(0, 10)}…`, 'info');
     } catch (sellErr) {
       if (isSlippageError(sellErr.message)) {
-        // FIXED: slippage error → retry once at +500 bps, NOT a circuit-breaker event
-        // IMPROVED: +600 bps retry (was +500) for better first-retry success rate
         const retrySellSlip = sellSlip + 600;
-        vbLog(
-          `  ⚠ Sell slippage (${sellSlip}bps) — retrying at ${retrySellSlip}bps…`,
-          'warn'
-        );
+        vbLog(`  ⚠ Sell slippage (${sellSlip}bps) — retrying at ${retrySellSlip}bps…`, 'warn');
         try {
           const retrySell = await buildSellTx(actualSellTokens, retrySellSlip);
           sellSig = await sendTx(retrySell);
           vbLog(`  ↳ Sell retry sent: ${sellSig.slice(0, 10)}…`, 'info');
         } catch (retryErr) {
-          // Both attempts failed — buy is already done, record partial
-          // FIXED: do NOT call vbFail() for slippage — it's not a code error
-          vbLog(
-            `  ⚠ Sell retry also failed (${retryErr.message}) — buy-only cycle recorded`,
-            'warn'
-          );
+          vbLog(`  ⚠ Sell retry also failed (${retryErr.message}) — buy-only cycle recorded`, 'warn');
           vb.stats.cycles++;
           vb.stats.feesPaid = parseFloat(vb.stats.feesPaid || 0) + fees;
           vb.history = vb.history || [];
           vb.history.unshift({
             id: uid(), ts: new Date().toISOString(),
             wallet: wallet.publicKey, solUsed: sol,
-            volume: sol, // only one leg
-            fees, netResult: -(sol + fees), // bought but didn't sell
+            volume: sol, fees, netResult: -(sol + fees),
             bundleId: 'n/a', path: 'Jupiter (buy-only)',
           });
           if (vb.history.length > 200) vb.history = vb.history.slice(0, 200);
           return;
         }
       } else {
-        // Non-slippage error — propagate so outer catch handles it
         throw sellErr;
       }
     }
 
     // Both legs succeeded
-    S.volumeBot._lastSuccessTs = Date.now(); // NEW: track for anti-AFK idle timer
+    S.volumeBot._lastSuccessTs = Date.now();
     vbRecordSuccess(wallet.publicKey, sol, fees + 0.00003, null, 'Jupiter');
     vbLog(`✓ [Jupiter fallback] +${(sol * 2).toFixed(4)} SOL vol`, 'success');
 
@@ -1119,11 +1126,35 @@ async function vbRefundAll() {
   }
 }
 async function vbDelGen(id) {
-  const vb=S.volumeBot; const w=vb.generatedWallets?.find(x=>x.id===id); if(!w) return;
-  const src=S.savedWallets.find(x=>x.id===vb.sourceWalletId);
-  if (src?.publicKey&&w.privateKey) { const bal=await vbFetchBal(w.publicKey)??0; if(bal>0.000010) try{await vbSendSol(w,src.publicKey,bal-0.000010);}catch{} }
-  vb.generatedWallets=vb.generatedWallets.filter(x=>x.id!==id);
-  await saveState(); render(); showToast('Wallet deleted & refunded');
+  const vb  = S.volumeBot;
+  const w   = vb.generatedWallets?.find(x => x.id === id);
+  if (!w) return;
+
+  const src = S.savedWallets.find(x => x.id === vb.sourceWalletId);
+  if (src?.publicKey && w.privateKey) {
+    // Fetch fresh balance so we know exactly what to refund
+    const bal = await vbFetchBal(w.publicKey) ?? 0;
+    if (bal > 0.000_010) {
+      try {
+        await vbSendSol(w, src.publicKey, bal - 0.000_010);
+        vbLog(`↩ Refunded ${bal.toFixed(4)} SOL from ${short(w.publicKey)} → source`, 'success');
+        // Refresh source balance so UI shows updated amount
+        await vbFetchBal(src.publicKey);
+        showToast(`✓ Refunded ${bal.toFixed(4)} SOL to source wallet`);
+      } catch (e) {
+        vbLog(`⚠ Refund failed for ${short(w.publicKey)}: ${e.message}`, 'warn');
+        showToast(`Wallet deleted (refund failed: ${e.message.slice(0, 40)})`);
+      }
+    } else {
+      showToast('Wallet deleted (balance too low to refund)');
+    }
+  } else {
+    showToast('Wallet deleted (no source wallet set for refund)');
+  }
+
+  vb.generatedWallets = vb.generatedWallets.filter(x => x.id !== id);
+  await saveState();
+  render();
 }
 
 // ── Start / stop ─────────────────────────────
