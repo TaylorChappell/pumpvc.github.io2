@@ -9,7 +9,7 @@
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const UDT_API_BASE = 'https://YOUR_RAILWAY_APP.up.railway.app/api';
+const UDT_API_BASE = 'ultimatedevtools-production.up.railway.app/api';
 // Replace above with your actual Railway URL. Can also be set in env / manifest.
 
 // ── Storage Helpers (works in both browser and extension contexts) ─────────────
