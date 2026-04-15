@@ -5,9 +5,7 @@
 
 'use strict';
 
-const RPC         = 'https://api.mainnet-beta.solana.com';
-const DEFAULT_RPC = 'https://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007';
-const DEFAULT_WS  = 'wss://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007';
+const RPC = 'https://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007';
 
 // ─────────────────────────────────────────
 // STATE
@@ -1610,26 +1608,26 @@ function buildSettingsPage() {
       <div class="settings-section">
         <div class="settings-section-title">RPC Endpoint</div>
         <p style="font-size:10px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">
-          HTTP RPC for balance checks and transactions. Leave blank to use the default.
+          HTTP RPC for balance checks and transactions. Helius/QuickNode free tiers work well.
         </p>
-        <input type="text" id="rpc-input" value="${S.settings.rpcEndpoint === DEFAULT_RPC ? '' : S.settings.rpcEndpoint}" placeholder="Default"/>
-        <div style="display:flex;gap:6px;margin-top:6px">
-          <button class="btn btn-ghost btn-sm" data-action="save-rpc">Save</button>
-          <button class="btn btn-secondary btn-sm" data-action="reset-rpc">Reset to Default</button>
-        </div>
+        <input type="text" id="rpc-input" value="${S.settings.rpcEndpoint}" placeholder="https://api.mainnet-beta.solana.com"/>
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px" data-action="save-rpc">Save RPC</button>
       </div>
 
       <!-- WebSocket -->
       <div class="settings-section">
         <div class="settings-section-title">WebSocket Endpoint <span style="font-size:9px;font-weight:400;color:var(--text-muted)">(for Auto-Split)</span></div>
         <p style="font-size:10px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">
-          For real-time buy detection. Leave blank to use the default. If it fails, auto-split falls back to polling.
+          For real-time buy detection. Helius/QuickNode free tier doesn't support this — use public endpoint or upgrade. Leave blank to auto-derive from RPC URL.
         </p>
-        <input type="text" id="ws-input" value="${(S.settings.wsEndpoint && S.settings.wsEndpoint !== DEFAULT_WS) ? S.settings.wsEndpoint : ''}" placeholder="Default"/>
-        <div style="display:flex;gap:6px;margin-top:6px">
-          <button class="btn btn-ghost btn-sm" data-action="save-ws">Save</button>
-          <button class="btn btn-secondary btn-sm" data-action="reset-ws">Reset to Default</button>
+        <div style="background:var(--surface2);border:1px solid var(--border-md);border-radius:var(--radius-sm);padding:7px 9px;font-size:9.5px;color:var(--text-dim);margin-bottom:6px;line-height:1.5">
+          Free options:<br>
+          <code style="color:var(--navy);font-size:9px">wss://api.mainnet-beta.solana.com</code> (public, can be slow)<br>
+          <code style="color:var(--navy);font-size:9px">wss://YOUR-QUICKNODE-ENDPOINT.solana-mainnet.quiknode.pro/</code>
         </div>
+        <input type="text" id="ws-input" value="${S.settings.wsEndpoint||'wss://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007'}" placeholder="wss://mainnet.helius-rpc.com/?api-key=…"/>
+        <div style="font-size:9px;color:var(--text-muted);margin-top:3px">If WebSocket fails, auto-split automatically falls back to 3-second polling.</div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px" data-action="save-ws">Save WS</button>
       </div>
 
 
@@ -2187,22 +2185,13 @@ async function handleClick(e) {
 
   } else if (a === 'save-rpc') {
     const val = document.getElementById('rpc-input')?.value?.trim();
-    S.settings.rpcEndpoint = val || DEFAULT_RPC;
-    await saveState(); checkRpc(); showToast('✓ RPC saved');
-
-  } else if (a === 'reset-rpc') {
-    S.settings.rpcEndpoint = DEFAULT_RPC;
-    await saveState(); checkRpc(); showToast('✓ RPC reset to default'); render();
+    if (val) { S.settings.rpcEndpoint = val; await saveState(); checkRpc(); showToast('✓ RPC saved'); }
 
   } else if (a === 'save-ws') {
     const val = document.getElementById('ws-input')?.value?.trim();
-    S.settings.wsEndpoint = val || DEFAULT_WS;
+    S.settings.wsEndpoint = val || '';
     await saveState();
-    showToast(val ? '✓ WebSocket endpoint saved' : '✓ WS reset to default');
-
-  } else if (a === 'reset-ws') {
-    S.settings.wsEndpoint = DEFAULT_WS;
-    await saveState(); showToast('✓ WebSocket reset to default'); render();
+    showToast(val ? '✓ WebSocket endpoint saved' : '✓ WS cleared (deriving from RPC URL)');
 
 
 
