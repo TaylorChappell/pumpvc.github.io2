@@ -279,68 +279,92 @@
   <div class="modal-overlay" id="emoji-modal" style="display:none"><div class="modal-box emoji-modal-box" id="emoji-modal-box"></div></div>
 </div>
 
-<!-- Payment overlay -->
+<!-- Payment overlay — method selection -->
 <div id="pay-overlay">
   <div class="pay-box">
     <div class="pay-title">Subscribe — $<span id="pay-usd-price">199</span> / month</div>
-    <div class="pay-sub">Manual renewal. No automatic charges. Price locked at time of payment.</div>
+    <div class="pay-sub">Manual renewal. Price locked in SOL when you click Pay.</div>
 
-    <!-- Loading state while fetching price -->
-    <div id="pay-price-loading" style="text-align:center;padding:20px 0;font-size:11px;color:var(--text-muted)">
+    <div id="pay-price-loading" style="text-align:center;padding:16px 0;font-size:11px;color:var(--text-muted)">
       <div class="pay-spin" style="margin:0 auto 8px"></div>
       Fetching current SOL price…
     </div>
 
-    <!-- Price display (shown once loaded) -->
     <div id="pay-price-display" style="display:none;background:var(--surface2);border:1px solid var(--border-md);border-radius:var(--r);padding:10px 12px;margin-bottom:14px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <span style="font-size:10px;color:var(--text-muted)">You pay</span>
-        <span style="font-size:13px;font-weight:700;color:var(--navy);font-family:var(--mono)" id="pay-sol-amount">—</span>
+        <span style="font-size:15px;font-weight:700;color:var(--navy);font-family:var(--mono)" id="pay-sol-amount">—</span>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between">
-        <span style="font-size:10px;color:var(--text-muted)">SOL price</span>
+        <span style="font-size:10px;color:var(--text-muted)">Rate</span>
         <span style="font-size:10px;color:var(--text-muted)" id="pay-sol-rate">—</span>
       </div>
-      <div style="font-size:9px;color:var(--text-muted);margin-top:4px;opacity:0.7">Rate locked at payment initiation</div>
+      <div style="font-size:9px;color:var(--text-muted);margin-top:3px;opacity:0.7">Locked the moment you click Pay</div>
     </div>
 
-    <!-- Method selection -->
     <div id="pay-method-select" style="display:none">
-      <div style="font-size:10px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Payment Method</div>
-      <div class="pay-grid" style="grid-template-columns:1fr 1fr">
+      <div style="font-size:10px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">How to pay</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div class="pay-opt" id="pay-opt-phantom" onclick="paySelect('phantom',this)">
-          <svg viewBox="0 0 24 24" fill="none">
-            <path d="M20.5 12C20.5 16.7 16.7 20.5 12 20.5C7.3 20.5 3.5 16.7 3.5 12C3.5 7.3 7.3 3.5 12 3.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
-            <path d="M16 3.5C18.5 4.5 20.5 7 20.5 10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
-            <path d="M9 12C9 10.3 10.3 9 12 9H16C17.7 9 19 10.3 19 12C19 13.7 17.7 15 16 15H12C10.3 15 9 13.7 9 12Z" stroke="currentColor" stroke-width="1.4"/>
-          </svg>
-          <div class="pay-opt-n">Phantom Wallet</div>
-          <div style="font-size:8px;color:var(--text-muted);margin-top:2px">Auto-confirm</div>
+          <svg viewBox="0 0 24 24" fill="none" style="width:20px;height:20px;color:var(--navy);display:block;margin:0 auto 5px"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" stroke="currentColor" stroke-width="1.5"/><path d="M8 12h8M12 8v8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <div style="font-size:10px;font-weight:600;color:var(--text)">Phantom</div>
+          <div style="font-size:8px;color:var(--text-muted);margin-top:1px">1-click confirm</div>
         </div>
         <div class="pay-opt" id="pay-opt-manual" onclick="paySelect('manual',this)">
-          <svg viewBox="0 0 24 24" fill="none">
-            <rect x="3" y="6" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.7"/>
-            <path d="M3 10h18" stroke="currentColor" stroke-width="1.7"/>
-            <path d="M7 14h4M15 14h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-          <div class="pay-opt-n">Manual SOL</div>
-          <div style="font-size:8px;color:var(--text-muted);margin-top:2px">Send from any wallet</div>
+          <svg viewBox="0 0 24 24" fill="none" style="width:20px;height:20px;color:var(--navy);display:block;margin:0 auto 5px"><rect x="3" y="6" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M3 10h18" stroke="currentColor" stroke-width="1.5"/></svg>
+          <div style="font-size:10px;font-weight:600;color:var(--text)">Manual SOL</div>
+          <div style="font-size:8px;color:var(--text-muted);margin-top:1px">Any wallet</div>
         </div>
       </div>
     </div>
 
-    <!-- Payment instructions (shown after generating) -->
-    <div id="pay-inst"></div>
-
-    <div class="pay-foot">
-      <button class="btn btn-primary" id="pay-gen-btn" onclick="payGenerate()" style="display:none">Continue</button>
-      <button class="btn btn-ghost" onclick="closePayOverlay()">Cancel</button>
+    <div class="pay-foot" style="margin-top:12px">
+      <button class="btn btn-primary" id="pay-gen-btn" onclick="payGenerate()" style="display:none;flex:1">Pay Now</button>
+      <button class="btn btn-ghost" onclick="closePayOverlay()" style="flex:1">Cancel</button>
     </div>
   </div>
 </div>
 
-<!-- Extension JS — same load order as popup.html -->
-<!-- IMPORTANT: Split.js must be deployed to Railway public/ as split.js (lowercase) -->
+<!-- Full-screen payment panel (shown once payment is created) -->
+<div id="pay-panel" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:400;overflow-y:auto">
+  <div style="max-width:460px;margin:0 auto;padding:28px 20px 40px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px">
+      <div>
+        <div style="font-size:16px;font-weight:800;color:var(--navy)" id="pp-title">Complete Payment</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:3px" id="pp-subtitle"></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="cancelPayPanel()" style="flex-shrink:0">&#x2715; Cancel</button>
+    </div>
+
+    <!-- Amount card -->
+    <div style="background:var(--surface);border:1px solid var(--border-md);border-radius:10px;padding:14px 16px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span style="font-size:10px;color:var(--text-muted)">Subscription</span>
+        <span style="font-size:10px;color:var(--text-muted)">Ultimate Dev Tools — 30 days</span>
+      </div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between">
+        <span style="font-size:10px;color:var(--text-muted)">Amount due</span>
+        <div style="text-align:right">
+          <div style="font-size:22px;font-weight:800;color:var(--navy);font-family:var(--mono);line-height:1.1" id="pp-sol-amount">—</div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:1px" id="pp-usd-amount"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Countdown -->
+    <div style="background:var(--surface2);border:1px solid var(--border-md);border-radius:8px;padding:9px 14px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:10px;color:var(--text-muted)">&#x23F1; Time remaining</span>
+      <span style="font-size:13px;font-weight:800;font-family:var(--mono);color:var(--navy);letter-spacing:0.04em" id="pp-timer">30:00</span>
+    </div>
+
+    <!-- Method content -->
+    <div id="pp-content"></div>
+
+    <!-- Status messages -->
+    <div id="pp-status" style="margin-top:14px"></div>
+  </div>
+</div>
+
 <script src="bs58.js"></script>
 <script src="split.js" onerror="console.error('FATAL: split.js 404 — deploy Split.js as split.js (lowercase) in Railway public/')"></script>
 <script src="auth.js"></script>
@@ -991,26 +1015,36 @@ window._removeAdmin = async (email) => {
   showToast('Removed'); _loadAdmins(document.getElementById('admin-content'));
 };
 
-// ── Payment overlay ───────────────────────────────────────────────────────────
+// ── Payment state ──────────────────────────────────────────────────────────────
+let _payMethod  = null;
+let _payData    = null;
+let _payPoll    = null;
+let _payTimer   = null;
+let _payExpiry  = null;
 
 function openPayOverlay() {
   _payMethod = null;
   _payData   = null;
-  if (_payPoll) { clearInterval(_payPoll); _payPoll = null; }
+  if (_payPoll)  { clearInterval(_payPoll);  _payPoll  = null; }
+  if (_payTimer) { clearInterval(_payTimer); _payTimer = null; }
   document.querySelectorAll('.pay-opt').forEach(o => o.classList.remove('sel'));
-  document.getElementById('pay-inst').innerHTML       = '';
   document.getElementById('pay-price-loading').style.display = '';
   document.getElementById('pay-price-display').style.display = 'none';
   document.getElementById('pay-method-select').style.display = 'none';
   const btn = document.getElementById('pay-gen-btn');
-  if (btn) { btn.style.display = 'none'; btn.disabled = false; btn.textContent = 'Continue'; }
+  if (btn) { btn.style.display = 'none'; btn.disabled = false; btn.textContent = 'Pay Now'; }
   document.getElementById('pay-overlay').style.display = 'flex';
   _loadPayPrice();
 }
 
 function closePayOverlay() {
   document.getElementById('pay-overlay').style.display = 'none';
-  if (_payPoll) { clearInterval(_payPoll); _payPoll = null; }
+}
+
+function cancelPayPanel() {
+  if (_payPoll)  { clearInterval(_payPoll);  _payPoll  = null; }
+  if (_payTimer) { clearInterval(_payTimer); _payTimer = null; }
+  document.getElementById('pay-panel').style.display = 'none';
 }
 
 async function _loadPayPrice() {
@@ -1038,43 +1072,35 @@ function paySelect(method, el) {
   _payMethod = method;
   document.querySelectorAll('.pay-opt').forEach(o => o.classList.remove('sel'));
   el.classList.add('sel');
-  document.getElementById('pay-inst').innerHTML = '';
 }
 
 async function payGenerate() {
-  if (!_payMethod) { showToast('Select a payment method'); return; }
+  if (!_payMethod) { showToast('Select Phantom or Manual SOL first'); return; }
   const btn   = document.getElementById('pay-gen-btn');
   const token = localStorage.getItem('udt_token');
-  btn.disabled = true; btn.textContent = 'Creating...';
+  btn.disabled = true; btn.textContent = 'Creating…';
 
   try {
-    // For Phantom: connect first to get sender address (needed for refunds)
     let senderAddress = null;
+
     if (_payMethod === 'phantom') {
       const phantom = window.solana || window.phantom?.solana;
       if (!phantom?.isPhantom) {
-        document.getElementById('pay-inst').innerHTML = `
-          <div style="background:var(--warn-bg);border:1px solid rgba(217,119,6,0.2);border-radius:var(--r);padding:10px 12px;font-size:10px;color:var(--warn);margin-top:8px;line-height:1.6">
-            Phantom wallet not detected.<br>
-            <a href="https://phantom.app" target="_blank" style="color:var(--warn);font-weight:600">Install Phantom</a> or use Manual SOL.
-          </div>`;
-        btn.disabled = false; btn.textContent = 'Continue';
-        return;
+        showToast('Phantom not found — install from phantom.app or use Manual SOL');
+        btn.disabled = false; btn.textContent = 'Pay Now'; return;
       }
       try {
         const resp = await phantom.connect({ onlyIfTrusted: false });
         senderAddress = resp?.publicKey?.toString() || phantom.publicKey?.toString();
+        if (!senderAddress) throw new Error('Could not get wallet address from Phantom');
       } catch (e) {
-        if (e.code === 4001 || e.message?.includes('rejected')) {
-          document.getElementById('pay-inst').innerHTML = `<div style="font-size:10px;color:var(--warn);margin-top:8px">Wallet connection cancelled.</div>`;
-          btn.disabled = false; btn.textContent = 'Continue';
-          return;
-        }
-        throw e;
+        const rejected = e.code === 4001 || e.message?.includes('reject') || e.message?.includes('cancel');
+        showToast(rejected ? 'Wallet connection cancelled' : 'Phantom: ' + e.message);
+        btn.disabled = false; btn.textContent = 'Pay Now'; return;
       }
     }
 
-    // Init payment on server
+    // Create payment on server — unique receiving wallet + locked price
     const r = await fetch(BACKEND + '/api/subscription/payment/init', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -1084,174 +1110,269 @@ async function payGenerate() {
     if (!r.ok) throw new Error(d.error || 'Failed to create payment');
     _payData = d;
 
-    const inst = document.getElementById('pay-inst');
-    if (_payMethod === 'phantom') {
-      await _handlePhantomPayment(d, inst, senderAddress, token);
-    } else {
-      _handleManualPayment(d, inst, token);
-    }
-    btn.textContent = '✓ Payment initiated';
+    // Close selection overlay, open full-screen panel
+    document.getElementById('pay-overlay').style.display = 'none';
+    _openPayPanel(d, senderAddress, token);
+
   } catch (e) {
-    showToast(e.message || 'Failed');
-    btn.disabled = false; btn.textContent = 'Continue';
+    showToast(e.message || 'Payment setup failed');
+    btn.disabled = false; btn.textContent = 'Pay Now';
   }
 }
 
-// ── Phantom payment ────────────────────────────────────────────────────────────
-async function _handlePhantomPayment(payData, instEl, fromPubkeyStr, token) {
-  const phantom = window.solana || window.phantom?.solana;
+// ── Full-screen payment panel ──────────────────────────────────────────────────
+function _openPayPanel(payData, senderAddress, token) {
+  document.getElementById('pp-sol-amount').textContent = `${payData.amount_sol} SOL`;
+  document.getElementById('pp-usd-amount').textContent = `≈ $${payData.amount_usd} USD`;
 
-  instEl.innerHTML = `
-    <div style="background:var(--surface2);border:1px solid var(--border-md);border-radius:var(--r);padding:12px 14px;margin-top:10px">
-      <div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:8px">Confirm in Phantom</div>
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:4px">
-        <span>Amount</span>
-        <span style="color:var(--navy);font-weight:700;font-family:var(--mono)">${payData.amount_sol} SOL</span>
+  // Reset status
+  document.getElementById('pp-status').innerHTML = '';
+  document.getElementById('pp-content').innerHTML = '';
+
+  // 30-min countdown
+  _payExpiry = Date.now() + 30 * 60 * 1000;
+  _startCountdown();
+
+  document.getElementById('pay-panel').style.display = 'block';
+  document.getElementById('pay-panel').scrollTop = 0;
+
+  if (_payMethod === 'phantom') {
+    document.getElementById('pp-title').textContent    = 'Confirm in Phantom';
+    document.getElementById('pp-subtitle').textContent = 'Approve the transaction in your Phantom wallet';
+    _buildPhantomPanel(payData, senderAddress, token);
+  } else {
+    document.getElementById('pp-title').textContent    = 'Send SOL to deposit address';
+    document.getElementById('pp-subtitle').textContent = 'Send from any Solana wallet — confirmed automatically';
+    _buildManualPanel(payData, token);
+  }
+}
+
+function _startCountdown() {
+  if (_payTimer) clearInterval(_payTimer);
+  const tick = () => {
+    const left = Math.max(0, _payExpiry - Date.now());
+    const m = Math.floor(left / 60000);
+    const s = Math.floor((left % 60000) / 1000);
+    const el = document.getElementById('pp-timer');
+    if (el) {
+      el.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      el.style.color = left < 5 * 60000 ? 'var(--danger)' : 'var(--navy)';
+    }
+    if (left === 0) {
+      clearInterval(_payTimer); _payTimer = null;
+      if (_payPoll) { clearInterval(_payPoll); _payPoll = null; }
+      const s = document.getElementById('pp-status');
+      if (s) s.innerHTML = `
+        <div style="background:var(--danger-bg);border:1px solid rgba(220,38,38,0.2);border-radius:8px;padding:14px 16px;text-align:center">
+          <div style="font-size:13px;font-weight:700;color:var(--danger);margin-bottom:4px">Payment window expired</div>
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:12px">The 30-minute window has closed. Please start a new payment.</div>
+          <button class="btn btn-primary btn-sm" onclick="cancelPayPanel();openPayOverlay()">Start New Payment</button>
+        </div>`;
+    }
+  };
+  tick();
+  _payTimer = setInterval(tick, 1000);
+}
+
+// ── Phantom panel ──────────────────────────────────────────────────────────────
+function _buildPhantomPanel(payData, senderAddress, token) {
+  const content = document.getElementById('pp-content');
+  window._ppPayData    = payData;
+  window._ppSender     = senderAddress;
+  window._ppToken      = token;
+
+  content.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border-md);border-radius:10px;padding:16px;margin-bottom:12px">
+      <div style="font-size:10px;font-weight:700;color:var(--navy);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.06em">Transaction details</div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:6px">
+        <span>From wallet</span>
+        <span style="font-family:var(--mono);font-size:9.5px">${senderAddress.slice(0,6)}…${senderAddress.slice(-6)}</span>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:4px">
-        <span>USD value</span><span>~$${payData.amount_usd}</span>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:6px">
+        <span>To (payment address)</span>
+        <span style="font-family:var(--mono);font-size:9.5px">${payData.address.slice(0,6)}…${payData.address.slice(-6)}</span>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted)">
-        <span>Rate locked</span><span>1 SOL = $${payData.sol_price_usd?.toFixed(2)}</span>
+      <div style="display:flex;justify-content:space-between;font-size:10px;padding-top:8px;border-top:1px solid var(--border)">
+        <span style="color:var(--text-muted)">Amount</span>
+        <span style="font-weight:700;color:var(--navy);font-family:var(--mono)">${payData.amount_sol} SOL</span>
       </div>
-      <div style="font-size:9px;color:var(--text-muted);margin-top:8px;padding-top:7px;border-top:1px solid var(--border)">Phantom is opening — please confirm the transaction.</div>
+    </div>
+    <button class="btn btn-primary btn-full" id="pp-phantom-btn" onclick="_triggerPhantomTx()" style="padding:12px;font-size:12px;font-weight:700">
+      Open Phantom &amp; Confirm Payment →
+    </button>
+    <div style="font-size:9px;color:var(--text-muted);margin-top:8px;text-align:center;line-height:1.5">
+      Phantom will open automatically. Review the amount and recipient, then click Approve.
     </div>`;
+}
+
+window._triggerPhantomTx = async function() {
+  const payData  = window._ppPayData;
+  const sender   = window._ppSender;
+  const token    = window._ppToken;
+  const phantom  = window.solana || window.phantom?.solana;
+  const btn      = document.getElementById('pp-phantom-btn');
+  const statusEl = document.getElementById('pp-status');
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Waiting for Phantom…'; }
 
   try {
-    // @solana/web3.js loaded from CDN — exposes window.solanaWeb3
     const web3 = window.solanaWeb3;
-    if (!web3) throw new Error('@solana/web3.js CDN not loaded — please refresh and try again.');
+    if (!web3) throw new Error('@solana/web3.js not loaded — please refresh');
 
-    const connection = new web3.Connection(
-      'https://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007',
-      'confirmed'
-    );
-    const fromPubkey = new web3.PublicKey(fromPubkeyStr);
+    const conn       = new web3.Connection('https://api.mainnet-beta.solana.com', 'confirmed');
+    const fromPubkey = new web3.PublicKey(sender);
     const toPubkey   = new web3.PublicKey(payData.address);
     const lamports   = Math.floor(payData.amount_sol * 1e9);
 
-    // Fresh blockhash
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
-
+    const { blockhash } = await conn.getLatestBlockhash('finalized');
     const tx = new web3.Transaction({ recentBlockhash: blockhash, feePayer: fromPubkey });
     tx.add(web3.SystemProgram.transfer({ fromPubkey, toPubkey, lamports }));
 
-    // signAndSendTransaction triggers the Phantom popup
-    const result = await phantom.signAndSendTransaction(tx);
-    const signature = result?.signature || result;
-    if (!signature) throw new Error('No signature returned from Phantom');
+    // This line opens the Phantom popup — user confirms amount + recipient
+    const { signature } = await phantom.signAndSendTransaction(tx);
+    if (!signature) throw new Error('No signature returned');
 
-    instEl.innerHTML += `
-      <div style="font-size:10px;color:var(--green-dim);margin-top:8px">
-        ✓ Transaction sent — waiting for confirmation…
+    if (btn) { btn.disabled = true; btn.textContent = '✓ Sent — confirming on-chain…'; btn.style.opacity = '0.7'; }
+    if (statusEl) statusEl.innerHTML = `
+      <div style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.25);border-radius:8px;padding:12px 14px">
+        <div style="font-size:11px;font-weight:600;color:var(--green-dim);margin-bottom:5px">✓ Transaction submitted to Solana</div>
+        <div style="font-size:9.5px;color:var(--text-muted);margin-bottom:5px">Waiting for on-chain confirmation…</div>
+        <div style="font-family:var(--mono);font-size:8.5px;color:var(--text-muted);word-break:break-all">Signature: ${signature}</div>
+        <div class="pay-watch" id="pp-phantom-watch" style="margin-top:8px">
+          <div class="pay-spin"></div><span>Checking blockchain every 5 seconds…</span>
+        </div>
       </div>`;
 
-    _pollPaymentConfirmation(instEl, payData.payment_id, token);
+    _startPaymentPolling(payData.payment_id, token, 'pp-phantom-watch');
 
   } catch (e) {
     const cancelled = e.code === 4001
       || e.message?.includes('User rejected')
-      || e.message?.includes('Transaction cancelled')
-      || e.message?.includes('rejected');
-    instEl.innerHTML += `
-      <div style="font-size:10px;color:${cancelled ? 'var(--warn)' : 'var(--danger)'};margin-top:8px">
-        ${cancelled ? 'Transaction cancelled. You can try again.' : 'Error: ' + e.message}
+      || e.message?.includes('rejected the request')
+      || e.message?.includes('Transaction cancelled');
+    if (btn) { btn.disabled = false; btn.textContent = 'Open Phantom & Confirm Payment →'; }
+    if (statusEl) statusEl.innerHTML = `
+      <div style="background:${cancelled?'var(--warn-bg)':'var(--danger-bg)'};border:1px solid ${cancelled?'rgba(217,119,6,0.2)':'rgba(220,38,38,0.2)'};border-radius:8px;padding:10px 14px;font-size:10px;color:${cancelled?'var(--warn)':'var(--danger)'}">
+        ${cancelled ? '⚠ Transaction cancelled — click the button above to try again.' : '✕ ' + e.message}
       </div>`;
-    const btn = document.getElementById('pay-gen-btn');
-    if (btn) { btn.disabled = false; btn.textContent = cancelled ? 'Try Again' : 'Retry'; }
   }
-}
+};
 
-// ── Manual payment ─────────────────────────────────────────────────────────────
-function _handleManualPayment(payData, instEl, token) {
-  const addrId   = 'pay-addr-' + Date.now();
-  const statusId = 'pay-status-' + Date.now();
+// ── Manual payment panel ───────────────────────────────────────────────────────
+function _buildManualPanel(payData, token) {
+  const content = document.getElementById('pp-content');
+  const addrId  = 'pp-addr-' + Date.now();
 
-  instEl.innerHTML = `
-    <div style="margin-top:12px">
-      <div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:10px">Deposit SOL to this address</div>
-
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">
-        <span style="font-size:10px;color:var(--text-muted)">Required amount</span>
-        <span style="font-size:18px;font-weight:700;color:var(--navy);font-family:var(--mono)">${payData.amount_sol} SOL</span>
+  content.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border-md);border-radius:10px;padding:16px;margin-bottom:12px">
+      <div style="font-size:10px;font-weight:700;color:var(--navy);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em">Your unique deposit address</div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:10px;line-height:1.6">
+        This address was generated just for you. Send exactly
+        <strong style="color:var(--navy)">${payData.amount_sol} SOL</strong> here.
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:10px">
-        <span>≈ $${payData.amount_usd} USD</span>
-        <span>Rate locked: 1 SOL = $${payData.sol_price_usd?.toFixed(2)}</span>
+      <div id="${addrId}"
+        style="background:var(--surface2);border:1.5px dashed var(--navy);border-radius:6px;padding:12px;font-family:var(--mono);font-size:9.5px;word-break:break-all;cursor:pointer;color:var(--navy);line-height:1.7;text-align:center"
+        onclick="navigator.clipboard.writeText('${payData.address}');showToast('Address copied!')">
+        ${payData.address}
       </div>
+      <div style="font-size:9px;color:var(--text-muted);margin-top:5px;text-align:center">↑ Click to copy</div>
 
-      <div style="font-size:9.5px;color:var(--text-muted);margin-bottom:3px">Your unique deposit address (click to copy):</div>
-      <div class="pay-addr" id="${addrId}">${payData.address}</div>
-
-      <div style="background:var(--surface2);border:1px solid var(--border-md);border-radius:5px;padding:8px 10px;margin-top:8px;font-size:9.5px;line-height:1.7;color:var(--text-muted)">
-        • Send exactly <strong style="color:var(--navy)">${payData.amount_sol} SOL</strong> or more to this address<br>
-        • Address expires in <strong>30 minutes</strong><br>
-        • If you send too little, your SOL is refunded automatically (minus network fees ~0.000015 SOL)<br>
-        • Once detected on-chain, your subscription is activated instantly
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
+        <button class="btn btn-primary" onclick="navigator.clipboard.writeText('${payData.address}');showToast('Address copied!')">
+          Copy Address
+        </button>
+        <button class="btn btn-secondary" onclick="navigator.clipboard.writeText('${payData.amount_sol}');showToast('Amount copied!')">
+          Copy ${payData.amount_sol} SOL
+        </button>
       </div>
+    </div>
 
-      <div class="pay-watch" id="${statusId}" style="margin-top:10px">
-        <div class="pay-spin"></div>
-        <span>Watching for your deposit…</span>
-      </div>
+    <div style="background:var(--surface2);border:1px solid var(--border-md);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:10px;line-height:1.9;color:var(--text-muted)">
+      <strong style="color:var(--text-dim);display:block;margin-bottom:4px">How to pay:</strong>
+      <span style="display:block">1. Copy the address above</span>
+      <span style="display:block">2. Open any Solana wallet (Phantom, Solflare, Backpack, exchange…)</span>
+      <span style="display:block">3. Send exactly <strong style="color:var(--navy)">${payData.amount_sol} SOL</strong> to that address</span>
+      <span style="display:block">4. Keep this page open — subscription activates automatically</span>
+      <span style="display:block;font-size:9px;margin-top:4px;opacity:0.8">Sending too little? Your SOL is refunded automatically (minus ~0.000015 SOL fee).</span>
+    </div>
+
+    <div id="pp-manual-watch" class="pay-watch" style="font-size:10px">
+      <div class="pay-spin"></div>
+      <span>Watching for your deposit on-chain (every 5 seconds)…</span>
     </div>`;
 
-  document.getElementById(addrId)?.addEventListener('click', () => {
-    navigator.clipboard.writeText(payData.address);
-    showToast('Address copied!');
-  });
-
-  _pollPaymentConfirmation(instEl, payData.payment_id, token, statusId);
+  _startPaymentPolling(payData.payment_id, token, 'pp-manual-watch');
 }
 
-// ── Payment status polling ─────────────────────────────────────────────────────
-function _pollPaymentConfirmation(instEl, paymentId, token, statusElId) {
-  const getStatus = () => statusElId
-    ? document.getElementById(statusElId)
-    : instEl.querySelector('.pay-watch');
-
+// ── Payment polling ────────────────────────────────────────────────────────────
+function _startPaymentPolling(paymentId, token, watchElId) {
   if (_payPoll) clearInterval(_payPoll);
 
   _payPoll = setInterval(async () => {
+    if (document.getElementById('pay-panel').style.display === 'none') {
+      clearInterval(_payPoll); _payPoll = null; return;
+    }
     try {
       const pr = await fetch(BACKEND + `/api/subscription/payment/check/${paymentId}`, {
         headers: { 'Authorization': 'Bearer ' + token }
       });
       const pd = await pr.json();
-      const el = getStatus();
 
       if (pd.confirmed) {
         clearInterval(_payPoll); _payPoll = null;
-        document.getElementById('pay-overlay').style.display = 'none';
-        showToast('Payment confirmed — subscription activated! 🎉');
+        if (_payTimer) { clearInterval(_payTimer); _payTimer = null; }
+        // Replace entire panel with success screen
+        document.getElementById('pay-panel').innerHTML = `
+          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:18px;padding:40px 24px;text-align:center">
+            <div style="width:70px;height:70px;border-radius:50%;background:var(--green-bg);border:2px solid var(--green-dim);display:flex;align-items:center;justify-content:center;font-size:32px">&#x1F389;</div>
+            <div style="font-size:22px;font-weight:800;color:var(--navy)">Payment Confirmed!</div>
+            <div style="font-size:12px;color:var(--text-muted);max-width:300px;line-height:1.7">
+              Your 30-day subscription is now active.<br>You have full access to all five tools.
+            </div>
+            <button class="btn btn-primary" style="padding:12px 28px;font-size:12px;font-weight:700"
+              onclick="document.getElementById('pay-panel').style.display='none';_refreshSubServer().then(()=>{if(typeof render==='function')render();if(_webTool==='subscription')renderSubPage();})">
+              Start Using Tools &rarr;
+            </button>
+          </div>`;
         await _refreshSubServer();
-        if (_webTool === 'subscription') renderSubPage();
-        if (typeof render === 'function') render();
+        showToast('Subscription activated! 🎉');
 
       } else if (pd.refunding) {
         clearInterval(_payPoll); _payPoll = null;
-        if (el) el.innerHTML = `<span style="color:var(--warn);font-size:10px">⚠ ${pd.message}</span>`;
-        const btn = document.getElementById('pay-gen-btn');
-        if (btn) { btn.disabled = false; btn.textContent = 'Try Again'; }
+        const s = document.getElementById('pp-status');
+        if (s) s.innerHTML = `
+          <div style="background:var(--warn-bg);border:1px solid rgba(217,119,6,0.2);border-radius:8px;padding:14px 16px">
+            <div style="font-size:12px;font-weight:700;color:var(--warn);margin-bottom:5px">⚠ Amount too low — refunding now</div>
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:12px">${pd.message}</div>
+            <button class="btn btn-primary btn-sm" onclick="cancelPayPanel();openPayOverlay()">Try Again with correct amount</button>
+          </div>`;
+        const w = document.getElementById(watchElId);
+        if (w) w.style.display = 'none';
 
       } else if (pd.refunded) {
         clearInterval(_payPoll); _payPoll = null;
-        if (el) el.innerHTML = `<span style="color:var(--warn);font-size:10px">↩ ${pd.message}</span>`;
-        const btn = document.getElementById('pay-gen-btn');
-        if (btn) { btn.disabled = false; btn.textContent = 'Try Again'; }
+        const s = document.getElementById('pp-status');
+        if (s) s.innerHTML = `
+          <div style="background:var(--warn-bg);border:1px solid rgba(217,119,6,0.2);border-radius:8px;padding:14px 16px">
+            <div style="font-size:12px;font-weight:700;color:var(--warn);margin-bottom:5px">&#x21A9; Refunded</div>
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:12px">${pd.message}</div>
+            <button class="btn btn-primary btn-sm" onclick="cancelPayPanel();openPayOverlay()">Try Again</button>
+          </div>`;
+        const w = document.getElementById(watchElId);
+        if (w) w.style.display = 'none';
 
       } else if (pd.underpaid) {
-        if (el) el.innerHTML = `<span style="color:var(--warn);font-size:10px">⚠ ${pd.message}</span>`;
+        const w = document.getElementById(watchElId);
+        if (w) w.innerHTML = `<span style="color:var(--warn);font-size:10px">&#x26A0; ${pd.message}</span>`;
 
       } else if (pd.expired) {
         clearInterval(_payPoll); _payPoll = null;
-        if (el) el.innerHTML = `<span style="color:var(--danger);font-size:10px">Payment window expired (30 min). Please start a new payment.</span>`;
-        const btn = document.getElementById('pay-gen-btn');
-        if (btn) { btn.disabled = false; btn.textContent = 'Start New Payment'; }
+        // countdown will handle the UI
       }
-    } catch {} // network hiccup — keep polling
+    } catch {} // network blip — keep polling
   }, 5000);
 }
+
 </script>
 </body>
 </html>
