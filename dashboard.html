@@ -10,15 +10,25 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="popup.css">
 
-  <!-- Buffer polyfill FIRST (required for @solana/web3.js in browser) -->
+  <!-- Buffer polyfill FIRST -->
   <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.min.js"></script>
 
   <!-- Solana web3.js -->
   <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.98.0/lib/index.iife.min.js"></script>
 
+  <!-- Your custom bs58.js -->
+  <script src="bs58.js"></script>
+
+  <!-- Make everything globally available for browser -->
   <script>
-  // Force Buffer global immediately — this is the most reliable way in browser
-  window.Buffer = window.Buffer || window.buffer?.Buffer || Buffer;
+    window.Buffer = window.Buffer || window.buffer?.Buffer;
+    window.solanaWeb3 = window.Web3 || window.solanaWeb3;
+    
+    // Expose bs58 functions
+    window.bs58 = {
+      encode: typeof bs58encode === 'function' ? bs58encode : null,
+      decode: typeof bs58decode === 'function' ? bs58decode : null
+    };
   </script>
 
   <style>
@@ -376,6 +386,13 @@
 </div>
 
 <script src="bs58.js"></script>
+<script>
+  // Make bs58 functions globally available for other scripts
+  window.bs58 = {
+    encode: bs58encode,
+    decode: bs58decode
+  };
+</script>
 <script src="split.js" onerror="console.error('FATAL: split.js 404 — deploy Split.js as split.js (lowercase) in Railway public/')"></script>
 <script src="auth.js"></script>
 <script src="bundle.js"></script>
