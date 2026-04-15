@@ -10,33 +10,42 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="popup.css">
 
-    <!-- Buffer polyfill — MUST come BEFORE web3.js -->
+   <!-- 1. Buffer polyfill — load as early as possible -->
   <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.min.js"></script>
 
-  <!-- Solana web3.js browser build -->
+  <!-- 2. Solana web3.js (IIFE build) -->
   <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.98.0/lib/index.iife.min.js"></script>
 
-  <!-- Your bs58.js (only ONE time) -->
+  <!-- 3. Your bs58.js (keep only ONE instance of this tag in the whole file) -->
   <script src="bs58.js"></script>
 
-  <!-- Make globals available + force Buffer fix -->
+  <!-- 4. Force globals + full Buffer polyfill immediately -->
   <script>
-    // Strong Buffer polyfill
-    window.Buffer = window.Buffer || window.buffer?.Buffer;
-    if (typeof window.Buffer?.from !== 'function') {
-      console.warn('Buffer polyfill failed — retrying...');
-      // Fallback assignment
-      window.Buffer = window.buffer?.Buffer;
-    }
+    // Strong Buffer attachment - run as soon as possible
+    (function() {
+      if (typeof window.buffer !== 'undefined' && window.buffer.Buffer) {
+        window.Buffer = window.buffer.Buffer;
+      } else if (typeof Buffer !== 'undefined') {
+        window.Buffer = Buffer;
+      }
 
-    window.solanaWeb3 = window.solanaWeb3 || window.Web3;
+      // Ensure all common methods exist
+      if (window.Buffer && !window.Buffer.from) {
+        window.Buffer.from = function(...args) {
+          return new window.Buffer(...args);
+        };
+      }
 
-    window.bs58 = {
-      encode: typeof bs58encode === 'function' ? bs58encode : null,
-      decode: typeof bs58decode === 'function' ? bs58decode : null
-    };
+      window.solanaWeb3 = window.solanaWeb3 || window.Web3;
 
-    console.log('[polyfill] Buffer.from ready:', typeof window.Buffer?.from);
+      window.bs58 = {
+        encode: typeof bs58encode === 'function' ? bs58encode : null,
+        decode: typeof bs58decode === 'function' ? bs58decode : null
+      };
+
+      console.log('[polyfill] Buffer.from ready:', typeof window.Buffer?.from);
+      console.log('[polyfill] solanaWeb3 ready:', typeof window.solanaWeb3?.Transaction);
+    })();
   </script>
 
   <style>
@@ -1229,26 +1238,25 @@ window._triggerPhantomTx = async function() {
   const statusEl = document.getElementById('pp-status');
 
   if (!phantom?.isPhantom) {
-    if (statusEl) statusEl.innerHTML = `<div style="color:var(--warn)">Phantom not detected. <a href="https://phantom.app" target="_blank">Install here</a></div>`;
+    if (statusEl) statusEl.innerHTML = `<div style="color:var(--warn)">Phantom not detected.</div>`;
     return;
   }
 
   try {
     if (btn) { btn.disabled = true; btn.textContent = 'Connecting...'; }
 
-    // Force fresh session so confirmation always pops up
     await phantom.disconnect().catch(() => {});
     await phantom.connect({ onlyIfTrusted: false });
 
     const senderAddress = phantom.publicKey?.toString();
-    if (!senderAddress) throw new Error('Could not get address');
-
-    if (btn) btn.textContent = 'Building tx...';
+    if (!senderAddress) throw new Error('Could not get wallet address');
 
     const web3 = window.solanaWeb3;
-    if (!web3 || typeof web3.Transaction !== 'function') {
-      throw new Error('web3.js not ready — refresh page');
+    if (!web3 || typeof web3.Transaction !== 'function' || typeof window.Buffer?.from !== 'function') {
+      throw new Error('Crypto libraries not ready — please refresh the page');
     }
+
+    if (btn) btn.textContent = 'Building transaction...';
 
     const conn = new web3.Connection('https://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007', 'confirmed');
     const fromPubkey = new web3.PublicKey(senderAddress);
@@ -1260,11 +1268,11 @@ window._triggerPhantomTx = async function() {
     const tx = new web3.Transaction({ recentBlockhash: blockhash, feePayer: fromPubkey });
     tx.add(web3.SystemProgram.transfer({ fromPubkey, toPubkey, lamports }));
 
-    if (btn) btn.textContent = 'Approve in Phantom...';
+    if (btn) btn.textContent = 'Waiting for approval in Phantom...';
 
     const { signature } = await phantom.signAndSendTransaction(tx);
 
-    // Update sender for refunds
+    // Update sender address on server
     fetch(BACKEND + '/api/subscription/payment/sender', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -1272,15 +1280,15 @@ window._triggerPhantomTx = async function() {
     }).catch(() => {});
 
     if (statusEl) {
-      statusEl.innerHTML = `<div style="color:var(--green-dim)">✓ Sent! Confirming on-chain... Sig: ${signature}</div>`;
+      statusEl.innerHTML = `<div style="color:var(--green-dim)">✓ Transaction sent (Sig: ${signature.slice(0,16)}...)</div>`;
     }
 
     _startPaymentPolling(payData.payment_id, token, 'pp-phantom-watch');
 
   } catch (e) {
     console.error(e);
-    if (btn) { btn.disabled = false; btn.textContent = 'Open Phantom & Confirm →'; }
-    if (statusEl) statusEl.innerHTML = `<div style="color:var(--danger)">${e.message || 'Failed'}</div>`;
+    if (btn) { btn.disabled = false; btn.textContent = 'Open Phantom & Confirm Payment →'; }
+    if (statusEl) statusEl.innerHTML = `<div style="color:var(--danger)">${e.message || 'Transaction failed'}</div>`;
   }
 };
 
