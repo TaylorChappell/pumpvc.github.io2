@@ -1078,38 +1078,30 @@ async function payGenerate() {
   btn.disabled = true; btn.textContent = 'Creating…';
 
   try {
-    let senderAddress = null;
-
+    // For Phantom: check it's installed, but DON'T connect yet —
+    // we connect + sign in one step when the user clicks confirm in the panel
     if (_payMethod === 'phantom') {
       const phantom = window.solana || window.phantom?.solana;
       if (!phantom?.isPhantom) {
         showToast('Phantom not found — install from phantom.app or use Manual SOL');
         btn.disabled = false; btn.textContent = 'Pay Now'; return;
       }
-      try {
-        const resp = await phantom.connect({ onlyIfTrusted: false });
-        senderAddress = resp?.publicKey?.toString() || phantom.publicKey?.toString();
-        if (!senderAddress) throw new Error('Could not get wallet address from Phantom');
-      } catch (e) {
-        const rejected = e.code === 4001 || e.message?.includes('reject') || e.message?.includes('cancel');
-        showToast(rejected ? 'Wallet connection cancelled' : 'Phantom: ' + e.message);
-        btn.disabled = false; btn.textContent = 'Pay Now'; return;
-      }
     }
 
     // Create payment on server — unique receiving wallet + locked price
+    // sender_address not needed until tx is sent (Phantom), or not needed at all (manual)
     const r = await fetch(BACKEND + '/api/subscription/payment/init', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ method: _payMethod, sender_address: senderAddress })
+      body: JSON.stringify({ method: _payMethod })
     });
     const d = await r.json();
-    if (!r.ok) throw new Error(d.error || 'Failed to create payment');
+    if (!r.ok) throw new Error(d.error || `Server error ${r.status}`);
     _payData = d;
 
     // Close selection overlay, open full-screen panel
     document.getElementById('pay-overlay').style.display = 'none';
-    _openPayPanel(d, senderAddress, token);
+    _openPayPanel(d, token);
 
   } catch (e) {
     showToast(e.message || 'Payment setup failed');
@@ -1118,15 +1110,12 @@ async function payGenerate() {
 }
 
 // ── Full-screen payment panel ──────────────────────────────────────────────────
-function _openPayPanel(payData, senderAddress, token) {
+function _openPayPanel(payData, token) {
   document.getElementById('pp-sol-amount').textContent = `${payData.amount_sol} SOL`;
   document.getElementById('pp-usd-amount').textContent = `≈ $${payData.amount_usd} USD`;
-
-  // Reset status
   document.getElementById('pp-status').innerHTML = '';
   document.getElementById('pp-content').innerHTML = '';
 
-  // 30-min countdown
   _payExpiry = Date.now() + 30 * 60 * 1000;
   _startCountdown();
 
@@ -1136,7 +1125,7 @@ function _openPayPanel(payData, senderAddress, token) {
   if (_payMethod === 'phantom') {
     document.getElementById('pp-title').textContent    = 'Confirm in Phantom';
     document.getElementById('pp-subtitle').textContent = 'Approve the transaction in your Phantom wallet';
-    _buildPhantomPanel(payData, senderAddress, token);
+    _buildPhantomPanel(payData, token);
   } else {
     document.getElementById('pp-title').textContent    = 'Send SOL to deposit address';
     document.getElementById('pp-subtitle').textContent = 'Send from any Solana wallet — confirmed automatically';
@@ -1172,19 +1161,14 @@ function _startCountdown() {
 }
 
 // ── Phantom panel ──────────────────────────────────────────────────────────────
-function _buildPhantomPanel(payData, senderAddress, token) {
+function _buildPhantomPanel(payData, token) {
   const content = document.getElementById('pp-content');
-  window._ppPayData    = payData;
-  window._ppSender     = senderAddress;
-  window._ppToken      = token;
+  window._ppPayData = payData;
+  window._ppToken   = token;
 
   content.innerHTML = `
     <div style="background:var(--surface);border:1px solid var(--border-md);border-radius:10px;padding:16px;margin-bottom:12px">
       <div style="font-size:10px;font-weight:700;color:var(--navy);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.06em">Transaction details</div>
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:6px">
-        <span>From wallet</span>
-        <span style="font-family:var(--mono);font-size:9.5px">${senderAddress.slice(0,6)}…${senderAddress.slice(-6)}</span>
-      </div>
       <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:6px">
         <span>To (payment address)</span>
         <span style="font-family:var(--mono);font-size:9.5px">${payData.address.slice(0,6)}…${payData.address.slice(-6)}</span>
@@ -1198,26 +1182,39 @@ function _buildPhantomPanel(payData, senderAddress, token) {
       Open Phantom &amp; Confirm Payment →
     </button>
     <div style="font-size:9px;color:var(--text-muted);margin-top:8px;text-align:center;line-height:1.5">
-      Phantom will open automatically. Review the amount and recipient, then click Approve.
+      Phantom will connect and show the transaction for you to approve.
     </div>`;
 }
 
 window._triggerPhantomTx = async function() {
   const payData  = window._ppPayData;
-  const sender   = window._ppSender;
   const token    = window._ppToken;
   const phantom  = window.solana || window.phantom?.solana;
   const btn      = document.getElementById('pp-phantom-btn');
   const statusEl = document.getElementById('pp-status');
 
-  if (btn) { btn.disabled = true; btn.textContent = 'Waiting for Phantom…'; }
+  if (!phantom?.isPhantom) {
+    if (statusEl) statusEl.innerHTML = `<div style="background:var(--warn-bg);border:1px solid rgba(217,119,6,0.2);border-radius:8px;padding:10px 14px;font-size:10px;color:var(--warn)">Phantom not detected. <a href="https://phantom.app" target="_blank" style="color:var(--warn);font-weight:700">Install Phantom →</a></div>`;
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Connecting to Phantom…'; }
+  if (statusEl) statusEl.innerHTML = '';
 
   try {
+    // Step 1: Connect wallet (shows Phantom connect popup if not already connected)
+    const connectResp = await phantom.connect({ onlyIfTrusted: false });
+    const senderAddress = connectResp?.publicKey?.toString() || phantom.publicKey?.toString();
+    if (!senderAddress) throw new Error('Could not read wallet address from Phantom');
+
+    if (btn) btn.textContent = 'Building transaction…';
+
+    // Step 2: Build transaction with @solana/web3.js
     const web3 = window.solanaWeb3;
-    if (!web3) throw new Error('@solana/web3.js not loaded — please refresh');
+    if (!web3) throw new Error('@solana/web3.js not loaded — please refresh the page');
 
     const conn       = new web3.Connection('https://api.mainnet-beta.solana.com', 'confirmed');
-    const fromPubkey = new web3.PublicKey(sender);
+    const fromPubkey = new web3.PublicKey(senderAddress);
     const toPubkey   = new web3.PublicKey(payData.address);
     const lamports   = Math.floor(payData.amount_sol * 1e9);
 
@@ -1225,18 +1222,27 @@ window._triggerPhantomTx = async function() {
     const tx = new web3.Transaction({ recentBlockhash: blockhash, feePayer: fromPubkey });
     tx.add(web3.SystemProgram.transfer({ fromPubkey, toPubkey, lamports }));
 
-    // This line opens the Phantom popup — user confirms amount + recipient
+    if (btn) btn.textContent = 'Waiting for approval in Phantom…';
+
+    // Step 3: Send — this opens the Phantom confirmation popup
     const { signature } = await phantom.signAndSendTransaction(tx);
-    if (!signature) throw new Error('No signature returned');
+    if (!signature) throw new Error('No signature returned from Phantom');
+
+    // Step 4: Update sender_address on the server for potential refunds
+    fetch(BACKEND + '/api/subscription/payment/sender', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ payment_id: payData.payment_id, sender_address: senderAddress })
+    }).catch(() => {}); // non-critical
 
     if (btn) { btn.disabled = true; btn.textContent = '✓ Sent — confirming on-chain…'; btn.style.opacity = '0.7'; }
     if (statusEl) statusEl.innerHTML = `
       <div style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.25);border-radius:8px;padding:12px 14px">
-        <div style="font-size:11px;font-weight:600;color:var(--green-dim);margin-bottom:5px">✓ Transaction submitted to Solana</div>
+        <div style="font-size:11px;font-weight:600;color:var(--green-dim);margin-bottom:5px">✓ Transaction submitted</div>
         <div style="font-size:9.5px;color:var(--text-muted);margin-bottom:5px">Waiting for on-chain confirmation…</div>
-        <div style="font-family:var(--mono);font-size:8.5px;color:var(--text-muted);word-break:break-all">Signature: ${signature}</div>
+        <div style="font-family:var(--mono);font-size:8.5px;color:var(--text-muted);word-break:break-all">Sig: ${signature}</div>
         <div class="pay-watch" id="pp-phantom-watch" style="margin-top:8px">
-          <div class="pay-spin"></div><span>Checking blockchain every 5 seconds…</span>
+          <div class="pay-spin"></div><span>Checking every 5 seconds…</span>
         </div>
       </div>`;
 
@@ -1246,11 +1252,12 @@ window._triggerPhantomTx = async function() {
     const cancelled = e.code === 4001
       || e.message?.includes('User rejected')
       || e.message?.includes('rejected the request')
-      || e.message?.includes('Transaction cancelled');
+      || e.message?.includes('Transaction cancelled')
+      || e.message?.includes('user rejected');
     if (btn) { btn.disabled = false; btn.textContent = 'Open Phantom & Confirm Payment →'; }
     if (statusEl) statusEl.innerHTML = `
       <div style="background:${cancelled?'var(--warn-bg)':'var(--danger-bg)'};border:1px solid ${cancelled?'rgba(217,119,6,0.2)':'rgba(220,38,38,0.2)'};border-radius:8px;padding:10px 14px;font-size:10px;color:${cancelled?'var(--warn)':'var(--danger)'}">
-        ${cancelled ? '⚠ Transaction cancelled — click the button above to try again.' : '✕ ' + e.message}
+        ${cancelled ? '⚠ Cancelled — click the button above to try again.' : '✕ Error: ' + e.message}
       </div>`;
   }
 };
