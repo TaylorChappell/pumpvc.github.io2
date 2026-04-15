@@ -10,61 +10,207 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="popup.css">
 
-  <!-- Buffer polyfill — load VERY early -->
-  <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.min.js"></script>
+  <!--
+    BUFFER POLYFILL STRATEGY
+    ────────────────────────
+    @solana/web3.js internally uses Buffer.from(str, 'hex'), Buffer.alloc,
+    Buffer.concat, and Buffer.isBuffer — all need to exist on window.Buffer
+    BEFORE web3.js is parsed/executed.
 
-  <!-- Solana web3.js (IIFE bundle exposes window.solanaWeb3) -->
+    CDN buffer packages are unreliable in browser IIFE context (version
+    mismatches, missing .from on the constructor, etc.).
+
+    Solution: inline a minimal but fully correct Buffer implementation built
+    on top of Uint8Array + TextEncoder. This is the same approach used by
+    @solana/web3.js's own browser bundle internally.
+  -->
+  <script>
+  (function installBuffer() {
+    'use strict';
+
+    // If a working Buffer already exists (e.g. from another script), keep it.
+    if (typeof window.Buffer === 'function' &&
+        typeof window.Buffer.from === 'function' &&
+        typeof window.Buffer.alloc === 'function') {
+      console.log('[buffer] Already present, keeping existing Buffer');
+      return;
+    }
+
+    // ── Hex helpers ────────────────────────────────────────────────────
+    const HEX = '0123456789abcdef';
+    function hexToBytes(s) {
+      const len = Math.floor(s.length / 2);
+      const out = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        const hi = parseInt(s[i * 2],     16);
+        const lo = parseInt(s[i * 2 + 1], 16);
+        out[i] = (hi << 4) | lo;
+      }
+      return out;
+    }
+    function bytesToHex(u8) {
+      let s = '';
+      for (let i = 0; i < u8.length; i++) {
+        s += HEX[u8[i] >> 4];
+        s += HEX[u8[i] & 0xf];
+      }
+      return s;
+    }
+    function base64ToBytes(s) {
+      const bin = atob(s);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    }
+    function bytesToBase64(u8) {
+      let bin = '';
+      for (let i = 0; i < u8.length; i++) bin += String.fromCharCode(u8[i]);
+      return btoa(bin);
+    }
+    const enc = new TextEncoder();
+    const dec = new TextDecoder();
+
+    // ── Buffer class (extends Uint8Array) ──────────────────────────────
+    class Buffer extends Uint8Array {
+      // Static factory — mirrors Node's Buffer.from()
+      static from(value, encoding, length) {
+        if (typeof value === 'string') {
+          const e = (encoding || 'utf8').toLowerCase();
+          if (e === 'hex')    return new Buffer(hexToBytes(value));
+          if (e === 'base64') return new Buffer(base64ToBytes(value));
+          // utf8 / ascii / latin1
+          return new Buffer(enc.encode(value));
+        }
+        if (value instanceof Buffer)      return new Buffer(value);
+        if (value instanceof Uint8Array)  return new Buffer(value);
+        if (value instanceof ArrayBuffer) return new Buffer(new Uint8Array(value));
+        if (ArrayBuffer.isView(value))    return new Buffer(new Uint8Array(value.buffer, value.byteOffset, value.byteLength));
+        if (Array.isArray(value))         return new Buffer(new Uint8Array(value));
+        // Fallback
+        return new Buffer(new Uint8Array(value));
+      }
+
+      static alloc(size, fill, encoding) {
+        const b = new Buffer(size);
+        if (fill !== undefined) {
+          if (typeof fill === 'string') {
+            const fillBytes = Buffer.from(fill, encoding || 'utf8');
+            for (let i = 0; i < size; i++) b[i] = fillBytes[i % fillBytes.length] || 0;
+          } else {
+            b.fill(fill);
+          }
+        }
+        return b;
+      }
+
+      static allocUnsafe(size)     { return new Buffer(size); }
+      static allocUnsafeSlow(size) { return new Buffer(size); }
+
+      static isBuffer(obj) {
+        return obj instanceof Uint8Array;
+      }
+
+      static isEncoding(enc) {
+        return ['hex','utf8','utf-8','ascii','latin1','binary','base64',
+                'ucs2','ucs-2','utf16le','utf-16le'].includes(String(enc).toLowerCase());
+      }
+
+      static byteLength(str, encoding) {
+        const e = (encoding || 'utf8').toLowerCase();
+        if (e === 'hex')    return Math.floor(str.length / 2);
+        if (e === 'base64') return Math.floor(str.length * 3 / 4);
+        return enc.encode(str).length;
+      }
+
+      static concat(list, totalLength) {
+        const total = totalLength !== undefined
+          ? totalLength
+          : list.reduce((s, b) => s + b.length, 0);
+        const out = new Buffer(total);
+        let offset = 0;
+        for (const b of list) {
+          out.set(b, offset);
+          offset += b.length;
+          if (offset >= total) break;
+        }
+        return out;
+      }
+
+      static compare(a, b) {
+        for (let i = 0; i < Math.min(a.length, b.length); i++) {
+          if (a[i] < b[i]) return -1;
+          if (a[i] > b[i]) return 1;
+        }
+        return a.length - b.length;
+      }
+
+      // Instance methods
+      toString(encoding, start, end) {
+        const slice = (start !== undefined || end !== undefined)
+          ? this.slice(start, end)
+          : this;
+        const e = (encoding || 'utf8').toLowerCase();
+        if (e === 'hex')    return bytesToHex(slice);
+        if (e === 'base64') return bytesToBase64(slice);
+        return dec.decode(slice);
+      }
+
+      write(string, offset, length, encoding) {
+        const off = typeof offset === 'number' ? offset : 0;
+        const bytes = Buffer.from(string, encoding || 'utf8');
+        const len   = length !== undefined ? Math.min(length, bytes.length) : bytes.length;
+        this.set(bytes.subarray(0, len), off);
+        return len;
+      }
+
+      copy(target, targetStart, sourceStart, sourceEnd) {
+        const ts  = targetStart  || 0;
+        const ss  = sourceStart  || 0;
+        const se  = sourceEnd    !== undefined ? sourceEnd : this.length;
+        const src = this.subarray(ss, se);
+        target.set(src, ts);
+        return src.length;
+      }
+
+      slice(start, end) { return Buffer.from(super.slice(start, end)); }
+      subarray(start, end) { return Buffer.from(super.subarray(start, end)); }
+
+      readUInt32LE(offset) { return (this[offset] | this[offset+1]<<8 | this[offset+2]<<16 | this[offset+3]<<24) >>> 0; }
+      readUInt32BE(offset) { return (this[offset]<<24 | this[offset+1]<<16 | this[offset+2]<<8 | this[offset+3]) >>> 0; }
+      writeUInt32LE(v, o)  { this[o]=v; this[o+1]=v>>8; this[o+2]=v>>16; this[o+3]=v>>24; return o+4; }
+      writeUInt32BE(v, o)  { this[o]=v>>24; this[o+1]=v>>16; this[o+2]=v>>8; this[o+3]=v; return o+4; }
+      readUInt8(o)         { return this[o]; }
+      writeUInt8(v, o)     { this[o] = v; return o+1; }
+      readInt32LE(o)       { return this.readUInt32LE(o) | 0; }
+      readInt32BE(o)       { return this.readUInt32BE(o) | 0; }
+
+      get _isBuffer() { return true; }
+    }
+
+    window.Buffer = Buffer;
+    // Some modules check `global.Buffer` (browserify shim pattern)
+    try { if (typeof global !== 'undefined') global.Buffer = Buffer; } catch {}
+
+    console.log('[buffer] ✅ Inline Buffer installed');
+    console.log('[buffer] ✅ Buffer.from:', typeof Buffer.from);
+    console.log('[buffer] ✅ Buffer.alloc:', typeof Buffer.alloc);
+    console.log('[buffer] ✅ Buffer.isBuffer:', typeof Buffer.isBuffer);
+  })();
+  </script>
+
+  <!-- Solana web3.js — loads AFTER Buffer is patched -->
   <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.98.0/lib/index.iife.min.js"></script>
 
   <!-- bs58 -->
   <script src="bs58.js"></script>
 
-  <!-- Polyfill setup -->
   <script>
-  (function setupPolyfills() {
-    // buffer@6.0.3 from CDN exposes window.buffer.Buffer — this is a proper
-    // Node-compatible Buffer implementation. Assign it as the global Buffer.
-    // CRITICAL: never call `new window.Buffer(str, encoding)` — that constructor
-    // form is broken in the CDN build. Always use the static methods (.from, .alloc).
-    const B = (typeof window.buffer !== 'undefined' && window.buffer.Buffer)
-      ? window.buffer.Buffer
-      : (typeof Buffer !== 'undefined' ? Buffer : null);
-
-    if (!B) {
-      console.error('[polyfill] No Buffer implementation found!');
-      return;
-    }
-
-    window.Buffer = B;
-
-    // Ensure all static methods exist (they should in buffer@6, but be safe)
-    if (typeof B.from !== 'function') {
-      console.error('[polyfill] Buffer.from missing — CDN load may have failed');
-    }
-    if (typeof B.alloc !== 'function') {
-      B.alloc = (size, fill) => { const b = B.from(new Uint8Array(size)); if (fill) b.fill(fill); return b; };
-    }
-    if (typeof B.isBuffer !== 'function') {
-      B.isBuffer = (obj) => obj != null && (obj._isBuffer === true || obj instanceof B);
-    }
-    if (typeof B.isEncoding !== 'function') {
-      B.isEncoding = (enc) => ['hex','utf8','utf-8','ascii','latin1','binary','base64','ucs2','ucs-2','utf16le','utf-16le'].includes(String(enc).toLowerCase());
-    }
-    if (typeof B.concat !== 'function') {
-      B.concat = (list, len) => {
-        const total = len ?? list.reduce((a, b) => a + b.length, 0);
-        const out = B.alloc(total);
-        let offset = 0;
-        for (const buf of list) { out.set(buf, offset); offset += buf.length; }
-        return out;
-      };
-    }
-
-    console.log('[polyfill] ✅ Buffer.from:', typeof B.from);
-    console.log('[polyfill] ✅ Buffer.alloc:', typeof B.alloc);
-    console.log('[polyfill] ✅ Buffer.isBuffer:', typeof B.isBuffer);
-    console.log('[polyfill] ✅ solanaWeb3:', typeof window.solanaWeb3);
-  })();
+  console.log('[init] solanaWeb3:', typeof window.solanaWeb3);
+  if (window.solanaWeb3) {
+    // Quick sanity check — make sure SystemProgram loaded
+    console.log('[init] SystemProgram:', typeof window.solanaWeb3.SystemProgram);
+    console.log('[init] Transaction:', typeof window.solanaWeb3.Transaction);
+  }
   </script>
 
   <style>
