@@ -479,6 +479,52 @@ app.get('/api/subscription/payment/check/:paymentId', authMiddleware, async (req
 });
 
 // =============================================================================
+// FAST CONFIRMATION — called immediately after Phantom signs the tx
+// =============================================================================
+
+// POST /api/subscription/payment/confirm — instant confirmation using signature
+app.post('/api/subscription/payment/confirm', authMiddleware, async (req, res) => {
+  try {
+    const { payment_id, signature } = req.body;
+    if (!payment_id || !signature) return res.status(400).json({ error: 'Missing payment_id or signature' });
+
+    const r = await db.query('SELECT * FROM payments WHERE payment_id=$1 AND user_id=$2', [payment_id, req.user.id]);
+    const pay = r.rows[0];
+    if (!pay) return res.status(404).json({ error: 'Payment not found' });
+    if (pay.confirmed) return res.json({ confirmed: true });
+
+    // Get the transaction using the signature Phantom just gave us
+    const tx = await solRpc('getTransaction', [signature, {
+      encoding: 'json',
+      maxSupportedTransactionVersion: 0,
+      commitment: 'confirmed'
+    }]);
+
+    if (!tx || tx.meta?.err) {
+      return res.json({ confirmed: false, message: 'Transaction not yet confirmed on-chain' });
+    }
+
+    const addr = pay.receive_address;
+    const keys = tx.transaction.message.accountKeys || [];
+    const idx = keys.findIndex(k => k === addr);
+    if (idx === -1) return res.json({ confirmed: false });
+
+    const receivedLamports = (tx.meta.postBalances[idx] || 0) - (tx.meta.preBalances[idx] || 0);
+    const expectedLamports = Math.floor(parseFloat(pay.amount_sol) * 1e9);
+
+    if (receivedLamports >= expectedLamports * 0.99) {
+      await confirmAndActivate(payment_id);
+      return res.json({ confirmed: true, signature });
+    }
+
+    return res.json({ confirmed: false, underpaid: true });
+  } catch (e) {
+    console.error('[payment/confirm]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// =============================================================================
 // AUTH
 // =============================================================================
 app.post('/api/auth/register', async (req, res) => {

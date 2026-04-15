@@ -1260,10 +1260,7 @@ window._triggerPhantomTx = async function() {
   }
 
   try {
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = 'Connecting to Phantom...';
-    }
+    if (btn) { btn.disabled = true; btn.textContent = 'Connecting to Phantom...'; }
 
     await phantom.disconnect().catch(() => {});
     const connectResp = await phantom.connect({ onlyIfTrusted: false });
@@ -1284,31 +1281,28 @@ window._triggerPhantomTx = async function() {
     );
 
     const fromPubkey = new web3.PublicKey(senderAddress);
-    const toPubkey   = new web3.PublicKey(payData.address);
-    const lamports   = Math.floor(parseFloat(payData.amount_sol) * 1_000_000_000);
+    const toPubkey = new web3.PublicKey(payData.address);
+    const lamports = Math.floor(parseFloat(payData.amount_sol) * 1_000_000_000);
 
     const { blockhash } = await connection.getLatestBlockhash('finalized');
 
-    // ── MANUAL TRANSFER (no buffer-layout) ──
     const SYSTEM_PROGRAM_ID = new web3.PublicKey('11111111111111111111111111111111');
-
     const data = new Uint8Array(9);
-    data[0] = 2; // Transfer instruction
+    data[0] = 2;
     new DataView(data.buffer).setBigUint64(1, BigInt(lamports), true);
 
     const transferIx = new web3.TransactionInstruction({
       keys: [
-        { pubkey: fromPubkey, isSigner: true,  isWritable: true },
+        { pubkey: fromPubkey, isSigner: true, isWritable: true },
         { pubkey: toPubkey,   isSigner: false, isWritable: true }
       ],
       programId: SYSTEM_PROGRAM_ID,
       data: data
     });
 
-    // Build transaction the way Phantom likes it
     const tx = new web3.Transaction();
     tx.add(transferIx);
-    tx.recentBlockhash = blockhash;      // ← This fixes the error
+    tx.recentBlockhash = blockhash;
     tx.feePayer = fromPubkey;
 
     if (btn) btn.textContent = 'Waiting for approval in Phantom...';
@@ -1317,11 +1311,11 @@ window._triggerPhantomTx = async function() {
 
     console.log('✅ Phantom tx sent →', signature);
 
-    // Tell backend who sent it (for refunds)
-    fetch(BACKEND + '/api/subscription/payment/sender', {
+    // ── NEW: Tell backend the exact signature for instant confirmation ──
+    fetch(BACKEND + '/api/subscription/payment/confirm', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ payment_id: payData.payment_id, sender_address: senderAddress })
+      body: JSON.stringify({ payment_id: payData.payment_id, signature })
     }).catch(() => {});
 
     if (statusEl) {
