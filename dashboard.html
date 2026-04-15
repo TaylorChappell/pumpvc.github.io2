@@ -1170,7 +1170,7 @@ function _buildPhantomPanel(payData, token) {
       <div style="font-size:10px;font-weight:700;color:var(--navy);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.06em">Transaction details</div>
       <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:6px">
         <span>To (deposit address)</span>
-        <span style="font-family:var(--mono);font-size:9.5px">${payData.address.slice(0,8)}…${payData.address.slice(-8)}</span>
+        <span style="font-family:var(--mono);font-size:9.5px">${(payData.payment_addr||payData.address).slice(0,8)}…${(payData.payment_addr||payData.address).slice(-8)}</span>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:10px;padding-top:8px;border-top:1px solid var(--border)">
         <span style="color:var(--text-muted)">Amount</span>
@@ -1201,15 +1201,23 @@ window._triggerPhantomTx = async function() {
   if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
 
   try {
-    // ── STEP 1: Connect Phantom (get sender public key) ──────────────
-    // Disconnect first to force fresh connection popup, not silent re-use
-    try { await phantom.disconnect(); } catch {}
-    const connectResp = await phantom.connect({ onlyIfTrusted: false });
-    const senderPubkey = connectResp.publicKey;
+    // ── STEP 1: Get sender public key from Phantom ───────────────────
+    // If already connected use the existing session directly — do NOT
+    // disconnect/reconnect. Disconnecting then reconnecting causes Phantom
+    // to show a "Connect" popup instead of a transaction approval popup.
+    let senderPubkey = phantom.publicKey;
+
+    if (!senderPubkey) {
+      // Not yet connected — request connection once
+      if (btn) btn.textContent = 'Connecting to Phantom…';
+      const connectResp = await phantom.connect({ onlyIfTrusted: false });
+      senderPubkey = connectResp?.publicKey || phantom.publicKey;
+    }
+
     if (!senderPubkey) throw new Error('Could not get wallet public key from Phantom.');
 
     const senderAddress = senderPubkey.toString();
-    console.log('[phantom] connected:', senderAddress);
+    console.log('[phantom] using wallet:', senderAddress);
 
     if (btn) btn.textContent = 'Building transaction…';
 
@@ -1233,7 +1241,11 @@ window._triggerPhantomTx = async function() {
     // The error "Instruction #N Failed - invalid instruction data" is caused by
     // manually building raw instruction data instead of using the SDK method.
     const fromPubkey = new web3.PublicKey(senderAddress);
-    const toPubkey   = new web3.PublicKey(payData.address);
+    // Send directly to PAYMENT_ADDR — no intermediate deposit wallet needed for Phantom.
+    // payment_addr is returned by the server as PAYMENT_ADDR env var.
+    // Falls back to payData.address (deposit wallet) if PAYMENT_ADDR isn't configured.
+    const destinationAddr = payData.payment_addr || payData.address;
+    const toPubkey        = new web3.PublicKey(destinationAddr);
     const lamports   = Math.round(parseFloat(payData.amount_sol) * 1_000_000_000);
 
     if (lamports <= 0) throw new Error('Invalid payment amount.');
@@ -1251,7 +1263,7 @@ window._triggerPhantomTx = async function() {
     transaction.feePayer       = fromPubkey;
     transaction.recentBlockhash = blockhash;
 
-    console.log('[phantom] tx built — from:', senderAddress, 'to:', payData.address, 'lamports:', lamports);
+    console.log('[phantom] tx built — from:', senderAddress, 'to:', destinationAddr, 'lamports:', lamports);
 
     if (btn) btn.textContent = 'Waiting for Phantom approval…';
 
