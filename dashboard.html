@@ -9,6 +9,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="popup.css">
+  <!-- Solana web3.js — needed for Phantom payment (builds proper Transaction objects) -->
+  <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.98.0/lib/index.iife.min.js"></script>
   <style>
     /* Remove 480px popup constraint */
     html { width:100% !important; height:100vh !important; }
@@ -994,6 +996,7 @@ window._removeAdmin = async (email) => {
 function openPayOverlay() {
   _payMethod = null;
   _payData   = null;
+  if (_payPoll) { clearInterval(_payPoll); _payPoll = null; }
   document.querySelectorAll('.pay-opt').forEach(o => o.classList.remove('sel'));
   document.getElementById('pay-inst').innerHTML       = '';
   document.getElementById('pay-price-loading').style.display = '';
@@ -1018,7 +1021,6 @@ async function _loadPayPrice() {
     });
     if (!r.ok) throw new Error();
     const d = await r.json();
-
     document.getElementById('pay-sol-amount').textContent = `${d.sol} SOL`;
     document.getElementById('pay-sol-rate').textContent   = `1 SOL = $${d.price_usd.toFixed(2)}`;
     document.getElementById('pay-price-loading').style.display = 'none';
@@ -1028,7 +1030,7 @@ async function _loadPayPrice() {
     if (btn) btn.style.display = '';
   } catch {
     document.getElementById('pay-price-loading').innerHTML =
-      '<span style="color:var(--danger);font-size:10px">Could not fetch SOL price. Check connection and try again.</span>';
+      '<span style="color:var(--danger);font-size:10px">Could not fetch SOL price. Please try again.</span>';
   }
 }
 
@@ -1041,30 +1043,53 @@ function paySelect(method, el) {
 
 async function payGenerate() {
   if (!_payMethod) { showToast('Select a payment method'); return; }
-
   const btn   = document.getElementById('pay-gen-btn');
   const token = localStorage.getItem('udt_token');
-  btn.disabled = true; btn.textContent = 'Creating payment…';
+  btn.disabled = true; btn.textContent = 'Creating...';
 
   try {
-    // Init payment on server — gets a fresh per-user wallet + locked SOL amount
+    // For Phantom: connect first to get sender address (needed for refunds)
+    let senderAddress = null;
+    if (_payMethod === 'phantom') {
+      const phantom = window.solana || window.phantom?.solana;
+      if (!phantom?.isPhantom) {
+        document.getElementById('pay-inst').innerHTML = `
+          <div style="background:var(--warn-bg);border:1px solid rgba(217,119,6,0.2);border-radius:var(--r);padding:10px 12px;font-size:10px;color:var(--warn);margin-top:8px;line-height:1.6">
+            Phantom wallet not detected.<br>
+            <a href="https://phantom.app" target="_blank" style="color:var(--warn);font-weight:600">Install Phantom</a> or use Manual SOL.
+          </div>`;
+        btn.disabled = false; btn.textContent = 'Continue';
+        return;
+      }
+      try {
+        const resp = await phantom.connect({ onlyIfTrusted: false });
+        senderAddress = resp?.publicKey?.toString() || phantom.publicKey?.toString();
+      } catch (e) {
+        if (e.code === 4001 || e.message?.includes('rejected')) {
+          document.getElementById('pay-inst').innerHTML = `<div style="font-size:10px;color:var(--warn);margin-top:8px">Wallet connection cancelled.</div>`;
+          btn.disabled = false; btn.textContent = 'Continue';
+          return;
+        }
+        throw e;
+      }
+    }
+
+    // Init payment on server
     const r = await fetch(BACKEND + '/api/subscription/payment/init', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ method: _payMethod })
+      body: JSON.stringify({ method: _payMethod, sender_address: senderAddress })
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || 'Failed to create payment');
-
     _payData = d;
-    const inst = document.getElementById('pay-inst');
 
+    const inst = document.getElementById('pay-inst');
     if (_payMethod === 'phantom') {
-      await _handlePhantomPayment(d, inst, token);
+      await _handlePhantomPayment(d, inst, senderAddress, token);
     } else {
       _handleManualPayment(d, inst, token);
     }
-
     btn.textContent = '✓ Payment initiated';
   } catch (e) {
     showToast(e.message || 'Failed');
@@ -1072,168 +1097,102 @@ async function payGenerate() {
   }
 }
 
-// ── Phantom Wallet payment ─────────────────────────────────────────────────────
-async function _handlePhantomPayment(payData, instEl, token) {
-  // Check Phantom is installed
+// ── Phantom payment ────────────────────────────────────────────────────────────
+async function _handlePhantomPayment(payData, instEl, fromPubkeyStr, token) {
   const phantom = window.solana || window.phantom?.solana;
-  if (!phantom?.isPhantom) {
-    instEl.innerHTML = `
-      <div style="background:var(--warn-bg);border:1px solid rgba(217,119,6,0.2);border-radius:var(--r);padding:10px 12px;font-size:10px;color:var(--warn);margin-top:8px;line-height:1.6">
-        Phantom wallet extension not detected.<br>
-        <a href="https://phantom.app" target="_blank" style="color:var(--warn);font-weight:600">Install Phantom →</a>
-        or use Manual SOL instead.
-      </div>`;
-    return;
-  }
 
-  instEl.innerHTML = `<div style="font-size:10px;color:var(--text-muted);margin-top:8px">Connecting to Phantom…</div>`;
+  instEl.innerHTML = `
+    <div style="background:var(--surface2);border:1px solid var(--border-md);border-radius:var(--r);padding:12px 14px;margin-top:10px">
+      <div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:8px">Confirm in Phantom</div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:4px">
+        <span>Amount</span>
+        <span style="color:var(--navy);font-weight:700;font-family:var(--mono)">${payData.amount_sol} SOL</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:4px">
+        <span>USD value</span><span>~$${payData.amount_usd}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted)">
+        <span>Rate locked</span><span>1 SOL = $${payData.sol_price_usd?.toFixed(2)}</span>
+      </div>
+      <div style="font-size:9px;color:var(--text-muted);margin-top:8px;padding-top:7px;border-top:1px solid var(--border)">Phantom is opening — please confirm the transaction.</div>
+    </div>`;
 
   try {
-    // Connect to Phantom
-    await phantom.connect();
-    const fromPubkey = phantom.publicKey.toString();
+    // @solana/web3.js loaded from CDN — exposes window.solanaWeb3
+    const web3 = window.solanaWeb3;
+    if (!web3) throw new Error('@solana/web3.js CDN not loaded — please refresh and try again.');
 
-    instEl.innerHTML = `<div style="font-size:10px;color:var(--text-muted);margin-top:8px">Building transaction…</div>`;
+    const connection = new web3.Connection(
+      'https://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007',
+      'confirmed'
+    );
+    const fromPubkey = new web3.PublicKey(fromPubkeyStr);
+    const toPubkey   = new web3.PublicKey(payData.address);
+    const lamports   = Math.floor(payData.amount_sol * 1e9);
 
-    // Build the SOL transfer transaction
-    // We need: @solana/web3.js loaded, but since this is the website we'll build it manually
-    // using the same approach as the backend sweep function
-    const lamports = Math.floor(payData.amount_sol * 1e9);
+    // Fresh blockhash
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
 
-    // Get latest blockhash from Solana RPC
-    const rpcUrl = 'https://api.mainnet-beta.solana.com';
-    const bhRes  = await fetch(rpcUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jsonrpc:'2.0', id:1, method:'getLatestBlockhash', params:[{commitment:'finalized'}] })
-    });
-    const bhJson = await bhRes.json();
-    const blockhash = bhJson.result?.value?.blockhash;
-    if (!blockhash) throw new Error('Could not get blockhash from Solana');
+    const tx = new web3.Transaction({ recentBlockhash: blockhash, feePayer: fromPubkey });
+    tx.add(web3.SystemProgram.transfer({ fromPubkey, toPubkey, lamports }));
 
-    // Use Phantom's signAndSendTransaction if available (cleanest way)
-    // We'll use the Phantom provider's request method which handles everything
-    const transaction = {
-      feePayer: fromPubkey,
-      recentBlockhash: blockhash,
-      instructions: [{
-        programId: '11111111111111111111111111111111', // SystemProgram
-        keys: [
-          { pubkey: fromPubkey, isSigner: true, isWritable: true },
-          { pubkey: payData.address, isSigner: false, isWritable: true }
-        ],
-        data: _buildTransferData(lamports)
-      }]
-    };
+    // signAndSendTransaction triggers the Phantom popup
+    const result = await phantom.signAndSendTransaction(tx);
+    const signature = result?.signature || result;
+    if (!signature) throw new Error('No signature returned from Phantom');
 
-    instEl.innerHTML = `
-      <div style="background:var(--surface2);border:1px solid var(--border-md);border-radius:var(--r);padding:10px 12px;margin-top:8px">
-        <div style="font-size:10px;font-weight:700;color:var(--navy);margin-bottom:6px">Confirm in Phantom</div>
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:3px">
-          <span>Amount</span><span style="color:var(--navy);font-weight:600;font-family:var(--mono)">${payData.amount_sol} SOL</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:3px">
-          <span>USD value</span><span>~$${payData.amount_usd}</span>
-        </div>
-        <div style="font-size:9px;color:var(--text-muted);margin-top:4px">Phantom will open — confirm the transaction</div>
+    instEl.innerHTML += `
+      <div style="font-size:10px;color:var(--green-dim);margin-top:8px">
+        ✓ Transaction sent — waiting for confirmation…
       </div>`;
 
-    // Request Phantom to sign and send
-    // Use the @solana/web3.js-compatible Transaction object via Phantom's wallet adapter
-    let signature;
-    try {
-      // Try the newer signAndSendTransaction API first
-      const resp = await phantom.request({
-        method: 'sol_signAndSendTransaction',
-        params: { transaction: _buildSerializedTransaction(fromPubkey, payData.address, lamports, blockhash) }
-      });
-      signature = resp?.signature || resp;
-    } catch {
-      // Fallback: use legacy Phantom signTransaction approach
-      // Build transaction using window.solanaWeb3 if available, or use the base approach
-      throw new Error('Phantom signature failed. Try Manual SOL instead.');
-    }
-
-    // Signature obtained — show confirmation and start polling
-    _showConfirmationWaiting(instEl, payData.payment_id, token, signature);
+    _pollPaymentConfirmation(instEl, payData.payment_id, token);
 
   } catch (e) {
-    if (e.code === 4001 || e.message?.includes('User rejected')) {
-      instEl.innerHTML = `<div style="font-size:10px;color:var(--warn);margin-top:8px">Transaction cancelled. You can try again.</div>`;
-    } else {
-      instEl.innerHTML = `<div style="font-size:10px;color:var(--danger);margin-top:8px">${e.message}</div>`;
-    }
+    const cancelled = e.code === 4001
+      || e.message?.includes('User rejected')
+      || e.message?.includes('Transaction cancelled')
+      || e.message?.includes('rejected');
+    instEl.innerHTML += `
+      <div style="font-size:10px;color:${cancelled ? 'var(--warn)' : 'var(--danger)'};margin-top:8px">
+        ${cancelled ? 'Transaction cancelled. You can try again.' : 'Error: ' + e.message}
+      </div>`;
+    const btn = document.getElementById('pay-gen-btn');
+    if (btn) { btn.disabled = false; btn.textContent = cancelled ? 'Try Again' : 'Retry'; }
   }
-}
-
-// Build SystemProgram.transfer instruction data (u32 type=2, u64 lamports LE)
-function _buildTransferData(lamports) {
-  const buf  = new ArrayBuffer(12);
-  const view = new DataView(buf);
-  view.setUint32(0, 2, true); // instruction type = transfer
-  view.setUint32(4, lamports & 0xffffffff, true);
-  view.setUint32(8, Math.floor(lamports / 0x100000000), true);
-  return Buffer.from(buf).toString('base64');
-}
-
-// Build a serialized transaction for Phantom's sol_signAndSendTransaction
-// Returns base64-encoded transaction bytes
-function _buildSerializedTransaction(fromAddr, toAddr, lamports, blockhash) {
-  // bs58 decode helpers (reuse from extension bs58.js loaded above)
-  const fromBytes = typeof bs58decode !== 'undefined' ? bs58decode(fromAddr) : _b58d(fromAddr);
-  const toBytes   = typeof bs58decode !== 'undefined' ? bs58decode(toAddr)   : _b58d(toAddr);
-  const bhBytes   = typeof bs58decode !== 'undefined' ? bs58decode(blockhash): _b58d(blockhash);
-  const sysBytes  = new Uint8Array(32);
-
-  const cl = (n) => n <= 0x7f ? new Uint8Array([n]) : new Uint8Array([n & 0x7f | 0x80, n >> 7]);
-
-  const amtBuf = new ArrayBuffer(8);
-  const amtDv  = new DataView(amtBuf);
-  amtDv.setUint32(0, lamports & 0xffffffff, true);
-  amtDv.setUint32(4, Math.floor(lamports / 0x100000000), true);
-  const instrData = new Uint8Array([2, 0, 0, 0, ...new Uint8Array(amtBuf)]);
-
-  // Message: header + accounts + blockhash + instructions
-  const msg = new Uint8Array([
-    1, 0, 1,
-    ...cl(3), ...fromBytes, ...toBytes, ...sysBytes,
-    ...bhBytes,
-    ...cl(1), 2, ...cl(2), 0, 1, ...cl(instrData.length), ...instrData
-  ]);
-
-  // Transaction: empty sig placeholder + message
-  // (Phantom will replace the sig placeholder)
-  const emptySignature = new Uint8Array(64);
-  const wire = new Uint8Array([...cl(1), ...emptySignature, ...msg]);
-
-  return Buffer.from(wire).toString('base64');
-}
-
-// Minimal b58 decode fallback if bs58.js not loaded yet
-function _b58d(s) {
-  const A = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-  let z = 0; while (z < s.length && s[z] === '1') z++;
-  const b = z < s.length ? [0] : [];
-  for (let i = z; i < s.length; i++) {
-    let c = A.indexOf(s[i]); if (c < 0) throw new Error('bad b58');
-    for (let j = b.length - 1; j >= 0; j--) { c += b[j]*58; b[j]=c&0xff; c>>=8; }
-    while (c > 0) { b.unshift(c & 0xff); c >>= 8; }
-  }
-  return new Uint8Array([...new Array(z).fill(0), ...b]);
 }
 
 // ── Manual payment ─────────────────────────────────────────────────────────────
 function _handleManualPayment(payData, instEl, token) {
-  const addrId = 'pay-addr-' + Date.now();
+  const addrId   = 'pay-addr-' + Date.now();
+  const statusId = 'pay-status-' + Date.now();
+
   instEl.innerHTML = `
-    <div style="margin-top:10px">
-      <div style="font-size:9.5px;color:var(--text-muted);margin-bottom:3px">Send exactly:</div>
-      <div style="font-size:17px;font-weight:700;color:var(--navy);font-family:var(--mono);margin-bottom:8px">${payData.amount_sol} SOL</div>
-      <div style="font-size:9.5px;color:var(--text-muted);margin-bottom:2px">To this address (click to copy):</div>
+    <div style="margin-top:12px">
+      <div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:10px">Deposit SOL to this address</div>
+
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">
+        <span style="font-size:10px;color:var(--text-muted)">Required amount</span>
+        <span style="font-size:18px;font-weight:700;color:var(--navy);font-family:var(--mono)">${payData.amount_sol} SOL</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:10px">
+        <span>≈ $${payData.amount_usd} USD</span>
+        <span>Rate locked: 1 SOL = $${payData.sol_price_usd?.toFixed(2)}</span>
+      </div>
+
+      <div style="font-size:9.5px;color:var(--text-muted);margin-bottom:3px">Your unique deposit address (click to copy):</div>
       <div class="pay-addr" id="${addrId}">${payData.address}</div>
-      <div style="font-size:9px;color:var(--text-muted);margin-top:4px;line-height:1.5">
-        This address is unique to your payment. Any SOL sent here will be detected automatically.
-        Rate locked at 1 SOL = $${payData.sol_price_usd?.toFixed(2) || '—'}.
+
+      <div style="background:var(--surface2);border:1px solid var(--border-md);border-radius:5px;padding:8px 10px;margin-top:8px;font-size:9.5px;line-height:1.7;color:var(--text-muted)">
+        • Send exactly <strong style="color:var(--navy)">${payData.amount_sol} SOL</strong> or more to this address<br>
+        • Address expires in <strong>30 minutes</strong><br>
+        • If you send too little, your SOL is refunded automatically (minus network fees ~0.000015 SOL)<br>
+        • Once detected on-chain, your subscription is activated instantly
+      </div>
+
+      <div class="pay-watch" id="${statusId}" style="margin-top:10px">
+        <div class="pay-spin"></div>
+        <span>Watching for your deposit…</span>
       </div>
     </div>`;
 
@@ -1242,38 +1201,55 @@ function _handleManualPayment(payData, instEl, token) {
     showToast('Address copied!');
   });
 
-  _showConfirmationWaiting(instEl, payData.payment_id, token, null);
+  _pollPaymentConfirmation(instEl, payData.payment_id, token, statusId);
 }
 
-// ── Shared confirmation polling UI ────────────────────────────────────────────
-function _showConfirmationWaiting(instEl, paymentId, token, existingSig) {
-  // Append the watching indicator
-  const watchDiv = document.createElement('div');
-  watchDiv.className = 'pay-watch';
-  watchDiv.style.marginTop = '8px';
-  watchDiv.innerHTML = '<div class="pay-spin"></div>Watching for confirmation…';
-  instEl.appendChild(watchDiv);
+// ── Payment status polling ─────────────────────────────────────────────────────
+function _pollPaymentConfirmation(instEl, paymentId, token, statusElId) {
+  const getStatus = () => statusElId
+    ? document.getElementById(statusElId)
+    : instEl.querySelector('.pay-watch');
 
   if (_payPoll) clearInterval(_payPoll);
+
   _payPoll = setInterval(async () => {
     try {
       const pr = await fetch(BACKEND + `/api/subscription/payment/check/${paymentId}`, {
         headers: { 'Authorization': 'Bearer ' + token }
       });
       const pd = await pr.json();
+      const el = getStatus();
 
       if (pd.confirmed) {
         clearInterval(_payPoll); _payPoll = null;
         document.getElementById('pay-overlay').style.display = 'none';
-        showToast('Payment confirmed! Subscription activated 🎉');
+        showToast('Payment confirmed — subscription activated! 🎉');
         await _refreshSubServer();
         if (_webTool === 'subscription') renderSubPage();
         if (typeof render === 'function') render();
+
+      } else if (pd.refunding) {
+        clearInterval(_payPoll); _payPoll = null;
+        if (el) el.innerHTML = `<span style="color:var(--warn);font-size:10px">⚠ ${pd.message}</span>`;
+        const btn = document.getElementById('pay-gen-btn');
+        if (btn) { btn.disabled = false; btn.textContent = 'Try Again'; }
+
+      } else if (pd.refunded) {
+        clearInterval(_payPoll); _payPoll = null;
+        if (el) el.innerHTML = `<span style="color:var(--warn);font-size:10px">↩ ${pd.message}</span>`;
+        const btn = document.getElementById('pay-gen-btn');
+        if (btn) { btn.disabled = false; btn.textContent = 'Try Again'; }
+
+      } else if (pd.underpaid) {
+        if (el) el.innerHTML = `<span style="color:var(--warn);font-size:10px">⚠ ${pd.message}</span>`;
+
       } else if (pd.expired) {
         clearInterval(_payPoll); _payPoll = null;
-        watchDiv.innerHTML = '<span style="color:var(--danger);font-size:10px">Payment window expired (30 min). Please start a new payment.</span>';
+        if (el) el.innerHTML = `<span style="color:var(--danger);font-size:10px">Payment window expired (30 min). Please start a new payment.</span>`;
+        const btn = document.getElementById('pay-gen-btn');
+        if (btn) { btn.disabled = false; btn.textContent = 'Start New Payment'; }
       }
-    } catch {}
+    } catch {} // network hiccup — keep polling
   }, 5000);
 }
 </script>
