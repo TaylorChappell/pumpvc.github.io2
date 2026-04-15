@@ -9,7 +9,7 @@
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const UDT_API_BASE1 = 'https://ultimatedevtools-production.up.railway.app/api';
+const UDT_API_BASE = 'https://ultimatedevtools-production.up.railway.app/api';
 // Replace above with your actual Railway URL. Can also be set in env / manifest.
 
 // ── Storage Helpers (works in both browser and extension contexts) ─────────────
@@ -89,7 +89,7 @@ async function udtFetch(path, options = {}) {
     ...(options.headers || {})
   };
 
-  const res = await fetch(`${UDT_API_BASE1}${path}`, {
+  const res = await fetch(`${UDT_API_BASE}${path}`, {
     ...options,
     headers
   });
