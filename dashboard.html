@@ -10,30 +10,39 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="popup.css">
 
-   <!-- 1. Buffer polyfill — load as early as possible -->
+    <!-- Buffer polyfill — load VERY early -->
   <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.min.js"></script>
 
-  <!-- 2. Solana web3.js (IIFE build) -->
+  <!-- Solana web3.js -->
   <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.98.0/lib/index.iife.min.js"></script>
 
-  <!-- 3. Your bs58.js (keep only ONE instance of this tag in the whole file) -->
+  <!-- bs58.js — ONLY ONCE in the whole file -->
   <script src="bs58.js"></script>
 
-  <!-- 4. Force globals + full Buffer polyfill immediately -->
+  <!-- Full polyfill setup -->
   <script>
-    // Strong Buffer attachment - run as soon as possible
-    (function() {
+    (function setupPolyfills() {
+      // Force Buffer global with all methods
       if (typeof window.buffer !== 'undefined' && window.buffer.Buffer) {
         window.Buffer = window.buffer.Buffer;
-      } else if (typeof Buffer !== 'undefined') {
-        window.Buffer = Buffer;
       }
 
-      // Ensure all common methods exist
-      if (window.Buffer && !window.Buffer.from) {
-        window.Buffer.from = function(...args) {
-          return new window.Buffer(...args);
-        };
+      // Polyfill missing methods that @solana/web3.js expects
+      if (window.Buffer) {
+        if (!window.Buffer.from) {
+          window.Buffer.from = function (value, encoding) {
+            if (typeof value === 'string') {
+              return new window.Buffer(value, encoding || 'utf8');
+            }
+            return new window.Buffer(value);
+          };
+        }
+        if (!window.Buffer.isEncoding) {
+          window.Buffer.isEncoding = function (encoding) {
+            const valid = ['hex', 'utf8', 'utf-8', 'ascii', 'latin1', 'binary', 'base64', 'ucs2', 'ucs-2', 'utf16le', 'utf-16le'];
+            return valid.includes(String(encoding).toLowerCase());
+          };
+        }
       }
 
       window.solanaWeb3 = window.solanaWeb3 || window.Web3;
@@ -43,8 +52,8 @@
         decode: typeof bs58decode === 'function' ? bs58decode : null
       };
 
+      console.log('[polyfill] Buffer.isEncoding ready:', typeof window.Buffer?.isEncoding);
       console.log('[polyfill] Buffer.from ready:', typeof window.Buffer?.from);
-      console.log('[polyfill] solanaWeb3 ready:', typeof window.solanaWeb3?.Transaction);
     })();
   </script>
 
@@ -402,14 +411,6 @@
   </div>
 </div>
 
-<script src="bs58.js"></script>
-<script>
-  // Make bs58 functions globally available for other scripts
-  window.bs58 = {
-    encode: bs58encode,
-    decode: bs58decode
-  };
-</script>
 <script src="split.js" onerror="console.error('FATAL: split.js 404 — deploy Split.js as split.js (lowercase) in Railway public/')"></script>
 <script src="auth.js"></script>
 <script src="bundle.js"></script>
