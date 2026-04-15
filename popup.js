@@ -5,7 +5,9 @@
 
 'use strict';
 
-const RPC = 'https://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007';
+const RPC         = 'https://api.mainnet-beta.solana.com';
+const DEFAULT_RPC = 'https://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007';
+const DEFAULT_WS  = 'wss://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007';
 
 // ─────────────────────────────────────────
 // STATE
@@ -49,24 +51,41 @@ let S = {
   },
 
   bundle: {
-    // Landing inputs
+    // tab: 'check' | 'create' | 'history'
+    createTab: 'check',
     ca: '',
-    walletAddresses: [],          // addresses for wallet checker
+    walletAddresses: [],
     _walletPickerOpen: false,
     _pastedWallet: '',
-    // View: 'landing' | 'token-result' | 'wallet-result'
     view: 'landing',
-    // Token analysis
     result: null,
     loading: false,
     progress: { step: '', pct: 0 },
     error: '',
-    // Wallet check
     walletResult: null,
     walletLoading: false,
     walletProgress: { step: '', pct: 0 },
     walletError: '',
     scroll: 0,
+    // Create bundle sub-state
+    create: {
+      sourceWalletId: '',
+      walletCount: 5,
+      totalSol: '',
+      maxSolPerWallet: '',
+      distribMode: 'equal',
+      addToGroup: false,
+      groupName: '',
+      running: false,
+      runStep: '',
+      runPct: 0,
+      error: '',
+    },
+    createResult: null,
+    createHistory: [],
+    historyExpanded: {},
+    historyKeyVis: {},
+    createKeyVis: {},
   },
 
   settings: { rpcEndpoint: 'https://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007', wsEndpoint: 'wss://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007', scroll: 0, editingWalletId: null },
@@ -84,7 +103,6 @@ let S = {
   // Wallet UI state (walletSelection is a Set, not persisted)
   wallets: { editingId: null, confirmDeleteId: null, scroll: 0 },
 
-  google: { token: null, profile: null, syncing: false, lastSync: null },
 
   walletPicker: { open: false, targetField: null },
 
@@ -130,17 +148,17 @@ let S = {
 let syncDebounceTimer = null;
 
 // ─────────────────────────────────────────
-// STORAGE
+// STORAGE  (website — uses localStorage)
 // ─────────────────────────────────────────
 async function saveState() {
-  try { await chrome.storage.local.set({ udt_v3: S }); } catch {}
-  scheduleDriveSync();
+  try { localStorage.setItem('udt_v3', JSON.stringify(S)); } catch {}
+  // Server sync is handled by dashboard.html's saveState wrapper
 }
 
 async function loadState() {
   try {
-    const { udt_v3 } = await chrome.storage.local.get('udt_v3');
-    if (udt_v3) S = deepMerge(S, udt_v3);
+    const raw = localStorage.getItem('udt_v3');
+    if (raw) S = deepMerge(S, JSON.parse(raw));
   } catch {}
 }
 
@@ -154,66 +172,6 @@ function deepMerge(target, source) {
     }
   }
   return out;
-}
-
-// ─────────────────────────────────────────
-// GOOGLE AUTH
-// ─────────────────────────────────────────
-async function handleGoogleSignIn() {
-  try {
-    showToast('Signing in…');
-    const token = await googleSignIn();
-    const profile = await fetchGoogleProfile(token);
-    if (!profile) throw new Error('Could not fetch profile');
-    S.google.token = token;
-    S.google.profile = profile;
-
-    showToast('Loading your settings…');
-    // Pass profile.sub as the encryption key seed
-    const cloud = await driveLoadSettings(token, profile.sub);
-    if (cloud) {
-      if (cloud.savedWallets) {
-        // Merge: keep any local private keys not in cloud
-        const localMap = {};
-        S.savedWallets.forEach(w => { if (w.privateKey) localMap[w.id] = w.privateKey; });
-        S.savedWallets = cloud.savedWallets.map(w => ({
-          ...w,
-          privateKey: w.privateKey || localMap[w.id] || ''
-        }));
-      }
-      if (cloud.split) S.split = deepMerge(S.split, cloud.split);
-      if (cloud.settings) S.settings = deepMerge(S.settings, cloud.settings);
-      S.google.lastSync = Date.now();
-      showToast('✓ Settings synced from Google');
-    } else {
-      showToast('✓ Signed in — no existing cloud data');
-    }
-    await saveState();
-    render();
-  } catch (e) {
-    showToast('Sign-in failed: ' + (e.message || 'Unknown error'));
-  }
-}
-
-async function handleGoogleSignOut() {
-  await googleSignOut();
-  S.google.token = null;
-  S.google.profile = null;
-  await saveState();
-  render();
-  showToast('Signed out');
-}
-
-function scheduleDriveSync() {
-  if (!S.google.token || !S.google.profile) return;
-  clearTimeout(syncDebounceTimer);
-  syncDebounceTimer = setTimeout(async () => {
-    S.google.syncing = true;
-    await driveSaveSettings(S.google.token, { savedWallets: S.savedWallets, split: S.split, settings: S.settings }, S.google.profile.sub);
-    S.google.syncing = false;
-    S.google.lastSync = Date.now();
-    await chrome.storage.local.set({ udt_v3: S });
-  }, 2000);
 }
 
 // ─────────────────────────────────────────
@@ -355,6 +313,10 @@ function openWalletPicker(targetField) {
       if (!w) return;
       if (targetField === 'split-source') S.split.sourceWallet = w.privateKey;
       else if (targetField === 'auto-source') S.split.auto.sourceWallet = w.privateKey;
+      else if (targetField === 'bundle-source-wallet') {
+        if (!S.bundle.create) S.bundle.create = {};
+        S.bundle.create.sourceWalletId = w.id;
+      }
       modal.style.display = 'none';
       saveState();
       render();
@@ -411,10 +373,12 @@ const TOOL_DEFS = {
     </svg>`,
   },
   'bundle-checker': {
-    label: 'Bundle Checker',
+    label: 'Bundle',
     svg: `<svg class="nav-svg" width="13" height="13" viewBox="0 0 13 13" fill="none">
-      <path d="M2 9.5L6.5 2 11 9.5H2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-      <path d="M6.5 6v2M6.5 9.3v.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+      <rect x="1.5" y="5.5" width="10" height="6" rx="1.2" stroke="currentColor" stroke-width="1.2"/>
+      <path d="M3.5 5.5V4a3 3 0 0 1 6 0v1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+      <path d="M4.5 5.5V3.8a2 2 0 0 1 4 0v1.7" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" opacity="0.45"/>
+      <circle cx="6.5" cy="8.5" r="1" fill="currentColor"/>
     </svg>`,
   },
   'volume-bot': {
@@ -1608,26 +1572,26 @@ function buildSettingsPage() {
       <div class="settings-section">
         <div class="settings-section-title">RPC Endpoint</div>
         <p style="font-size:10px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">
-          HTTP RPC for balance checks and transactions. Helius/QuickNode free tiers work well.
+          HTTP RPC for balance checks and transactions. Leave blank to use the default.
         </p>
-        <input type="text" id="rpc-input" value="${S.settings.rpcEndpoint}" placeholder="https://api.mainnet-beta.solana.com"/>
-        <button class="btn btn-ghost btn-sm" style="margin-top:6px" data-action="save-rpc">Save RPC</button>
+        <input type="text" id="rpc-input" value="${S.settings.rpcEndpoint === DEFAULT_RPC ? '' : S.settings.rpcEndpoint}" placeholder="Default"/>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button class="btn btn-ghost btn-sm" data-action="save-rpc">Save</button>
+          <button class="btn btn-secondary btn-sm" data-action="reset-rpc">Reset to Default</button>
+        </div>
       </div>
 
       <!-- WebSocket -->
       <div class="settings-section">
         <div class="settings-section-title">WebSocket Endpoint <span style="font-size:9px;font-weight:400;color:var(--text-muted)">(for Auto-Split)</span></div>
         <p style="font-size:10px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">
-          For real-time buy detection. Helius/QuickNode free tier doesn't support this — use public endpoint or upgrade. Leave blank to auto-derive from RPC URL.
+          For real-time buy detection. Leave blank to use the default. Falls back to polling on failure.
         </p>
-        <div style="background:var(--surface2);border:1px solid var(--border-md);border-radius:var(--radius-sm);padding:7px 9px;font-size:9.5px;color:var(--text-dim);margin-bottom:6px;line-height:1.5">
-          Free options:<br>
-          <code style="color:var(--navy);font-size:9px">wss://api.mainnet-beta.solana.com</code> (public, can be slow)<br>
-          <code style="color:var(--navy);font-size:9px">wss://YOUR-QUICKNODE-ENDPOINT.solana-mainnet.quiknode.pro/</code>
+        <input type="text" id="ws-input" value="${(S.settings.wsEndpoint && S.settings.wsEndpoint !== DEFAULT_WS) ? S.settings.wsEndpoint : ''}" placeholder="Default"/>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button class="btn btn-ghost btn-sm" data-action="save-ws">Save</button>
+          <button class="btn btn-secondary btn-sm" data-action="reset-ws">Reset to Default</button>
         </div>
-        <input type="text" id="ws-input" value="${S.settings.wsEndpoint||'wss://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007'}" placeholder="wss://mainnet.helius-rpc.com/?api-key=…"/>
-        <div style="font-size:9px;color:var(--text-muted);margin-top:3px">If WebSocket fails, auto-split automatically falls back to 3-second polling.</div>
-        <button class="btn btn-ghost btn-sm" style="margin-top:6px" data-action="save-ws">Save WS</button>
       </div>
 
 
@@ -1764,63 +1728,10 @@ function attachHandlers() {
     }
   });
 
-  // Pin / Unpin sidebar — toggles between popup and side panel mode
-  const pinBtn = document.getElementById('pin-btn');
-  if (pinBtn) {
-    // Update label based on current mode
-    chrome.storage.local.get('udt_sidebar_mode', (d) => {
-      const pinned = !!d.udt_sidebar_mode;
-      const label = pinBtn.querySelector('.pin-btn-label');
-      if (label) label.textContent = pinned ? 'Unpin Sidebar' : 'Pin Sidebar';
-    });
-
-    pinBtn.onclick = async () => {
-      const d = await chrome.storage.local.get('udt_sidebar_mode');
-      const currentlyPinned = !!d.udt_sidebar_mode;
-
-      if (currentlyPinned) {
-        // Unpin: switch back to popup mode
-        await chrome.storage.local.set({ udt_sidebar_mode: false });
-        try { await chrome.runtime.sendMessage({ action: 'setPopupMode' }); } catch {}
-        showToast('✓ Unpinned — use the extension icon to open');
-        const label = pinBtn.querySelector('.pin-btn-label');
-        if (label) label.textContent = 'Pin Sidebar';
-      } else {
-        // Pin: open as side panel
-        if (!chrome?.sidePanel?.open) { showToast('Requires Chrome 116+'); return; }
-        try {
-          await chrome.storage.local.set({ udt_sidebar_mode: true });
-          const wins = await chrome.windows.getCurrent();
-          await chrome.sidePanel.open({ windowId: wins.id });
-          window.close();
-        } catch (e) {
-          await chrome.storage.local.set({ udt_sidebar_mode: false });
-          showToast('Could not open sidebar: ' + (e.message || 'unknown error'));
-        }
-      }
-    };
-  }
   const sBtn = document.getElementById('settings-nav-btn');
   if (sBtn) sBtn.onclick = () => { S.activeTool = 'settings'; saveState(); render(); };
 
-  // Unpin / restore popup mode
-  const unpinBtn = document.getElementById('unpin-btn');
-  if (unpinBtn) unpinBtn.onclick = async () => {
-    await chrome.runtime.sendMessage({ action: 'setPopupMode' });
-    await chrome.storage.local.set({ udt_sidebar_mode: false });
-    showToast('✓ Switched back to popup mode');
-  };
 
-  // Show sidebar mode status in settings
-  const sidebarStatusEl = document.getElementById('sidebar-mode-status');
-  if (sidebarStatusEl) {
-    chrome.storage.local.get('udt_sidebar_mode', (d) => {
-      const on = !!d.udt_sidebar_mode;
-      sidebarStatusEl.innerHTML = on
-        ? '<div style="font-size:10px;color:var(--green-dim);padding:4px 0">● Currently pinned to sidebar — click extension icon to open</div>'
-        : '<div style="font-size:10px;color:var(--text-muted);padding:4px 0">○ Currently using popup mode</div>';
-    });
-  }
 }
 
 async function handleClick(e) {
@@ -2138,12 +2049,6 @@ async function handleClick(e) {
   } else if (a === 'open-picker') {
     openWalletPicker(el.dataset.field);
 
-  } else if (a === 'google-signin') {
-    await handleGoogleSignIn();
-
-  } else if (a === 'google-signout') {
-    await handleGoogleSignOut();
-
   } else if (a === 'add-saved-wallet') {
     const newW = { id: uid(), name: '', emoji: '💼', privateKey: '' };
     S.savedWallets.push(newW);
@@ -2185,15 +2090,112 @@ async function handleClick(e) {
 
   } else if (a === 'save-rpc') {
     const val = document.getElementById('rpc-input')?.value?.trim();
-    if (val) { S.settings.rpcEndpoint = val; await saveState(); checkRpc(); showToast('✓ RPC saved'); }
+    S.settings.rpcEndpoint = val || DEFAULT_RPC;
+    await saveState(); checkRpc(); showToast('✓ RPC saved');
+
+  } else if (a === 'reset-rpc') {
+    S.settings.rpcEndpoint = DEFAULT_RPC;
+    await saveState(); checkRpc(); showToast('✓ RPC reset to default'); render();
 
   } else if (a === 'save-ws') {
     const val = document.getElementById('ws-input')?.value?.trim();
-    S.settings.wsEndpoint = val || '';
+    S.settings.wsEndpoint = val || DEFAULT_WS;
     await saveState();
-    showToast(val ? '✓ WebSocket endpoint saved' : '✓ WS cleared (deriving from RPC URL)');
+    showToast(val ? '✓ WebSocket endpoint saved' : '✓ WS reset to default');
+
+  } else if (a === 'reset-ws') {
+    S.settings.wsEndpoint = DEFAULT_WS;
+    await saveState(); showToast('✓ WebSocket reset to default'); render();
 
 
+
+  } else if (a === 'bundle-tab') {
+    S.bundle.createTab = el.dataset.tab;
+    await saveState(); render();
+
+  // ── Create Bundle controls ──
+  } else if (a === 'cb-set-distrib') {
+    if (!S.bundle.create) S.bundle.create = {};
+    S.bundle.create.distribMode = el.dataset.mode;
+    await saveState(); render();
+
+  } else if (a === 'cb-toggle-group') {
+    if (!S.bundle.create) S.bundle.create = {};
+    S.bundle.create.addToGroup = !S.bundle.create.addToGroup;
+    await saveState(); render();
+
+  } else if (a === 'cb-run') {
+    if (!S.bundle.create) S.bundle.create = {};
+    // Snapshot current field values before re-render
+    const cnt  = document.getElementById('cb-wallet-count')?.value;
+    const sol  = document.getElementById('cb-total-sol')?.value;
+    const mxs  = document.getElementById('cb-max-sol')?.value;
+    const grpN = document.getElementById('cb-group-name')?.value;
+    if (cnt)  S.bundle.create.walletCount      = parseInt(cnt);
+    if (sol)  S.bundle.create.totalSol         = sol;
+    if (mxs !== undefined) S.bundle.create.maxSolPerWallet = mxs;
+    if (grpN !== undefined) S.bundle.create.groupName = grpN;
+    S.bundle.create.running = true;
+    S.bundle.create.error   = '';
+    S.bundle.create.runStep = 'Starting…';
+    S.bundle.create.runPct  = 0;
+    render();
+    try {
+      const result = await runCreateBundle();
+      S.bundle.create.running  = false;
+      S.bundle.createResult    = result;
+      S.bundle.createKeyVis    = {};
+      S.bundle.view            = 'create-result';
+    } catch (err) {
+      S.bundle.create.running = false;
+      S.bundle.create.error   = err.message || 'Bundle creation failed';
+    }
+    await saveState(); render();
+
+  } else if (a === 'cb-copy-all-keys') {
+    const r = S.bundle.createResult;
+    if (r?.wallets) {
+      copyText(r.wallets.map(w => w.privateKey).join('\n'));
+      showToast('✓ All private keys copied');
+    }
+
+  } else if (a === 'cb-copy-all-addrs') {
+    const r = S.bundle.createResult;
+    if (r?.wallets) {
+      copyText(r.wallets.map(w => w.publicKey).join('\n'));
+      showToast('✓ All addresses copied');
+    }
+
+  } else if (a === 'cr-toggle-key') {
+    const idx = parseInt(el.dataset.idx);
+    if (!S.bundle.createKeyVis) S.bundle.createKeyVis = {};
+    S.bundle.createKeyVis[idx] = !S.bundle.createKeyVis[idx];
+    render();
+
+  // ── History ──
+  } else if (a === 'bh-toggle') {
+    if (!S.bundle.historyExpanded) S.bundle.historyExpanded = {};
+    const id = el.dataset.id;
+    S.bundle.historyExpanded[id] = !S.bundle.historyExpanded[id];
+    await saveState(); render();
+
+  } else if (a === 'bh-toggle-key') {
+    const key = `${el.dataset.id}-${el.dataset.idx}`;
+    if (!S.bundle.historyKeyVis) S.bundle.historyKeyVis = {};
+    S.bundle.historyKeyVis[key] = !S.bundle.historyKeyVis[key];
+    render();
+
+  } else if (a === 'bh-copy-all-keys') {
+    const entry = (S.bundle.createHistory||[]).find(e => e.id === el.dataset.id);
+    if (entry?.wallets) { copyText(entry.wallets.map(w => w.privateKey).join('\n')); showToast('✓ All private keys copied'); }
+
+  } else if (a === 'bh-copy-all-addrs') {
+    const entry = (S.bundle.createHistory||[]).find(e => e.id === el.dataset.id);
+    if (entry?.wallets) { copyText(entry.wallets.map(w => w.publicKey).join('\n')); showToast('✓ All addresses copied'); }
+
+  } else if (a === 'bh-delete') {
+    S.bundle.createHistory = (S.bundle.createHistory||[]).filter(e => e.id !== el.dataset.id);
+    await saveState(); render(); showToast('Bundle deleted');
 
   } else if (a.startsWith('vb-')) {
     await handleVolumeBotAction(a, el);
@@ -2248,15 +2250,4 @@ document.addEventListener('DOMContentLoaded', async () => {
   render();
   checkRpc();
   setInterval(checkRpc, 30000);
-
-  // Poll for auto-split triggers from background worker
-  setInterval(() => {
-    chrome.storage.local.get('udt_v3', ({ udt_v3 }) => {
-      if (!udt_v3) return;
-      const triggers = udt_v3.split?.autoTriggers || [];
-      if (JSON.stringify(triggers) !== JSON.stringify(S.split.autoTriggers)) {
-        S.split.autoTriggers = triggers; render();
-      }
-    });
-  }, 5000);
 });

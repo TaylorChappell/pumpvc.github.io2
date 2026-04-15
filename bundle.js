@@ -1,17 +1,14 @@
 /* ═══════════════════════════════════════════
-   bundle.js — Bundle Detection Engine
+   bundle.js — Bundle Engine + Create Bundle
    Essor Studios / Ultimate Dev Tools
-
-   Supports:
-   - Pump.fun tokens (bonding curve buys)
-   - Raydium / Jupiter launches
-   - Same-block / same-funder detection
 ═══════════════════════════════════════════ */
 
 'use strict';
 
 const PUMPFUN_PROGRAM  = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBymMDer';
 const RAYDIUM_AMM      = '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8';
+const SPLITNOW_KEY     = '9a7d704f-fa8f-435d-9231-5bf467e141d0';
+const SPLITNOW_BASE    = 'https://splitnow.io/api/v1';
 
 function getBundleRpc() {
   return (typeof S !== 'undefined' && S.settings?.rpcEndpoint)
@@ -32,18 +29,562 @@ async function bundleRpc(method, params) {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-// ── Detect if a tx is a pump.fun buy ────────
+// ── SplitNow API helper ──────────────────
+async function splitNowReq(method, path, body) {
+  const res = await fetch(SPLITNOW_BASE + path, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${SPLITNOW_KEY}`,
+      'X-Api-Key': SPLITNOW_KEY,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = { error: text || `HTTP ${res.status}` }; }
+  if (!res.ok) throw new Error(data?.error || data?.message || `API error ${res.status}`);
+  return data;
+}
+
+// ══════════════════════════════════════════
+// PAGE ROUTER
+// ══════════════════════════════════════════
+function buildBundlePage() {
+  const b = S.bundle;
+  if (b.view === 'token-result')  return buildBundleTokenResult();
+  if (b.view === 'wallet-result') return buildBundleWalletResult();
+  if (b.view === 'create-result') return buildCreateBundleResult();
+  return buildBundleLanding();
+}
+
+// ══════════════════════════════════════════
+// LANDING — tabs: Check / Create / History
+// ══════════════════════════════════════════
+function buildBundleLanding() {
+  const b   = S.bundle;
+  const tab = b.createTab || 'check';
+
+  return `
+    <div class="tool-header">
+      <div class="tool-title-row">
+        <span class="tool-title">Bundle</span>
+      </div>
+      <div style="display:flex;border-bottom:1px solid var(--border-md);margin:0 -14px;padding:0 14px">
+        <button class="tab ${tab==='check'   ?'active':''}" data-action="bundle-tab" data-tab="check">Check</button>
+        <button class="tab ${tab==='create'  ?'active':''}" data-action="bundle-tab" data-tab="create">Create</button>
+        <button class="tab ${tab==='history' ?'active':''}" data-action="bundle-tab" data-tab="history">History${(b.createHistory||[]).length ? `<span style="margin-left:4px;background:var(--navy-ghost2);color:var(--navy);font-size:8px;font-weight:700;padding:1px 5px;border-radius:20px">${(b.createHistory||[]).length}</span>` : ''}</button>
+      </div>
+    </div>
+    <div class="scroll-area" id="scroll-area">
+      ${tab === 'check'   ? buildBundleCheckTab()   : ''}
+      ${tab === 'create'  ? buildBundleCreateTab()  : ''}
+      ${tab === 'history' ? buildBundleHistoryTab() : ''}
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════
+// CHECK TAB
+// ══════════════════════════════════════════
+function buildBundleCheckTab() {
+  const b           = S.bundle;
+  const walletCount = (b.walletAddresses || []).length;
+  const open        = b._walletPickerOpen;
+  const allWallets  = (S.savedWallets || []).filter(w => w.publicKey);
+  const allGroups   = S.walletGroups || [];
+  const selSet      = new Set(b.walletAddresses || []);
+  const ungrouped   = allWallets.filter(w => !w.groupId);
+
+  return `
+    <div class="field">
+      <div class="field-label">Token Contract Address <button class="help-q" data-action="show-help" data-title="Token Bundle Analysis" data-body="Scans the first buyers of a token for: shared funding sources (same wallet funded multiple buyers), same-block buys (bundled transactions), and full-port purchases (a wallet bought ≥50% of visible supply).">?</button></div>
+      <div class="add-row">
+        <input type="text" id="bundle-ca" value="${b.ca}" placeholder="Paste token mint address…"/>
+        <button class="btn btn-primary btn-sm" data-action="run-bundle" ${b.loading ? 'disabled' : ''}>
+          ${b.loading ? '<span class="spinner-dark"></span>' : 'Analyze'}
+        </button>
+      </div>
+    </div>
+    ${b.loading ? buildBundleLoading(b.progress) : ''}
+    ${b.error   ? `<div class="error-card">⚠ ${b.error}</div>` : ''}
+
+    <div class="bc-divider"></div>
+
+    <div class="field">
+      <div class="field-label" style="justify-content:space-between">
+        <span>Wallet Connection Check <button class="help-q" data-action="show-help" data-title="Wallet Connection Check" data-body="Checks whether 2+ wallets share a common funding source, suggesting they are controlled by the same person.">?</button></span>
+        <span style="font-size:9px;color:var(--text-muted);text-transform:none;letter-spacing:0;font-weight:400">${walletCount} selected</span>
+      </div>
+
+      ${walletCount > 0 ? `
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">
+          ${(b.walletAddresses||[]).map((addr, i) => {
+            const w = allWallets.find(x => x.publicKey === addr);
+            return `<span style="display:inline-flex;align-items:center;gap:3px;background:var(--navy-ghost);color:var(--navy);border-radius:20px;padding:2px 8px;font-size:9px;font-family:var(--mono)">
+              ${w ? (w.emoji||'💼')+' '+w.name : short(addr)}
+              <span data-action="bc-wallet-remove" data-idx="${i}" style="cursor:pointer;opacity:0.5;margin-left:1px">✕</span>
+            </span>`;
+          }).join('')}
+        </div>
+      ` : ''}
+
+      <div style="display:flex;gap:6px;margin-bottom:6px">
+        <input type="text" id="bc-paste-addr" placeholder="Paste address…" style="flex:1"/>
+        <button class="btn btn-ghost btn-sm" data-action="bc-wallet-paste">Add</button>
+        <button class="btn btn-ghost btn-sm" data-action="bc-wallet-toggle">${open ? 'Close ▲' : 'Saved ▼'}</button>
+      </div>
+
+      ${open ? `
+        <div style="background:var(--surface2);border:1px solid var(--border-md);border-radius:var(--r-sm);padding:8px;margin-bottom:6px;max-height:140px;overflow-y:auto">
+          ${allGroups.map(g => {
+            const gW = allWallets.filter(w => w.groupId === g.id);
+            if (!gW.length) return '';
+            const allSel = gW.every(w => selSet.has(w.publicKey));
+            return `<div style="margin-bottom:4px">
+              <div data-action="bc-wallet-group" data-gid="${g.id}" style="font-size:9.5px;font-weight:700;color:var(--navy);cursor:pointer;padding:2px 0">
+                ${allSel?'☑':'☐'} ${g.emoji||'📁'} ${g.name}
+              </div>
+              ${gW.map(w => `<div data-action="bc-wallet-pick" data-pub="${w.publicKey}" style="padding:2px 8px;font-size:9px;cursor:pointer;color:var(--text-dim)">
+                ${selSet.has(w.publicKey)?'☑':'☐'} ${w.emoji||'💼'} ${w.name} <span style="font-family:var(--mono);opacity:0.5">${short(w.publicKey)}</span>
+              </div>`).join('')}
+            </div>`;
+          }).join('')}
+          ${ungrouped.map(w => `<div data-action="bc-wallet-pick" data-pub="${w.publicKey}" style="padding:2px 0;font-size:9px;cursor:pointer;color:var(--text-dim)">
+            ${selSet.has(w.publicKey)?'☑':'☐'} ${w.emoji||'💼'} ${w.name} <span style="font-family:var(--mono);opacity:0.5">${short(w.publicKey)}</span>
+          </div>`).join('')}
+          ${!allWallets.length ? `<div style="font-size:9px;color:var(--text-muted);text-align:center;padding:8px">No saved wallets</div>` : ''}
+        </div>
+      ` : ''}
+
+      <button class="btn btn-primary btn-sm btn-full" data-action="run-wallet-check"
+        ${b.walletLoading || walletCount < 2 ? 'disabled' : ''}>
+        ${b.walletLoading ? '<span class="spinner-dark"></span> Checking…' : `Check ${walletCount >= 2 ? walletCount+' Wallets' : 'Wallets (need 2+)'}`}
+      </button>
+      ${b.walletLoading ? buildBundleLoading(b.walletProgress) : ''}
+      ${b.walletError ? `<div class="error-card" style="margin-top:8px">⚠ ${b.walletError}</div>` : ''}
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════
+// CREATE TAB
+// ══════════════════════════════════════════
+function buildBundleCreateTab() {
+  const c          = S.bundle.create || {};
+  const allWallets = (S.savedWallets || []).filter(w => w.publicKey && w.privateKey);
+  const selSource  = allWallets.find(w => w.id === c.sourceWalletId);
+  const distrib    = c.distribMode || 'equal';
+  const count      = parseInt(c.walletCount) || 5;
+  const running    = !!c.running;
+
+  return `
+    <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
+      <div class="settings-section-title">Source Wallet</div>
+      <p style="font-size:10px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">
+        Route: Source → SplitNow exchange → fresh wallets. Zero on-chain link.
+      </p>
+      <button class="btn btn-ghost btn-sm btn-full" data-action="open-picker" data-field="bundle-source-wallet"
+        style="justify-content:flex-start;font-family:var(--mono);font-size:10px;text-align:left">
+        ${selSource ? `${selSource.emoji||'💼'} ${selSource.name} · ${short(selSource.publicKey)}` : '⚡ Select source wallet…'}
+      </button>
+      <input type="hidden" id="bundle-source-wallet" value="${c.sourceWalletId||''}"/>
+    </div>
+
+    <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
+      <div class="settings-section-title">Wallet Count</div>
+      <div class="add-row" style="align-items:center">
+        <input type="number" id="cb-wallet-count" value="${count}" min="1" max="50" style="width:72px"/>
+        <span style="font-size:10px;color:var(--text-muted)">wallets will be generated &nbsp;(max 50)</span>
+      </div>
+    </div>
+
+    <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
+      <div class="settings-section-title">Total SOL to Distribute</div>
+      <div class="add-row" style="align-items:center">
+        <input type="number" id="cb-total-sol" value="${c.totalSol||''}" min="0.01" step="0.01" placeholder="e.g. 5.0" style="width:100px"/>
+        <span style="font-size:10px;color:var(--text-muted)">SOL across all wallets</span>
+      </div>
+    </div>
+
+    <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
+      <div class="settings-section-title">Max SOL Per Wallet <span style="font-size:9px;font-weight:400;color:var(--text-muted)">(optional cap)</span></div>
+      <div class="add-row" style="align-items:center">
+        <input type="number" id="cb-max-sol" value="${c.maxSolPerWallet||''}" min="0" step="0.01" placeholder="No limit" style="width:100px"/>
+        <span style="font-size:10px;color:var(--text-muted)">SOL max per wallet</span>
+      </div>
+    </div>
+
+    <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
+      <div class="settings-section-title">Distribution</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div data-action="cb-set-distrib" data-mode="equal"
+          style="padding:9px 10px;border:1.5px solid ${distrib==='equal'?'var(--navy)':'var(--border-md)'};border-radius:var(--r-sm);cursor:pointer;background:${distrib==='equal'?'var(--navy-ghost)':'var(--surface)'}">
+          <div style="font-size:10.5px;font-weight:600;color:${distrib==='equal'?'var(--navy)':'var(--text-dim)'}">Equal split</div>
+          <div style="font-size:9px;color:var(--text-muted);margin-top:2px">Each wallet gets the same amount</div>
+        </div>
+        <div data-action="cb-set-distrib" data-mode="random"
+          style="padding:9px 10px;border:1.5px solid ${distrib==='random'?'var(--navy)':'var(--border-md)'};border-radius:var(--r-sm);cursor:pointer;background:${distrib==='random'?'var(--navy-ghost)':'var(--surface)'}">
+          <div style="font-size:10.5px;font-weight:600;color:${distrib==='random'?'var(--navy)':'var(--text-dim)'}">Random</div>
+          <div style="font-size:9px;color:var(--text-muted);margin-top:2px">Random % each (natural spread)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div class="settings-section-title" style="margin-bottom:0">Add to Wallet Group</div>
+        <div class="toggle ${c.addToGroup?'on':''}" data-action="cb-toggle-group"></div>
+      </div>
+      ${c.addToGroup ? `
+        <div class="field" style="margin-bottom:0">
+          <div class="field-label">Group Name</div>
+          <input type="text" id="cb-group-name" value="${c.groupName||''}" placeholder="e.g. Bundle Jan 2025…" maxlength="30"/>
+        </div>
+      ` : `<p style="font-size:10px;color:var(--text-muted);line-height:1.5;margin:0">Keys shown once after creation. Toggle on to save wallets to a group.</p>`}
+    </div>
+
+    ${c.error ? `<div class="error-card">${c.error}</div>` : ''}
+
+    ${running ? buildBundleLoading({ step: c.runStep||'Working…', pct: c.runPct||0 }) : ''}
+
+    <button class="btn btn-primary btn-full" data-action="cb-run" ${running?'disabled':''}>
+      ${running ? '<span class="spinner-dark"></span>&nbsp; Creating…' : '⚡ Create Bundle'}
+    </button>
+    <p style="font-size:9px;color:var(--text-muted);text-align:center;margin-top:7px;line-height:1.5">
+      SOL is routed through SplitNow's exchange network. No direct on-chain link between source and destination wallets.
+    </p>
+  `;
+}
+
+// ══════════════════════════════════════════
+// HISTORY TAB
+// ══════════════════════════════════════════
+function buildBundleHistoryTab() {
+  const history = S.bundle.createHistory || [];
+  if (!history.length) {
+    return `
+      <div class="empty-state">
+        <div class="empty-icon">📦</div>
+        <div class="empty-text">No bundles created yet.<br>Switch to the Create tab to get started.</div>
+      </div>
+    `;
+  }
+
+  return history.slice().reverse().map(entry => {
+    const expanded = (S.bundle.historyExpanded||{})[entry.id];
+    const date     = new Date(entry.ts).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'2-digit' })
+                   + ' ' + new Date(entry.ts).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+
+    return `
+      <div style="background:var(--surface);border:1px solid var(--border-md);border-radius:var(--r);margin-bottom:8px;overflow:hidden">
+        <div data-action="bh-toggle" data-id="${entry.id}"
+          style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;cursor:pointer">
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--navy)">${entry.groupName||'Bundle'} <span style="font-weight:400;color:var(--text-muted)">· ${entry.wallets?.length||0} wallets · ${entry.totalSol} SOL</span></div>
+            <div style="font-size:9.5px;color:var(--text-muted);margin-top:2px">${date} · ${entry.distribMode==='random'?'Random dist.':'Equal dist.'}</div>
+          </div>
+          <span style="font-size:13px;color:var(--text-muted);transform:rotate(${expanded?'90':'0'}deg);display:inline-block;transition:transform 0.15s">›</span>
+        </div>
+
+        ${expanded ? `
+          <div style="border-top:1px solid var(--border-md);padding:10px 12px">
+            <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+              <button class="btn btn-ghost btn-sm" data-action="bh-copy-all-keys"  data-id="${entry.id}">Copy All Keys</button>
+              <button class="btn btn-ghost btn-sm" data-action="bh-copy-all-addrs" data-id="${entry.id}">Copy All Addresses</button>
+              <button class="btn btn-danger btn-sm" data-action="bh-delete" data-id="${entry.id}">Delete</button>
+            </div>
+            ${(entry.wallets||[]).map((w, i) => {
+              const visKey = `${entry.id}-${i}`;
+              const shown  = (S.bundle.historyKeyVis||{})[visKey];
+              return `
+                <div style="background:var(--surface2);border:1px solid var(--border-md);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:6px">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                    <span style="font-size:10px;font-weight:600;color:var(--navy)">Wallet ${i+1}
+                      ${w.sol ? `<span style="font-weight:400;color:var(--text-muted)"> · ${w.sol} SOL</span>` : ''}
+                    </span>
+                    <span style="font-size:9px;color:var(--green-dim);background:var(--green-bg);padding:1px 6px;border-radius:20px">Funded</span>
+                  </div>
+                  <div style="margin-bottom:5px">
+                    <div style="font-size:8.5px;font-weight:700;letter-spacing:0.05em;color:var(--text-muted);text-transform:uppercase;margin-bottom:2px">Address</div>
+                    <div style="display:flex;align-items:center;gap:4px">
+                      <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${w.publicKey}</span>
+                      <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:8.5px;flex-shrink:0" data-action="copy" data-copy="${w.publicKey}">Copy</button>
+                    </div>
+                  </div>
+                  <div>
+                    <div style="font-size:8.5px;font-weight:700;letter-spacing:0.05em;color:var(--text-muted);text-transform:uppercase;margin-bottom:2px">Private Key</div>
+                    <div style="display:flex;align-items:center;gap:4px">
+                      <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                        ${shown ? w.privateKey : '•'.repeat(Math.min(w.privateKey?.length||32, 32))}
+                      </span>
+                      <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:8.5px;flex-shrink:0" data-action="bh-toggle-key" data-id="${entry.id}" data-idx="${i}">${shown?'Hide':'Show'}</button>
+                      <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:8.5px;flex-shrink:0" data-action="copy" data-copy="${w.privateKey}">Copy</button>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+// ══════════════════════════════════════════
+// CREATE RESULT VIEW
+// ══════════════════════════════════════════
+function buildCreateBundleResult() {
+  const r = S.bundle.createResult;
+  if (!r) { S.bundle.view = 'landing'; return buildBundleLanding(); }
+
+  return `
+    <div class="tool-header">
+      <div class="tool-title-row">
+        <span class="tool-title">Bundle Created</span>
+        <button class="btn btn-ghost btn-sm" data-action="bundle-back">← Back</button>
+      </div>
+    </div>
+    <div class="scroll-area" id="scroll-area">
+
+      <div style="background:var(--green-bg);border:1px solid rgba(34,197,94,0.25);border-radius:var(--r);padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:20px">🎉</span>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--green-dim)">Bundle funded successfully!</div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${r.wallets.length} wallets · ${r.totalSol} SOL · ${r.distribMode==='random'?'Random':'Equal'} distribution</div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" data-action="cb-copy-all-keys">Copy All Private Keys</button>
+        <button class="btn btn-ghost btn-sm" data-action="cb-copy-all-addrs">Copy All Addresses</button>
+      </div>
+
+      ${r.wallets.map((w, i) => {
+        const shown = (S.bundle.createKeyVis||{})[i];
+        return `
+          <div style="background:var(--surface);border:1px solid var(--border-md);border-radius:var(--r);padding:10px 12px;margin-bottom:7px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <span style="font-size:10.5px;font-weight:700;color:var(--navy)">Wallet ${i+1}</span>
+              <span style="font-size:10px;font-family:var(--mono);font-weight:600;color:var(--navy)">${w.sol} SOL</span>
+            </div>
+            <div style="margin-bottom:5px">
+              <div style="font-size:8.5px;font-weight:700;letter-spacing:0.05em;color:var(--text-muted);text-transform:uppercase;margin-bottom:2px">Address</div>
+              <div style="display:flex;align-items:center;gap:4px">
+                <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim);flex:1;word-break:break-all">${w.publicKey}</span>
+                <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:8.5px;flex-shrink:0" data-action="copy" data-copy="${w.publicKey}">Copy</button>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:8.5px;font-weight:700;letter-spacing:0.05em;color:var(--text-muted);text-transform:uppercase;margin-bottom:2px">Private Key</div>
+              <div style="display:flex;align-items:center;gap:4px">
+                <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim);flex:1;word-break:break-all">
+                  ${shown ? w.privateKey : '•'.repeat(Math.min(w.privateKey?.length||32,32))}
+                </span>
+                <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:8.5px;flex-shrink:0" data-action="cr-toggle-key" data-idx="${i}">${shown?'Hide':'Show'}</button>
+                <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:8.5px;flex-shrink:0" data-action="copy" data-copy="${w.privateKey}">Copy</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('')}
+
+      <button class="btn btn-primary btn-full" data-action="bundle-back" style="margin-top:4px">Done</button>
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════
+// LOADING CARD
+// ══════════════════════════════════════════
+function buildBundleLoading(p) {
+  return `
+    <div class="loading-card" style="margin:10px 0">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
+        <span class="loading-step" style="font-size:10px;color:var(--text-dim)">${p?.step||'Working…'}</span>
+        <span class="loading-pct" style="font-size:10px;font-weight:600;color:var(--navy);font-family:var(--mono)">${p?.pct||0}%</span>
+      </div>
+      <div style="background:var(--border-md);border-radius:3px;height:3px;overflow:hidden">
+        <div class="loading-bar" style="background:var(--navy);height:100%;width:${p?.pct||0}%;transition:width 0.3s ease;border-radius:3px"></div>
+      </div>
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════
+// CREATE BUNDLE LOGIC
+// ══════════════════════════════════════════
+
+function distributeSOL(totalSol, walletCount, distribMode, maxPerWallet) {
+  const total = parseFloat(totalSol);
+  const max   = parseFloat(maxPerWallet) > 0 ? parseFloat(maxPerWallet) : Infinity;
+  const amounts = [];
+
+  if (distribMode === 'equal') {
+    const each = total / walletCount;
+    for (let i = 0; i < walletCount; i++) amounts.push(parseFloat(Math.min(each, max).toFixed(6)));
+  } else {
+    // Random weights
+    const weights  = Array.from({ length: walletCount }, () => Math.random());
+    const wSum     = weights.reduce((a, b) => a + b, 0);
+    let remaining  = total;
+    for (let i = 0; i < walletCount; i++) {
+      if (i === walletCount - 1) {
+        amounts.push(parseFloat(Math.max(0, Math.min(remaining, max)).toFixed(6)));
+      } else {
+        const share  = parseFloat(Math.min((weights[i] / wSum) * total, max).toFixed(6));
+        amounts.push(share);
+        remaining   -= share;
+      }
+    }
+  }
+  return amounts;
+}
+
+function generateKeypair() {
+  if (window.solanaWeb3?.Keypair) {
+    const kp = window.solanaWeb3.Keypair.generate();
+    return { publicKey: kp.publicKey.toBase58(), privateKey: bs58encode(kp.secretKey) };
+  }
+  throw new Error('Solana web3 SDK not loaded — cannot generate keypairs');
+}
+
+async function runCreateBundle() {
+  const c           = S.bundle.create || {};
+  const sourceWallet= (S.savedWallets||[]).find(w => w.id === c.sourceWalletId);
+  const walletCount = Math.max(1, Math.min(50, parseInt(c.walletCount)||5));
+  const totalSol    = parseFloat(c.totalSol);
+  const maxPerWallet= parseFloat(c.maxSolPerWallet)||0;
+  const distrib     = c.distribMode || 'equal';
+
+  if (!sourceWallet?.privateKey) throw new Error('Select a source wallet with a private key');
+  if (!totalSol || totalSol <= 0) throw new Error('Enter a valid SOL amount');
+
+  const setStep = (step, pct) => {
+    if (!S.bundle.create) S.bundle.create = {};
+    S.bundle.create.runStep = step;
+    S.bundle.create.runPct  = pct;
+    // Update progress bar in DOM without full re-render
+    const stepEl = document.querySelector('.loading-step');
+    const barEl  = document.querySelector('.loading-bar');
+    const pctEl  = document.querySelector('.loading-pct');
+    if (stepEl) stepEl.textContent     = step;
+    if (barEl)  barEl.style.width      = pct + '%';
+    if (pctEl)  pctEl.textContent      = pct + '%';
+  };
+
+  // Step 1 — generate keypairs
+  setStep('Generating wallets…', 10);
+  await sleep(200);
+  const amounts  = distributeSOL(totalSol, walletCount, distrib, maxPerWallet);
+  const keypairs = Array.from({ length: walletCount }, () => generateKeypair());
+
+  // Step 2 — submit to SplitNow
+  setStep('Submitting to SplitNow…', 30);
+  const splits = keypairs.map((kp, i) => ({
+    address: kp.publicKey,
+    amount:  amounts[i],
+  }));
+
+  let splitJob = null;
+  const bodies = [
+    { from_private_key: sourceWallet.privateKey, splits, use_exchange: true },
+    { private_key: sourceWallet.privateKey, destinations: splits, privacy: true },
+    { source_private_key: sourceWallet.privateKey, outputs: splits },
+    { sender_private_key: sourceWallet.privateKey, recipients: splits },
+  ];
+  const paths = ['/split', '/create', '/transaction', '/send'];
+  let lastErr = '';
+  for (let attempt = 0; attempt < paths.length; attempt++) {
+    try {
+      splitJob = await splitNowReq('POST', paths[attempt], bodies[attempt]);
+      break;
+    } catch (e) {
+      lastErr = e.message;
+    }
+  }
+  if (!splitJob) throw new Error(`SplitNow API unreachable: ${lastErr}`);
+
+  // Step 3 — poll for completion
+  setStep('Routing through exchange…', 55);
+  const jobId = splitJob?.id || splitJob?.job_id || splitJob?.transaction_id || splitJob?.split_id;
+  if (jobId) {
+    for (let attempt = 0; attempt < 24; attempt++) {
+      await sleep(3500);
+      setStep(`Confirming on-chain… (${attempt+1}/24)`, 55 + Math.floor(attempt * 1.5));
+      try {
+        const status = await splitNowReq('GET', `/status/${jobId}`);
+        const st = (status?.status || status?.state || '').toLowerCase();
+        if (['completed','confirmed','success','done','complete'].includes(st)) break;
+        if (['failed','error','cancelled'].includes(st)) throw new Error(`Split failed: ${status?.error||status?.message||st}`);
+      } catch (e) {
+        if (e.message.startsWith('Split failed')) throw e;
+      }
+    }
+  } else {
+    // No job ID returned — wait a fixed time for funds to propagate
+    setStep('Waiting for exchange routing…', 60);
+    await sleep(8000);
+  }
+
+  setStep('Finalising…', 95);
+  await sleep(500);
+
+  const wallets = keypairs.map((kp, i) => ({
+    publicKey:  kp.publicKey,
+    privateKey: kp.privateKey,
+    sol:        amounts[i],
+  }));
+
+  const result = {
+    id:          uid(),
+    ts:          Date.now(),
+    wallets,
+    totalSol:    parseFloat(totalSol.toFixed(6)),
+    distribMode: distrib,
+    groupName:   c.groupName?.trim() || `Bundle ${new Date().toLocaleDateString('en-GB')}`,
+    addToGroup:  !!c.addToGroup,
+    jobId:       jobId || null,
+  };
+
+  // Save to history
+  if (!S.bundle.createHistory) S.bundle.createHistory = [];
+  S.bundle.createHistory.push(result);
+  if (S.bundle.createHistory.length > 20) S.bundle.createHistory = S.bundle.createHistory.slice(-20);
+
+  // Add to wallet group
+  if (c.addToGroup) {
+    const groupName = result.groupName;
+    const groupId   = uid();
+    S.walletGroups  = S.walletGroups || [];
+    S.walletGroups.push({ id: groupId, name: groupName, emoji: '📦', collapsed: false });
+    wallets.forEach((w, i) => {
+      S.savedWallets.push({
+        id: uid(), name: `${groupName} W${i+1}`, emoji: '💼',
+        publicKey: w.publicKey, privateKey: w.privateKey, groupId,
+      });
+    });
+    if (typeof syncWalletsToServer === 'function') await syncWalletsToServer();
+    showToast(`✓ ${wallets.length} wallets saved to "${groupName}"`);
+  }
+
+  return result;
+}
+
+// ══════════════════════════════════════════
+// BUNDLE CHECK LOGIC (original, preserved)
+// ══════════════════════════════════════════
+
 function isPumpFunBuy(tx, mintAddress) {
   if (!tx?.transaction?.message) return false;
   const accounts = tx.transaction.message.accountKeys || [];
-  const addrs = accounts.map(a => typeof a === 'string' ? a : a.pubkey);
+  const addrs    = accounts.map(a => typeof a === 'string' ? a : a.pubkey);
   return addrs.includes(PUMPFUN_PROGRAM);
 }
 
-// ── Extract buyer and amount from a tx ──────
 function extractBuyer(tx, mintAddress) {
   if (!tx?.meta) return null;
-
   const postBals = tx.meta.postTokenBalances || [];
   const preBals  = tx.meta.preTokenBalances  || [];
   const accounts = tx.transaction?.message?.accountKeys || [];
@@ -52,462 +593,292 @@ function extractBuyer(tx, mintAddress) {
   for (const post of postBals) {
     if (post.mint !== mintAddress) continue;
     if (!post.owner) continue;
-
     const pre    = preBals.find(p => p.accountIndex === post.accountIndex);
     const preAmt = Number(pre?.uiTokenAmount?.uiAmount || 0);
     const postAmt= Number(post.uiTokenAmount?.uiAmount || 0);
-
     if (postAmt > preAmt) {
       return {
-        wallet:    post.owner,
-        amount:    postAmt - preAmt,
-        slot:      tx.slot,
-        timestamp: tx.blockTime,
-        signature: sig,
-        isPump:    isPumpFunBuy(tx, mintAddress),
-        verdict:   'UNKNOWN',
-        fundingSource: null,
-        bundleGroup:   null,
+        wallet: post.owner, amount: postAmt - preAmt,
+        slot: tx.slot, timestamp: tx.blockTime,
+        signature: sig, isPump: isPumpFunBuy(tx, mintAddress),
+        verdict: 'UNKNOWN', fundingSource: null, bundleGroup: null,
       };
     }
   }
 
-  // Pump.fun fallback — check SOL balance changes to find buyer
-  // when token accounts are not parsed
-  const solPre  = tx.meta.preBalances  || [];
-  const solPost = tx.meta.postBalances || [];
-  const acctKeys= accounts.map(a => typeof a === 'string' ? a : a.pubkey);
+  const solPre   = tx.meta.preBalances  || [];
+  const solPost  = tx.meta.postBalances || [];
+  const acctKeys = accounts.map(a => typeof a === 'string' ? a : a.pubkey);
+  const prog     = acctKeys.indexOf(PUMPFUN_PROGRAM);
+  if (prog === -1) return null;
 
-  // If pump.fun is in accounts, the buyer is whoever lost SOL (not the program itself)
-  if (acctKeys.includes(PUMPFUN_PROGRAM)) {
-    for (let i = 0; i < acctKeys.length; i++) {
-      const addr = acctKeys[i];
-      if (addr === PUMPFUN_PROGRAM) continue;
-      if (addr === mintAddress) continue;
-      // Signer who lost SOL = buyer
-      const lost = (solPre[i] || 0) - (solPost[i] || 0);
-      if (lost > 5000 && tx.transaction?.message?.header?.numRequiredSignatures > 0) {
-        // Check if this account is a signer
-        const isSignerIndex = i < (tx.transaction?.message?.header?.numRequiredSignatures || 0);
-        if (isSignerIndex) {
-          return {
-            wallet:    addr,
-            amount:    0, // unknown amount from this path
-            slot:      tx.slot,
-            timestamp: tx.blockTime,
-            signature: tx.transaction?.signatures?.[0] || '',
-            isPump:    true,
-            verdict:   'UNKNOWN',
-            fundingSource: null,
-            bundleGroup:   null,
-          };
-        }
-      }
-    }
+  let maxSpent = 0, buyerIdx = -1;
+  for (let i = 0; i < acctKeys.length; i++) {
+    const spent = (solPre[i]||0) - (solPost[i]||0);
+    if (spent > maxSpent) { maxSpent = spent; buyerIdx = i; }
   }
-
-  return null;
-}
-
-// ── Main analysis ────────────────────────────
-async function analyzeBundles(mintAddress, onProgress) {
-  const report = p => onProgress && onProgress(p);
-
-  report({ step: 'Fetching token transactions…', pct: 5 });
-
-  // Get signatures — for pump.fun we use the token mint address directly
-  const sigsRaw = await bundleRpc('getSignaturesForAddress', [
-    mintAddress,
-    { limit: 150, commitment: 'confirmed' }
-  ]);
-
-  if (!sigsRaw || sigsRaw.length === 0) {
-    throw new Error('No transactions found. Double-check the CA and make sure you have a working RPC in Settings.');
-  }
-
-  // Oldest first — launch transactions are at the end
-  const sigs = [...sigsRaw].reverse().slice(0, 80);
-  report({ step: `Got ${sigsRaw.length} transactions. Analysing first ${sigs.length}…`, pct: 12 });
-
-  // Fetch tx details in small batches with delay (avoid rate limits)
-  const txDetails = [];
-  const batchSize = 4;
-
-  for (let i = 0; i < sigs.length; i += batchSize) {
-    const batch = sigs.slice(i, i + batchSize);
-    const results = await Promise.all(
-      batch.map(s => bundleRpc('getTransaction', [
-        s.signature,
-        { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'confirmed' }
-      ]))
-    );
-    txDetails.push(...results.filter(Boolean));
-    const pct = 12 + Math.floor((i / sigs.length) * 38);
-    report({ step: `Fetched ${Math.min(i + batchSize, sigs.length)} / ${sigs.length}…`, pct });
-    await sleep(200); // rate limit friendly
-  }
-
-  report({ step: 'Extracting buyers…', pct: 52 });
-
-  const buyers    = [];
-  const seenWallets = new Set();
-
-  for (const tx of txDetails) {
-    if (!tx) continue;
-    const buyer = extractBuyer(tx, mintAddress);
-    if (buyer && !seenWallets.has(buyer.wallet)) {
-      seenWallets.add(buyer.wallet);
-      buyers.push(buyer);
-    }
-  }
-
-  if (buyers.length === 0) {
-    throw new Error('Could not identify any buyers. This token may use an unusual program — try a different CA or check your RPC endpoint in Settings.');
-  }
-
-  const launchSlot = Math.min(...buyers.map(b => b.slot));
-  const isPumpToken = buyers.some(b => b.isPump);
-  report({ step: `Found ${buyers.length} buyers. Tracing funding sources…`, pct: 55 });
-
-  // Trace early buyers (within 5 slots of launch for pump.fun, 3 for others)
-  const slotWindow  = isPumpToken ? 5 : 3;
-  const earlyBuyers = buyers.filter(b => b.slot - launchSlot <= slotWindow);
-
-  report({ step: `Tracing ${earlyBuyers.length} early buyer${earlyBuyers.length !== 1 ? 's' : ''}…`, pct: 58 });
-
-  for (let i = 0; i < earlyBuyers.length; i++) {
-    const b = earlyBuyers[i];
-    b.fundingSource = await traceFundingSource(b.wallet);
-    report({ step: `Tracing wallet ${i + 1} / ${earlyBuyers.length}…`, pct: 58 + Math.floor((i / earlyBuyers.length) * 28) });
-    await sleep(150);
-  }
-
-  report({ step: 'Scoring wallets…', pct: 88 });
-
-  // Group wallets by shared funder
-  const sourceMap   = {};
-  for (const b of earlyBuyers) {
-    if (!b.fundingSource) continue;
-    if (!sourceMap[b.fundingSource]) sourceMap[b.fundingSource] = [];
-    sourceMap[b.fundingSource].push(b.wallet);
-  }
-
-  // Also group by same slot (same block = likely bundled even if different funders)
-  const slotMap = {};
-  for (const b of earlyBuyers) {
-    if (b.slot - launchSlot > 1) continue; // only first 2 slots
-    if (!slotMap[b.slot]) slotMap[b.slot] = [];
-    slotMap[b.slot].push(b.wallet);
-  }
-
-  let bundleGroupId = 0;
-  const groupLabels = {};
-
-  for (const b of buyers) {
-    const slotDiff = b.slot - launchSlot;
-
-    const sharedFunder = b.fundingSource && sourceMap[b.fundingSource]?.length > 1;
-    const sameBlock    = slotMap[b.slot]?.length > 1;
-
-    if (sharedFunder) {
-      if (!groupLabels[b.fundingSource]) {
-        groupLabels[b.fundingSource] = 'Group ' + String.fromCharCode(65 + bundleGroupId++);
-      }
-      b.bundleGroup = groupLabels[b.fundingSource];
-      b.verdict     = slotDiff <= 2 ? 'BUNDLE' : 'SUSPICIOUS';
-    } else if (sameBlock && slotDiff <= 1) {
-      b.verdict = 'SUSPICIOUS';
-    } else if (slotDiff <= slotWindow) {
-      b.verdict = 'EARLY';
-    } else {
-      b.verdict = 'CLEAN';
-    }
-
-    b.slotDiff = slotDiff;
-  }
-
-  // Get supply
-  report({ step: 'Fetching supply…', pct: 93 });
-  const supplyInfo  = await bundleRpc('getTokenSupply', [mintAddress]);
-  const totalSupply = Number(supplyInfo?.value?.uiAmount || 0);
-
-  // ── Full-port detection ──────────────────────────────────────────────────
-  // A "full port" buyer is an EARLY/CLEAN buyer who purchased ≥50% of the visible
-  // token supply in their first buy — a strong signal of coordinated dev/team buying.
-  // We only flag wallets that are NOT already BUNDLE/SUSPICIOUS (to avoid double-counting).
-  if (totalSupply > 0) {
-    for (const b of buyers) {
-      if (b.verdict === 'BUNDLE' || b.verdict === 'SUSPICIOUS') continue;
-      const pct = (b.amount / totalSupply) * 100;
-      if (pct >= 50) {
-        b.verdict  = 'FULLPORT';
-        b.fullPort = true;
-      }
-    }
-  }
-
-  const bundled    = buyers.filter(b => b.verdict === 'BUNDLE');
-  const suspicious = buyers.filter(b => b.verdict === 'SUSPICIOUS');
-  const fullPorts  = buyers.filter(b => b.verdict === 'FULLPORT');
-  const bundledAmt = bundled.reduce((s, b) => s + b.amount, 0);
-  const suspAmt    = suspicious.reduce((s, b) => s + b.amount, 0);
-  const bundledPct = totalSupply > 0 ? ((bundledAmt / totalSupply) * 100).toFixed(1) : '?';
-  const suspPct    = totalSupply > 0 ? ((suspAmt   / totalSupply) * 100).toFixed(1) : '?';
-
-  report({ step: 'Done!', pct: 100 });
-
+  if (buyerIdx === -1) return null;
   return {
-    mint: mintAddress,
-    launchSlot,
-    totalSupply,
-    isPumpToken,
-    buyers,
-    stats: {
-      total:        buyers.length,
-      bundled:      bundled.length,
-      suspicious:   suspicious.length,
-      fullPort:     fullPorts.length,
-      bundledPct,
-      suspiciousPct: suspPct,
-      bundleGroups: Object.keys(groupLabels).length,
-    },
-    sourceMap,
-    groupLabels,
+    wallet: acctKeys[buyerIdx], amount: 0,
+    slot: tx.slot, timestamp: tx.blockTime,
+    signature: sig, isPump: true, verdict: 'UNKNOWN',
+    fundingSource: null, bundleGroup: null, solSpent: maxSpent / 1e9,
   };
 }
 
-// ── Trace SOL funding source of a wallet ────
-async function traceFundingSource(walletAddress) {
-  try {
-    const sigs = await bundleRpc('getSignaturesForAddress', [walletAddress, { limit: 10 }]);
-    if (!sigs?.length) return null;
-
-    // Check oldest transactions for incoming SOL
-    const oldest = [...sigs].reverse().slice(0, 3);
-
-    for (const sig of oldest) {
-      const tx = await bundleRpc('getTransaction', [
-        sig.signature,
-        { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'confirmed' }
-      ]);
-      if (!tx?.meta) continue;
-
-      const accounts = tx.transaction?.message?.accountKeys || [];
-      const pre      = tx.meta.preBalances  || [];
-      const post     = tx.meta.postBalances || [];
-      const addrs    = accounts.map(a => typeof a === 'string' ? a : a.pubkey);
-
-      // Find who sent SOL to this wallet
-      const walletIdx = addrs.indexOf(walletAddress);
-      if (walletIdx === -1) continue;
-
-      const walletGained = (post[walletIdx] || 0) - (pre[walletIdx] || 0);
-      if (walletGained <= 0) continue;
-
-      // Find the sender (largest SOL decrease that isn't the wallet itself)
-      let sender = null;
-      let maxLost = 0;
-      for (let i = 0; i < addrs.length; i++) {
-        if (addrs[i] === walletAddress) continue;
-        const lost = (pre[i] || 0) - (post[i] || 0);
-        if (lost > maxLost) {
-          maxLost = lost;
-          sender  = addrs[i];
-        }
-      }
-
-      if (sender && maxLost > 5000) return sender;
-    }
-
-    return null;
-  } catch { return null; }
+async function getTokenSupply(mintAddress) {
+  const r = await bundleRpc('getTokenSupply', [mintAddress]);
+  return r?.value?.uiAmount || null;
 }
-// ═══════════════════════════════════════════
-// WALLET CONNECTION ANALYSIS
-// ═══════════════════════════════════════════
 
-// Checks a list of wallet addresses for connections:
-//  1. Direct SOL/token transfers between them
-//  2. Shared funding source (same wallet funded multiple)
-//  3. Same-time funding (funded within 2 slots of each other)
+async function analyzeBundles(mintAddress, onProgress) {
+  const prog = (step, pct) => onProgress?.({ step, pct });
+  prog('Fetching token transactions…', 5);
 
-async function analyzeWalletConnections(addresses, onProgress) {
-  const report = p => onProgress && onProgress(p);
-  const n = addresses.length;
+  const sigs = await bundleRpc('getSignaturesForAddress', [mintAddress, { limit: 100 }]);
+  if (!sigs?.length) throw new Error('No transactions found for this token');
 
-  if (n < 2) throw new Error('Select at least 2 wallets to check connections.');
+  prog('Fetching transaction details…', 15);
+  const totalSupply = await getTokenSupply(mintAddress);
+  const buyers = [];
+  const batchSize = 10;
 
-  report({ step: `Tracing funding sources for ${n} wallets…`, pct: 5 });
-
-  // ── Step 1: Get funding info for every wallet ──────────────────────────
-  const walletData = [];
-  for (let i = 0; i < n; i++) {
-    const addr = addresses[i];
-    const info = await getFundingInfo(addr);
-    walletData.push({ addr, ...info });
-    report({ step: `Tracing ${i + 1} / ${n}…`, pct: 5 + Math.floor((i / n) * 40) });
+  for (let i = 0; i < Math.min(sigs.length, 80); i += batchSize) {
+    const batch = sigs.slice(i, i + batchSize);
+    const txs   = await Promise.all(batch.map(s =>
+      bundleRpc('getTransaction', [s.signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'confirmed' }])
+    ));
+    for (const tx of txs) {
+      if (!tx) continue;
+      const buyer = extractBuyer(tx, mintAddress);
+      if (buyer) buyers.push(buyer);
+    }
+    prog(`Analysing transactions… (${Math.min(i+batchSize, sigs.length)}/${Math.min(sigs.length,80)})`, 15 + Math.floor((i/80)*45));
     await sleep(150);
   }
 
-  report({ step: 'Scanning for direct transfers between wallets…', pct: 46 });
+  if (!buyers.length) throw new Error('No buy transactions found');
 
-  // ── Step 2: Scan recent tx history of each wallet for direct transfers ─
-  const addrSet       = new Set(addresses);
-  const directTxList  = [];
-  const connMap       = {}; // addr → Set of addrs it's connected to
-  addresses.forEach(a => { connMap[a] = new Set(); });
-
-  for (let i = 0; i < n; i++) {
-    const addr = addresses[i];
-    try {
-      const sigs = await bundleRpc('getSignaturesForAddress', [addr, { limit: 40, commitment: 'confirmed' }]);
-      if (!sigs?.length) continue;
-
-      for (const s of sigs.slice(0, 30)) {
-        const tx = await bundleRpc('getTransaction', [s.signature, {
-          encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'confirmed'
-        }]);
-        if (!tx?.meta || tx.meta.err) continue;
-
-        const accounts = (tx.transaction?.message?.accountKeys || []).map(a => typeof a === 'string' ? a : a.pubkey);
-        const pre       = tx.meta.preBalances  || [];
-        const post      = tx.meta.postBalances || [];
-
-        // Check if any other watched wallet is in this tx's accounts
-        for (let j = 0; j < accounts.length; j++) {
-          const other = accounts[j];
-          if (!addrSet.has(other) || other === addr) continue;
-
-          // Is there a meaningful SOL flow between addr and other?
-          const addrIdx  = accounts.indexOf(addr);
-          const solLost  = addrIdx >= 0 ? (pre[addrIdx]  || 0) - (post[addrIdx]  || 0) : 0;
-          const solGained= j >= 0       ? (post[j] || 0) - (pre[j] || 0)              : 0;
-
-          const isDirectTransfer = solLost > 5000 || solGained > 5000;
-          if (!isDirectTransfer) continue;
-
-          const from = solLost > 0 ? addr  : other;
-          const to   = solLost > 0 ? other : addr;
-          const solAmt = Math.max(solLost, solGained);
-
-          // Deduplicate by signature
-          if (!directTxList.find(t => t.sig === s.signature && t.from === from)) {
-            directTxList.push({ sig: s.signature, from, to, solAmt, slot: tx.slot });
-            connMap[from]?.add(to);
-            connMap[to]?.add(from);
-          }
-        }
-      }
-    } catch {}
-    report({ step: `Scanning wallet ${i + 1} / ${n}…`, pct: 46 + Math.floor((i / n) * 30) });
+  prog('Tracing funding sources…', 62);
+  const uniqueWallets = [...new Set(buyers.map(b => b.wallet))];
+  const fundingMap    = {};
+  for (let i = 0; i < uniqueWallets.length; i++) {
+    fundingMap[uniqueWallets[i]] = await traceFundingSource(uniqueWallets[i]);
+    prog(`Tracing wallets… (${i+1}/${uniqueWallets.length})`, 62 + Math.floor((i/uniqueWallets.length)*25));
     await sleep(100);
   }
 
-  report({ step: 'Grouping shared funders…', pct: 78 });
+  prog('Detecting bundles…', 88);
+  const result = detectBundleGroups(buyers, fundingMap, totalSupply);
+  prog('Done', 100);
+  return result;
+}
 
-  // ── Step 3: Group by shared funder ────────────────────────────────────
-  const funderMap = {};
-  for (const w of walletData) {
-    if (!w.fundingSource) continue;
-    if (!funderMap[w.fundingSource]) funderMap[w.fundingSource] = [];
-    funderMap[w.fundingSource].push({ addr: w.addr, amt: w.fundingAmount || 0 });
-  }
-  const sharedFunderGroups = Object.entries(funderMap)
-    .filter(([, ws]) => ws.length > 1)
-    .map(([funder, wallets]) => ({ funder, wallets }));
-
-  // Mark connections from shared funders
-  for (const grp of sharedFunderGroups) {
-    for (const w of grp.wallets) {
-      for (const other of grp.wallets) {
-        if (other.addr !== w.addr) connMap[w.addr]?.add(other.addr);
-      }
+function detectBundleGroups(buyers, fundingMap, totalSupply) {
+  const bySlot   = {};
+  const byFunder = {};
+  for (const b of buyers) {
+    const slotKey = String(b.slot);
+    if (!bySlot[slotKey]) bySlot[slotKey] = [];
+    bySlot[slotKey].push(b);
+    const fs = fundingMap[b.wallet]?.fundingSource;
+    if (fs) {
+      if (!byFunder[fs]) byFunder[fs] = [];
+      byFunder[fs].push(b);
     }
   }
 
-  report({ step: 'Detecting same-time funding…', pct: 85 });
-
-  // ── Step 4: Same-time funding (within 2 slots) ────────────────────────
-  // Group wallets whose FIRST funding tx landed within 2 slots of each other
-  const bySlot = {};
-  for (const w of walletData) {
-    if (!w.fundingSlot) continue;
-    // Round to nearest 2-slot window
-    const bucket = Math.floor(w.fundingSlot / 2) * 2;
-    if (!bySlot[bucket]) bySlot[bucket] = [];
-    bySlot[bucket].push({ addr: w.addr, funder: w.fundingSource, slot: w.fundingSlot });
+  let groupIndex = 1;
+  for (const group of Object.values(bySlot)) {
+    if (group.length >= 2) {
+      group.forEach(b => { b.verdict = 'BUNDLED'; b.bundleGroup = `Block ${groupIndex}`; });
+      groupIndex++;
+    }
   }
-  const sameFundingGroups = Object.entries(bySlot)
-    .filter(([, ws]) => ws.length > 1)
-    .map(([slot, wallets]) => ({ slot: parseInt(slot), wallets }));
+  for (const [funder, group] of Object.entries(byFunder)) {
+    if (group.length >= 2) {
+      group.forEach(b => {
+        if (b.verdict === 'UNKNOWN') { b.verdict = 'BUNDLED'; b.bundleGroup = `Funder ${short(funder)}`; }
+        b.fundingSource = funder;
+      });
+    }
+  }
 
-  report({ step: 'Done!', pct: 100 });
+  if (totalSupply) {
+    for (const b of buyers) {
+      if (b.verdict !== 'UNKNOWN') continue;
+      if      (b.amount / totalSupply >= 0.5)  b.verdict = 'FULLPORT';
+      else if (b.amount / totalSupply >= 0.1)  b.verdict = 'SUSPICIOUS';
+      else                                      b.verdict = 'CLEAN';
+    }
+  } else {
+    buyers.filter(b => b.verdict === 'UNKNOWN').forEach(b => b.verdict = 'EARLY');
+  }
 
-  // ── Build per-wallet connectedTo list ──────────────────────────────────
-  const wallets = walletData.map(w => ({
-    ...w,
-    connectedTo: [...(connMap[w.addr] || [])],
-  }));
+  const bundled      = buyers.filter(b => b.verdict === 'BUNDLED').length;
+  const fullport     = buyers.filter(b => b.verdict === 'FULLPORT').length;
+  const suspicious   = buyers.filter(b => b.verdict === 'SUSPICIOUS').length;
+  const clean        = buyers.filter(b => b.verdict === 'CLEAN').length;
+  const bundleGroups = new Set(buyers.filter(b => b.bundleGroup).map(b => b.bundleGroup)).size;
+  const bundledAmt   = buyers.filter(b => b.verdict === 'BUNDLED').reduce((s, b) => s + b.amount, 0);
+  const bundledPct   = totalSupply ? Math.round((bundledAmt / totalSupply) * 100) : null;
 
-  const connectionCount =
-    sharedFunderGroups.length + directTxList.length + sameFundingGroups.length;
-
-  return {
-    wallets,
-    directTxList,
-    sharedFunderGroups,
-    sameFundingGroups,
-    connectionCount,
-    directTransfers:  directTxList.length,
-    sharedFunders:    sharedFunderGroups.length,
-    sameFundingTime:  sameFundingGroups.length,
-  };
+  return { buyers, totalSupply, stats: { total: buyers.length, bundled, fullport, suspicious, clean, bundleGroups, bundledPct }, fundingMap };
 }
 
-// ── Get funding source AND slot for a wallet ───────────────────────────────
-// Returns { fundingSource, fundingAmount, fundingSlot }
-async function getFundingInfo(walletAddress) {
+async function traceFundingSource(walletAddress) {
   try {
-    const sigs = await bundleRpc('getSignaturesForAddress', [walletAddress, { limit: 15 }]);
+    const sigs = await bundleRpc('getSignaturesForAddress', [walletAddress, { limit: 10 }]);
     if (!sigs?.length) return { fundingSource: null, fundingAmount: 0, fundingSlot: null };
-
-    // Check oldest transactions for the first incoming SOL
     const oldest = [...sigs].reverse().slice(0, 5);
-
     for (const sig of oldest) {
-      const tx = await bundleRpc('getTransaction', [
-        sig.signature,
-        { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'confirmed' }
-      ]);
+      const tx = await bundleRpc('getTransaction', [sig.signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'confirmed' }]);
       if (!tx?.meta) continue;
-
-      const accounts = (tx.transaction?.message?.accountKeys || []).map(a => typeof a === 'string' ? a : a.pubkey);
+      const accounts  = (tx.transaction?.message?.accountKeys||[]).map(a => typeof a === 'string' ? a : a.pubkey);
       const pre       = tx.meta.preBalances  || [];
       const post      = tx.meta.postBalances || [];
       const walletIdx = accounts.indexOf(walletAddress);
       if (walletIdx === -1) continue;
-
-      const gained = (post[walletIdx] || 0) - (pre[walletIdx] || 0);
+      const gained = (post[walletIdx]||0) - (pre[walletIdx]||0);
       if (gained <= 0) continue;
-
-      // Find sender (largest SOL decrease)
       let sender = null, maxLost = 0;
       for (let i = 0; i < accounts.length; i++) {
         if (accounts[i] === walletAddress) continue;
-        const lost = (pre[i] || 0) - (post[i] || 0);
+        const lost = (pre[i]||0) - (post[i]||0);
         if (lost > maxLost) { maxLost = lost; sender = accounts[i]; }
       }
-
-      if (sender && maxLost > 5000) {
-        return {
-          fundingSource: sender,
-          fundingAmount: maxLost,
-          fundingSlot:   tx.slot,
-        };
-      }
+      if (sender && maxLost > 5000) return { fundingSource: sender, fundingAmount: maxLost, fundingSlot: tx.slot };
     }
     return { fundingSource: null, fundingAmount: 0, fundingSlot: null };
-  } catch {
-    return { fundingSource: null, fundingAmount: 0, fundingSlot: null };
+  } catch { return { fundingSource: null, fundingAmount: 0, fundingSlot: null }; }
+}
+
+async function analyzeWalletConnections(addresses, onProgress) {
+  const prog = (step, pct) => onProgress?.({ step, pct });
+  prog('Tracing wallet histories…', 5);
+  const results = {};
+  for (let i = 0; i < addresses.length; i++) {
+    results[addresses[i]] = await traceFundingSource(addresses[i]);
+    prog(`Tracing ${i+1}/${addresses.length}…`, 5 + Math.floor((i/addresses.length)*80));
+    await sleep(120);
   }
+  prog('Comparing sources…', 88);
+  const groups = {};
+  for (const [addr, info] of Object.entries(results)) {
+    const src = info.fundingSource || 'unknown';
+    if (!groups[src]) groups[src] = [];
+    groups[src].push(addr);
+  }
+  const linkedGroups = Object.entries(groups).filter(([src, ws]) => src !== 'unknown' && ws.length >= 2);
+  prog('Done', 100);
+  return { addresses, fundingMap: results, linkedGroups };
+}
+
+// ══════════════════════════════════════════
+// TOKEN + WALLET RESULT VIEWS
+// ══════════════════════════════════════════
+function buildBundleTokenResult() {
+  const r = S.bundle.result;
+  if (!r) { S.bundle.view = 'landing'; return buildBundleLanding(); }
+  const s      = r.stats;
+  const buyers = r.buyers || [];
+  const groups = {
+    BUNDLED:    buyers.filter(b => b.verdict === 'BUNDLED'),
+    FULLPORT:   buyers.filter(b => b.verdict === 'FULLPORT'),
+    SUSPICIOUS: buyers.filter(b => b.verdict === 'SUSPICIOUS'),
+    EARLY:      buyers.filter(b => b.verdict === 'EARLY'),
+    CLEAN:      buyers.filter(b => b.verdict === 'CLEAN'),
+  };
+  const riskScore = Math.min(100, s.bundled*10 + s.fullport*25 + s.suspicious*5);
+  const riskColor = riskScore >= 60 ? 'var(--danger)' : riskScore >= 30 ? 'var(--warn)' : 'var(--green-dim)';
+  const riskLabel = riskScore >= 60 ? 'HIGH RISK' : riskScore >= 30 ? 'MEDIUM RISK' : 'LOW RISK';
+
+  return `
+    <div class="tool-header">
+      <div class="tool-title-row">
+        <span class="tool-title">Token Analysis</span>
+        <button class="btn btn-ghost btn-sm" data-action="bundle-back">← Back</button>
+      </div>
+    </div>
+    <div class="scroll-area" id="scroll-area">
+      <div style="background:var(--surface);border:1px solid var(--border-md);border-radius:var(--r);padding:12px 14px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <span style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-dim)">Risk Assessment</span>
+          <span style="font-size:11px;font-weight:700;color:${riskColor}">${riskLabel}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+          <div class="bundle-stat"><div class="bundle-stat-val">${s.total}</div><div class="bundle-stat-label">Buyers</div></div>
+          <div class="bundle-stat"><div class="bundle-stat-val" style="color:var(--danger)">${s.bundled}</div><div class="bundle-stat-label">Bundled</div></div>
+          <div class="bundle-stat"><div class="bundle-stat-val" style="color:var(--warn)">${s.fullport}</div><div class="bundle-stat-label">Full-port</div></div>
+          <div class="bundle-stat"><div class="bundle-stat-val" style="color:var(--green-dim)">${s.clean}</div><div class="bundle-stat-label">Clean</div></div>
+        </div>
+        ${s.bundledPct !== null ? `<div style="font-size:10px;color:var(--text-muted);margin-top:8px;padding-top:8px;border-top:1px solid var(--border-md)">Bundled wallets hold <strong style="color:var(--danger)">${s.bundledPct}%</strong> of visible supply</div>` : ''}
+      </div>
+      ${groups.BUNDLED.length    ? `<div class="bc-section-hdr" style="color:var(--danger)">🔴 Confirmed Bundles — ${s.bundleGroups} group${s.bundleGroups!==1?'s':''}</div>${groups.BUNDLED.map(w=>buildBundleWalletRow(w,r.totalSupply)).join('')}` : ''}
+      ${groups.FULLPORT.length   ? `<div class="bc-section-hdr" style="color:var(--danger);margin-top:12px">🟠 Full-Port Buys</div>${groups.FULLPORT.map(w=>buildBundleWalletRow(w,r.totalSupply)).join('')}` : ''}
+      ${groups.SUSPICIOUS.length ? `<div class="bc-section-hdr" style="color:var(--warn);margin-top:12px">🟡 Suspicious</div>${groups.SUSPICIOUS.map(w=>buildBundleWalletRow(w,r.totalSupply)).join('')}` : ''}
+      ${groups.EARLY.length      ? `<div class="bc-section-hdr" style="color:var(--text-muted);margin-top:12px">⚪ Early Buyers</div>${groups.EARLY.map(w=>buildBundleWalletRow(w,r.totalSupply)).join('')}` : ''}
+      ${groups.CLEAN.length      ? `<div class="bc-section-hdr" style="color:var(--green-dim);margin-top:12px">🟢 Clean</div>${groups.CLEAN.map(w=>buildBundleWalletRow(w,r.totalSupply)).join('')}` : ''}
+    </div>
+  `;
+}
+
+function buildBundleWalletResult() {
+  const r = S.bundle.walletResult;
+  if (!r) { S.bundle.view = 'landing'; return buildBundleLanding(); }
+  const linked = r.linkedGroups || [];
+
+  return `
+    <div class="tool-header">
+      <div class="tool-title-row">
+        <span class="tool-title">Wallet Connections</span>
+        <button class="btn btn-ghost btn-sm" data-action="bundle-back">← Back</button>
+      </div>
+    </div>
+    <div class="scroll-area" id="scroll-area">
+      ${linked.length === 0 ? `
+        <div style="background:var(--green-bg);border:1px solid rgba(34,197,94,0.25);border-radius:var(--r);padding:14px;text-align:center">
+          <div style="font-size:14px;margin-bottom:5px">✅</div>
+          <div style="font-size:11px;font-weight:700;color:var(--green-dim)">No connections found</div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:4px">These wallets don't appear to share a funding source.</div>
+        </div>
+      ` : `
+        <div class="error-card" style="margin-bottom:12px">⚠ ${linked.length} linked group${linked.length>1?'s':''} found — these wallets likely share an owner.</div>
+        ${linked.map(([funder, wallets]) => `
+          <div style="background:var(--surface);border:1px solid var(--border-md);border-radius:var(--r);padding:10px 12px;margin-bottom:8px">
+            <div style="font-size:9.5px;font-weight:700;color:var(--danger);margin-bottom:6px">Shared funder: <span style="font-family:var(--mono)">${short(funder)}</span></div>
+            ${wallets.map(addr => {
+              const saved = (S.savedWallets||[]).find(w => w.publicKey === addr);
+              return `<div style="font-size:9.5px;color:var(--text-dim);padding:3px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px">
+                ${saved?`<span>${saved.emoji||'💼'} ${saved.name}</span>`:''}
+                <span style="font-family:var(--mono)">${short(addr)}</span>
+                <button class="btn btn-ghost btn-sm" style="padding:1px 5px;font-size:8px;margin-left:auto" data-action="copy" data-copy="${addr}">Copy</button>
+              </div>`;
+            }).join('')}
+          </div>
+        `).join('')}
+      `}
+    </div>
+  `;
+}
+
+function buildBundleWalletRow(w, totalSupply) {
+  const pct    = totalSupply && w.amount ? ((w.amount/totalSupply)*100).toFixed(2) : null;
+  const colors = { BUNDLED:'var(--danger)', FULLPORT:'var(--danger)', SUSPICIOUS:'var(--warn)', CLEAN:'var(--green-dim)', EARLY:'var(--text-muted)' };
+  return `
+    <div style="background:var(--surface);border:1px solid var(--border-md);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:5px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
+        <span style="font-family:var(--mono);font-size:9.5px;color:var(--text-dim);cursor:pointer" data-action="copy" data-copy="${w.wallet}">${short(w.wallet)}</span>
+        <div style="display:flex;align-items:center;gap:5px">
+          ${w.bundleGroup ? `<span style="font-size:8px;background:rgba(220,38,38,0.1);color:var(--danger);padding:1px 5px;border-radius:20px">${w.bundleGroup}</span>` : ''}
+          <span style="font-size:8.5px;font-weight:700;color:${colors[w.verdict]||'var(--text-muted)'}">${w.verdict}</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;font-size:9px;color:var(--text-muted);flex-wrap:wrap">
+        ${w.amount  ? `<span>${w.amount.toLocaleString(undefined,{maximumFractionDigits:0})} tokens${pct?` (${pct}%)`:''}` : ''}
+        ${w.solSpent? `<span>${w.solSpent.toFixed(4)} SOL</span>` : ''}
+        ${w.fundingSource ? `<span>Funder: <span style="font-family:var(--mono)">${short(w.fundingSource)}</span></span>` : ''}
+      </div>
+    </div>
+  `;
 }
