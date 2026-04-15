@@ -6,7 +6,7 @@
 
 const fetch = require('node-fetch');                    // Required for Node < 18
 const { Keypair } = require('@solana/web3.js');        // For stable keypair generation
-const bs58 = window.bs58;
+const bs58 = require('bs58');   // ← Add this line
 
 const express    = require('express');
 const bcrypt     = require('bcryptjs');
@@ -453,7 +453,7 @@ app.get('/api/subscription/payment/check/:paymentId', authMiddleware, async (req
     const { sig, receivedLamports } = result;
     const expectedLamports = Math.floor(parseFloat(pay.amount_sol) * 1e9);
 
-    if (receivedLamports >= expectedLamports * 0.99) {
+    if (receivedLamports >= expectedLamports * 0.99) {   // or even 0.90
       // Full payment — activate subscription and sweep funds
       await confirmAndActivate(paymentId);
       return res.json({ confirmed: true, signature: sig });
