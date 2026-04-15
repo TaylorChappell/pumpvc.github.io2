@@ -22,31 +22,48 @@
   <!-- Polyfill setup -->
   <script>
   (function setupPolyfills() {
-    if (typeof window.buffer !== 'undefined' && window.buffer.Buffer) {
-      window.Buffer = window.buffer.Buffer;
+    // buffer@6.0.3 from CDN exposes window.buffer.Buffer — this is a proper
+    // Node-compatible Buffer implementation. Assign it as the global Buffer.
+    // CRITICAL: never call `new window.Buffer(str, encoding)` — that constructor
+    // form is broken in the CDN build. Always use the static methods (.from, .alloc).
+    const B = (typeof window.buffer !== 'undefined' && window.buffer.Buffer)
+      ? window.buffer.Buffer
+      : (typeof Buffer !== 'undefined' ? Buffer : null);
+
+    if (!B) {
+      console.error('[polyfill] No Buffer implementation found!');
+      return;
     }
-    if (window.Buffer) {
-      if (!window.Buffer.from) {
-        window.Buffer.from = function(value, encoding) {
-          return typeof value === 'string' ? new window.Buffer(value, encoding || 'utf8') : new window.Buffer(value);
-        };
-      }
-      if (!window.Buffer.isEncoding) {
-        window.Buffer.isEncoding = function(enc) {
-          return ['hex','utf8','utf-8','ascii','latin1','binary','base64','ucs2','ucs-2','utf16le','utf-16le'].includes(String(enc).toLowerCase());
-        };
-      }
-      if (typeof window.Buffer.isBuffer !== 'function') {
-        window.Buffer.isBuffer = function(obj) { return !!(obj && (obj._isBuffer || obj instanceof window.Buffer)); };
-      }
-      if (!window.Buffer.alloc) {
-        window.Buffer.alloc = function(size, fill) { return new window.Buffer(size).fill(fill || 0); };
-      }
+
+    window.Buffer = B;
+
+    // Ensure all static methods exist (they should in buffer@6, but be safe)
+    if (typeof B.from !== 'function') {
+      console.error('[polyfill] Buffer.from missing — CDN load may have failed');
     }
-    // The IIFE bundle exposes solanaWeb3 globally
-    if (!window.solanaWeb3 && window.solanaWeb3 !== undefined) window.solanaWeb3 = window.solanaWeb3;
-    console.log('[polyfill] Buffer ready:', typeof window.Buffer?.isBuffer);
-    console.log('[polyfill] solanaWeb3 ready:', typeof window.solanaWeb3);
+    if (typeof B.alloc !== 'function') {
+      B.alloc = (size, fill) => { const b = B.from(new Uint8Array(size)); if (fill) b.fill(fill); return b; };
+    }
+    if (typeof B.isBuffer !== 'function') {
+      B.isBuffer = (obj) => obj != null && (obj._isBuffer === true || obj instanceof B);
+    }
+    if (typeof B.isEncoding !== 'function') {
+      B.isEncoding = (enc) => ['hex','utf8','utf-8','ascii','latin1','binary','base64','ucs2','ucs-2','utf16le','utf-16le'].includes(String(enc).toLowerCase());
+    }
+    if (typeof B.concat !== 'function') {
+      B.concat = (list, len) => {
+        const total = len ?? list.reduce((a, b) => a + b.length, 0);
+        const out = B.alloc(total);
+        let offset = 0;
+        for (const buf of list) { out.set(buf, offset); offset += buf.length; }
+        return out;
+      };
+    }
+
+    console.log('[polyfill] ✅ Buffer.from:', typeof B.from);
+    console.log('[polyfill] ✅ Buffer.alloc:', typeof B.alloc);
+    console.log('[polyfill] ✅ Buffer.isBuffer:', typeof B.isBuffer);
+    console.log('[polyfill] ✅ solanaWeb3:', typeof window.solanaWeb3);
   })();
   </script>
 
