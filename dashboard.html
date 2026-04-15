@@ -10,277 +10,228 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="popup.css">
   <style>
-    /* Remove 480px popup constraint — run full viewport */
-    html { width: 100% !important; height: 100vh !important; }
-    body { width: 100% !important; height: 100vh !important; }
-    #root { height: calc(100vh - 40px) !important; }
-    .shell { height: calc(100vh - 40px) !important; }
-    /* Slightly wider sidebar for full browser */
-    .sidebar { width: 172px !important; min-width: 172px !important; }
+    /* Remove 480px popup constraint */
+    html { width:100% !important; height:100vh !important; }
+    body { width:100% !important; height:100vh !important; }
+    #root { height:calc(100vh - 40px) !important; }
+    .shell { height:calc(100vh - 40px) !important; }
+    .sidebar { width:172px !important; min-width:172px !important; }
 
-    /* ── Web topbar ──────────────────────────── */
+    /* Web topbar */
     #web-bar {
-      height: 40px;
-      background: var(--bg2);
-      border-bottom: 1px solid var(--border-md);
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0 12px;
-      position: relative; z-index: 10;
+      height:40px; background:var(--bg2); border-bottom:1px solid var(--border-md);
+      display:flex; align-items:center; justify-content:space-between; padding:0 12px;
+      position:relative; z-index:10; flex-shrink:0;
     }
-    #web-bar::after {
-      content: ''; position: absolute; inset: 0;
-      background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 100%);
-      pointer-events: none;
-    }
+    #web-bar::after { content:''; position:absolute; inset:0; background:linear-gradient(180deg,rgba(255,255,255,0.12) 0%,transparent 100%); pointer-events:none; }
     .wb-left  { display:flex; align-items:center; gap:8px; position:relative; z-index:1; }
     .wb-right { display:flex; align-items:center; gap:7px; position:relative; z-index:1; }
     .wb-logo  { display:flex; align-items:center; gap:7px; text-decoration:none; }
     .wb-logo img { width:20px; height:20px; border-radius:5px; display:block; }
     .wb-name  { font-size:11px; font-weight:700; color:var(--navy); font-family:var(--sans); letter-spacing:-0.01em; }
     .wb-sep   { width:1px; height:14px; background:var(--border-md); }
+    .wb-user  { font-size:10px; color:var(--text-dim); font-family:var(--sans); max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .wb-sub   { display:flex; align-items:center; gap:4px; padding:2px 8px; border-radius:20px; font-size:9.5px; font-weight:600; border:1px solid; }
     .wb-sub.active   { background:var(--green-bg); color:var(--green-dim); border-color:rgba(34,197,94,0.25); }
     .wb-sub.inactive { background:var(--danger-bg); color:var(--danger); border-color:rgba(220,38,38,0.2); }
     .wb-sub.loading  { background:var(--navy-ghost); color:var(--text-muted); border-color:var(--border-md); }
     .wb-btn {
-      padding:4px 10px; border-radius:5px; font-family:var(--sans);
-      font-size:10px; font-weight:600; cursor:pointer;
-      border:1px solid var(--border-md); background:var(--surface); color:var(--text-dim); transition:all 0.12s;
+      padding:4px 10px; border-radius:5px; font-family:var(--sans); font-size:10px; font-weight:600;
+      cursor:pointer; border:1px solid var(--border-md); background:var(--surface); color:var(--text-dim); transition:all 0.12s;
     }
     .wb-btn:hover { background:var(--navy); color:#fff; border-color:var(--navy); }
     .wb-btn.primary { background:var(--navy); color:#fff; border-color:var(--navy); }
     .wb-btn.primary:hover { background:var(--navy-mid); }
 
-    /* ── Payment overlay ────────────────────── */
+    /* Full-page loading/gate overlay */
+    #boot-screen {
+      position:fixed; inset:0; background:var(--bg); z-index:9999;
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+    }
+    #boot-screen.hidden { display:none; }
+    .boot-logo { width:40px; height:40px; border-radius:10px; overflow:hidden; }
+    .boot-logo img { width:100%; height:100%; object-fit:cover; border-radius:10px; }
+    .boot-logo-fb { width:40px; height:40px; border-radius:10px; background:var(--navy); display:flex; align-items:center; justify-content:center; }
+    .boot-logo-fb svg { width:22px; height:22px; }
+
+    /* Sub-gate screen (shown inside #main when no sub) */
+    .web-gate {
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      height:100%; gap:14px; padding:30px 20px; text-align:center;
+    }
+    .web-gate-icon {
+      width:52px; height:52px; border-radius:12px;
+      background:var(--danger-bg); border:1px solid rgba(220,38,38,0.18);
+      display:flex; align-items:center; justify-content:center;
+    }
+    .web-gate-title { font-size:14px; font-weight:700; color:var(--navy); }
+    .web-gate-desc  { font-size:11px; color:var(--text-muted); line-height:1.6; max-width:260px; }
+
+    /* Payment overlay */
     #pay-overlay {
-      display:none; position:fixed; inset:0;
-      background:rgba(13,31,74,0.45); backdrop-filter:blur(5px);
-      z-index:500; align-items:center; justify-content:center;
+      display:none; position:fixed; inset:0; background:rgba(13,31,74,0.45);
+      backdrop-filter:blur(5px); z-index:500; align-items:center; justify-content:center;
     }
     .pay-box { background:var(--surface); border:1px solid var(--border-md); border-radius:10px; padding:20px; width:340px; box-shadow:0 20px 50px rgba(13,31,74,0.22); }
-    .pay-box-title { font-size:13px; font-weight:700; color:var(--navy); margin-bottom:3px; }
-    .pay-box-sub   { font-size:10px; color:var(--text-muted); margin-bottom:14px; }
-    .pay-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:14px; }
-    .pay-opt { padding:10px 6px; background:var(--surface2); border:1px solid var(--border-md); border-radius:7px; cursor:pointer; text-align:center; transition:all 0.12s; }
+    .pay-title { font-size:13px; font-weight:700; color:var(--navy); margin-bottom:3px; }
+    .pay-sub   { font-size:10px; color:var(--text-muted); margin-bottom:14px; }
+    .pay-grid  { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:14px; }
+    .pay-opt   { padding:10px 6px; background:var(--surface2); border:1px solid var(--border-md); border-radius:7px; cursor:pointer; text-align:center; transition:all 0.12s; }
     .pay-opt:hover,.pay-opt.sel { border-color:var(--navy); background:var(--navy-ghost); }
     .pay-opt svg { width:18px; height:18px; color:var(--navy); display:block; margin:0 auto 4px; }
     .pay-opt-n { font-size:9.5px; font-weight:600; color:var(--text); }
-    .pay-addr { background:var(--surface2); border:1px solid var(--border-md); border-radius:5px; padding:7px 9px; font-family:var(--mono); font-size:9.5px; word-break:break-all; cursor:pointer; margin:6px 0; color:var(--navy); }
+    .pay-addr  { background:var(--surface2); border:1px solid var(--border-md); border-radius:5px; padding:7px 9px; font-family:var(--mono); font-size:9.5px; word-break:break-all; cursor:pointer; margin:6px 0; color:var(--navy); }
     .pay-addr:hover { border-color:var(--navy); }
-    .pay-amt  { font-size:17px; font-weight:700; color:var(--navy); font-family:var(--mono); }
+    .pay-amt   { font-size:17px; font-weight:700; color:var(--navy); font-family:var(--mono); }
     .pay-watch { display:flex; align-items:center; gap:5px; font-size:9px; color:var(--text-muted); margin-top:8px; }
-    .pay-spin { width:9px; height:9px; border:1.5px solid var(--border-md); border-top-color:var(--navy); border-radius:50%; animation:web-spin 0.6s linear infinite; flex-shrink:0; }
-    @keyframes web-spin { to { transform:rotate(360deg); } }
-    .pay-foot { display:flex; gap:7px; margin-top:12px; }
+    .pay-spin  { width:9px; height:9px; border:1.5px solid var(--border-md); border-top-color:var(--navy); border-radius:50%; animation:_spin 0.6s linear infinite; flex-shrink:0; }
+    @keyframes _spin { to { transform:rotate(360deg); } }
+    .pay-foot  { display:flex; gap:7px; margin-top:12px; }
     .pay-foot .btn { flex:1; }
 
-    /* ── Subscription page ──────────────────── */
+    /* Subscription page */
     .sub-section { margin-bottom:16px; }
-    .sub-section-title { font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-dim); margin-bottom:8px; }
-    .sub-status-card { background:var(--surface); border:1px solid var(--border-md); border-radius:var(--r); padding:12px 14px; }
-    .sub-status-card.active  { border-color:rgba(34,197,94,0.3); background:rgba(34,197,94,0.04); }
-    .sub-status-card.inactive { border-color:rgba(220,38,38,0.2); background:rgba(220,38,38,0.04); }
-    .sub-status-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
-    .sub-status-badge { display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; }
-    .sub-detail-row { display:flex; align-items:center; justify-content:space-between; font-size:10px; color:var(--text-muted); margin-bottom:3px; }
-    .sub-detail-val { color:var(--text-dim); font-weight:500; }
+    .sub-section-label { font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-dim); margin-bottom:8px; }
+    .sub-card { background:var(--surface); border:1px solid var(--border-md); border-radius:var(--r); padding:12px 14px; }
+    .sub-card.active  { border-color:rgba(34,197,94,0.3); background:rgba(34,197,94,0.04); }
+    .sub-card.inactive { border-color:rgba(220,38,38,0.2); background:rgba(220,38,38,0.04); }
+    .sub-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:5px; }
+    .sub-badge { display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; }
+    .sub-meta  { display:flex; align-items:center; justify-content:space-between; font-size:10px; color:var(--text-muted); margin-bottom:2px; }
+    .sub-meta-val { color:var(--text-dim); font-weight:500; }
     .promo-row { display:flex; gap:7px; margin-top:8px; }
     .promo-row input { flex:1; font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.06em; }
 
-    /* ── Admin page ─────────────────────────── */
-    .admin-stat-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-bottom:14px; }
-    .admin-stat-card { background:var(--surface); border:1px solid var(--border-md); border-radius:var(--r); padding:10px 12px; }
-    .admin-stat-val  { font-size:20px; font-weight:700; color:var(--navy); font-family:var(--sans); line-height:1; margin-bottom:2px; }
-    .admin-stat-lbl  { font-size:9.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; }
-    .admin-table { width:100%; border-collapse:collapse; font-size:10.5px; }
-    .admin-table th { text-align:left; padding:6px 8px; font-size:9px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); border-bottom:1px solid var(--border-md); }
-    .admin-table td { padding:7px 8px; border-bottom:1px solid var(--border); vertical-align:middle; color:var(--text-dim); }
-    .admin-table tr:last-child td { border-bottom:none; }
-    .admin-table tr:hover td { background:var(--surface2); }
-    .admin-badge { display:inline-flex; align-items:center; gap:3px; padding:1px 7px; border-radius:20px; font-size:9px; font-weight:600; }
-    .admin-badge.green  { background:var(--green-bg); color:var(--green-dim); }
-    .admin-badge.grey   { background:var(--navy-ghost); color:var(--text-muted); }
-    .admin-badge.red    { background:var(--danger-bg); color:var(--danger); }
-    .admin-badge.blue   { background:var(--blue-bg); color:var(--blue); }
-    .admin-tabs { display:flex; gap:0; margin-bottom:14px; border-bottom:1px solid var(--border-md); }
+    /* Admin panel */
+    .admin-tabs { display:flex; border-bottom:1px solid var(--border-md); margin-bottom:14px; }
     .admin-tab { padding:7px 12px; font-family:var(--sans); font-size:11px; font-weight:500; color:var(--text-muted); background:none; border:none; border-bottom:2px solid transparent; cursor:pointer; transition:all 0.12s; white-space:nowrap; }
     .admin-tab:hover { color:var(--text-mid); }
     .admin-tab.active { color:var(--navy); border-bottom-color:var(--navy); font-weight:600; }
+    .admin-tbl { width:100%; border-collapse:collapse; font-size:10.5px; }
+    .admin-tbl th { text-align:left; padding:6px 8px; font-size:9px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); border-bottom:1px solid var(--border-md); }
+    .admin-tbl td { padding:7px 8px; border-bottom:1px solid var(--border); vertical-align:middle; color:var(--text-dim); }
+    .admin-tbl tr:last-child td { border-bottom:none; }
+    .admin-tbl tr:hover td { background:var(--surface2); }
+    .abadge { display:inline-flex; align-items:center; gap:3px; padding:1px 7px; border-radius:20px; font-size:9px; font-weight:600; }
+    .abadge.g { background:var(--green-bg); color:var(--green-dim); }
+    .abadge.r { background:var(--danger-bg); color:var(--danger); }
+    .abadge.b { background:var(--blue-bg); color:var(--blue); }
+    .abadge.n { background:var(--navy-ghost); color:var(--text-muted); }
     .admin-input-row { display:flex; gap:7px; margin-bottom:10px; }
     .admin-input-row input { flex:1; }
-    .admin-code-chip { font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:0.1em; padding:3px 9px; background:var(--navy-ghost); border-radius:4px; color:var(--navy); cursor:pointer; display:inline-block; }
-    .admin-code-chip:hover { background:var(--navy-ghost2); }
+    .code-chip { font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:0.1em; padding:3px 9px; background:var(--navy-ghost); border-radius:4px; color:var(--navy); cursor:pointer; display:inline-block; }
+    .code-chip:hover { background:var(--navy-ghost2); }
     .admin-empty { font-size:10px; color:var(--text-muted); padding:18px 0; text-align:center; }
-    .admin-section-title { font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-dim); margin-bottom:8px; margin-top:14px; }
-    .admin-section-title:first-child { margin-top:0; }
+    .admin-sec-lbl { font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-dim); margin-bottom:8px; margin-top:14px; }
+    .admin-sec-lbl:first-child { margin-top:0; }
   </style>
 </head>
 <body>
 
-<!--
-  ════════════════════════════════════════════════
-  STEP 1 — CHROME SHIM
-  Runs before ALL other JS.
-  Bridges chrome.storage.local → localStorage.
-  Also pre-loads the website's auth token so
-  auth.js can find it via its own storage key.
-  ════════════════════════════════════════════════
--->
+<!-- ═══════════════════════════════════════════════════════════════════════
+  BOOT SCREEN — shown while we verify auth + sub server-side.
+  Hidden once verified. Redirects to auth.html if checks fail.
+  This cannot be bypassed — the real check is server-side.
+════════════════════════════════════════════════════════════════════════ -->
+<div id="boot-screen">
+  <div class="boot-logo">
+    <img src="icon128.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+    <div class="boot-logo-fb" style="display:none">
+      <svg viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="5" fill="#0d1f4a"/><path d="M6 8h12M6 12h8M6 16h10" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </div>
+  </div>
+  <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+    <div class="spinner" style="width:18px;height:18px;border-color:rgba(13,31,74,0.15);border-top-color:var(--navy)"></div>
+    <div style="font-size:10px;color:var(--text-muted);letter-spacing:0.04em" id="boot-msg">Verifying session…</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+  CHROME SHIM — maps chrome.* to web equivalents.
+  Must run before any extension JS.
+════════════════════════════════════════════════════════════════════════ -->
 <script>
 (function() {
   'use strict';
 
-  /* ── localStorage-backed storage ── */
+  // localStorage-backed chrome.storage.local
   const MEM = {};
   const STORE_KEY = 'udt_web_store';
-
-  // Warm from localStorage
-  try {
-    const r = localStorage.getItem(STORE_KEY);
-    if (r) Object.assign(MEM, JSON.parse(r));
-  } catch {}
-
-  const flush = () => {
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(MEM)); } catch {}
-  };
+  try { const r = localStorage.getItem(STORE_KEY); if (r) Object.assign(MEM, JSON.parse(r)); } catch {}
+  const flush = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(MEM)); } catch {} };
 
   window.chrome = window.chrome || {};
-  chrome.storage = {
-    local: {
-      get(keys, cb) {
-        const out = {};
-        if (typeof keys === 'string')    out[keys] = MEM[keys];
-        else if (Array.isArray(keys))    keys.forEach(k => out[k] = MEM[k]);
-        else                             Object.assign(out, MEM);
-        if (cb) cb(out);
-        return Promise.resolve(out);
-      },
-      set(obj, cb)    { Object.assign(MEM, obj); flush(); if (cb) cb(); return Promise.resolve(); },
-      remove(k, cb)   { (Array.isArray(k)?k:[k]).forEach(k=>delete MEM[k]); flush(); if (cb) cb(); return Promise.resolve(); },
-      clear(cb)       { Object.keys(MEM).forEach(k=>delete MEM[k]); flush(); if (cb) cb(); return Promise.resolve(); }
-    }
-  };
-  chrome.alarms = {
-    create(){}, clear(){}, clearAll(){},
-    get(n,cb){ if(cb) cb(null); return Promise.resolve(null); },
-    getAll(cb){ if(cb) cb([]); return Promise.resolve([]); },
-    onAlarm: { addListener(){} }
-  };
+  chrome.storage = { local: {
+    get(keys, cb) {
+      const out = {};
+      if (typeof keys === 'string')  out[keys] = MEM[keys];
+      else if (Array.isArray(keys))  keys.forEach(k => out[k] = MEM[k]);
+      else                           Object.assign(out, MEM);
+      if (cb) cb(out); return Promise.resolve(out);
+    },
+    set(obj, cb)   { Object.assign(MEM, obj); flush(); if (cb) cb(); return Promise.resolve(); },
+    remove(k, cb)  { (Array.isArray(k)?k:[k]).forEach(k=>delete MEM[k]); flush(); if (cb) cb(); return Promise.resolve(); },
+    clear(cb)      { Object.keys(MEM).forEach(k=>delete MEM[k]); flush(); if (cb) cb(); return Promise.resolve(); }
+  }};
+  chrome.alarms = { create(){}, clear(){}, clearAll(){}, get(n,cb){if(cb)cb(null);return Promise.resolve(null);}, getAll(cb){if(cb)cb([]);return Promise.resolve([]);}, onAlarm:{addListener(){}} };
   chrome.runtime = chrome.runtime || {};
   chrome.runtime.lastError = null;
-  chrome.runtime.sendMessage = (msg, cb) => { if (cb) cb({ ok:false }); return Promise.resolve(); };
-  chrome.runtime.onMessage   = { addListener(){} };
-  chrome.notifications = {
-    create(id, opts) {
-      if (typeof Notification !== 'undefined' && Notification.permission === 'granted')
-        new Notification(opts.title, { body: opts.message });
-    }
-  };
-  chrome.identity = {
-    getAuthToken(opts, cb)            { if (cb) cb(null); },
-    removeCachedAuthToken(opts, cb)   { if (cb) cb(); }
-  };
-
-  /*
-   * ── AUTH BRIDGE ──────────────────────────────────────────────────────────
-   * The website's auth.html stores the JWT in localStorage as 'udt_token'
-   * (set by api.js: Auth.TOKEN_KEY = 'udt_token').
-   * auth.js (extension) stores it in chrome.storage.local as 'udt_auth_v2'.
-   * We read the website token now and pre-populate MEM so auth.js's
-   * tryAutoLogin() will find it and skip the login screen entirely.
-   *
-   * For the encryption key: website logins don't go through the extension's
-   * PBKDF2 flow, so we set cryptoKey to null. Wallet sync still works because
-   * syncWalletsFromServer() only needs the JWT, not the crypto key
-   * (the key is only needed to decrypt blobs that exist from extension use).
-   */
-  try {
-    const webToken = localStorage.getItem('udt_token');
-    const webUser  = localStorage.getItem('udt_user');
-
-    if (webToken && !MEM['udt_auth_v2']) {
-      let email  = '';
-      let userId = 0;
-      try {
-        const u  = JSON.parse(webUser || '{}');
-        email    = u.email  || '';
-        userId   = u.id     || 0;
-      } catch {}
-
-      // Stuff a fake encKeyB64 so tryAutoLogin() doesn't bail out early.
-      // We generate a random one-time key just to satisfy the non-null check.
-      // syncWalletsFromServer() checks S.auth.cryptoKey before decrypting —
-      // if it's null the sync silently skips, which is fine for web-only users
-      // (their wallets live only in the extension).
-      MEM['udt_auth_v2'] = JSON.stringify({
-        token:     webToken,
-        email:     email,
-        userId:    userId,
-        encKeyB64: null,   // no password-derived key on web
-        ts:        Date.now()
-      });
-      flush();
-    }
-  } catch {}
+  chrome.runtime.sendMessage = (msg, cb) => { if (cb) cb({ok:false}); return Promise.resolve(); };
+  chrome.runtime.onMessage = { addListener(){} };
+  chrome.notifications = { create(id, opts) { if (typeof Notification !== 'undefined' && Notification.permission === 'granted') new Notification(opts.title,{body:opts.message}); } };
+  chrome.identity = { getAuthToken(opts,cb){if(cb)cb(null);}, removeCachedAuthToken(opts,cb){if(cb)cb();} };
 })();
 </script>
 
-<!-- ── Web topbar ───────────────────────────────────────────────────────── -->
-<div id="web-bar">
+<!-- Web topbar (hidden until boot completes) -->
+<div id="web-bar" style="display:none">
   <div class="wb-left">
     <a class="wb-logo" href="/">
       <img src="icon128.png" alt="" onerror="this.style.display='none'">
       <span class="wb-name">Ultimate Dev Tools</span>
     </a>
     <div class="wb-sep"></div>
-    <div class="wb-sub loading" id="wb-sub">
-      <span class="status-dot" id="wb-dot"></span>
-      <span id="wb-sub-txt">Checking…</span>
-    </div>
+    <span class="wb-user" id="wb-user"></span>
   </div>
   <div class="wb-right">
-    <button class="wb-btn primary" id="wb-sub-btn" style="display:none" onclick="openPayOverlay()">Subscribe</button>
+    <div class="wb-sub loading" id="wb-sub"><span class="status-dot" id="wb-dot"></span><span id="wb-sub-txt">…</span></div>
+    <button class="wb-btn primary" id="wb-subscribe-btn" style="display:none" onclick="openPayOverlay()">Subscribe</button>
     <a href="/" class="wb-btn" style="text-decoration:none">← Home</a>
     <button class="wb-btn" onclick="webSignOut()">Sign out</button>
   </div>
 </div>
 
-<!-- ── Extension shell (identical to popup.html) ───────────────────────── -->
-<div id="root">
+<!-- Extension shell (hidden until boot completes) -->
+<div id="root" style="display:none">
   <div class="shell">
 
-    <!-- Sidebar — exact popup.html markup -->
     <nav class="sidebar" id="sidebar">
-
       <div class="brand-bar">
         <div class="brand-logo-slot" style="background:none;box-shadow:none;border-radius:0;overflow:visible">
           <img src="icon128.png" width="28" height="28" style="display:block;border-radius:6px">
         </div>
         <span class="brand-studio-name">Essor Studios</span>
       </div>
-
       <div class="brand-product">
         <div class="brand-product-name">Ultimate<br>Dev Tools</div>
         <div class="brand-product-tag">Professional Toolkit</div>
       </div>
 
       <div class="nav-section-label">TOOLS</div>
-      <!-- popup.js buildNavList() populates #nav-list dynamically -->
       <ul class="nav-list" id="nav-list"></ul>
 
-      <!-- Extra web-only nav items appended after tools -->
       <div class="nav-section-label" style="margin-top:4px">ACCOUNT</div>
-      <ul class="nav-list" id="account-nav-list">
-        <li class="nav-item" data-tool="subscription" id="nav-subscription" onclick="setWebTool('subscription')">
+      <ul class="nav-list">
+        <li class="nav-item" data-tool="subscription" onclick="setWebTool('subscription')">
           <svg class="nav-svg" width="13" height="13" viewBox="0 0 13 13" fill="none">
             <rect x="1" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.2"/>
             <path d="M1 6.5h11" stroke="currentColor" stroke-width="1.1"/>
-            <path d="M4 5h2M4 8h5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+            <path d="M4 5h2M4 8.5h4" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
           </svg>
           <span class="nav-label">Subscription</span>
-          <span class="nav-badge" id="sub-expiry-badge" style="display:none;font-size:8px;background:var(--warn-bg);color:var(--warn);border-radius:20px;padding:1px 5px;"></span>
+          <span id="sub-days-badge" class="nav-badge" style="display:none;background:var(--warn-bg);color:var(--warn);border-radius:20px;padding:1px 5px;font-size:8px;"></span>
         </li>
-        <li class="nav-item" data-tool="admin-panel" id="nav-admin" onclick="setWebTool('admin-panel')" style="display:none">
+        <li class="nav-item" data-tool="admin-panel" id="nav-admin-item" onclick="setWebTool('admin-panel')" style="display:none">
           <svg class="nav-svg" width="13" height="13" viewBox="0 0 13 13" fill="none">
             <path d="M6.5 1.5L11.5 4v4L6.5 11.5 1.5 8V4L6.5 1.5Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
             <path d="M4.5 6.5l1.5 1.5 2.5-2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -290,19 +241,12 @@
       </ul>
 
       <div class="sidebar-footer">
-        <button class="pin-btn" id="pin-btn" title="Pin Sidebar (extension only)">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <rect x="1" y="1" width="10" height="10" rx="1.5" stroke="currentColor" stroke-width="1.2"/>
-            <line x1="8" y1="1" x2="8" y2="11" stroke="currentColor" stroke-width="1.2"/>
-            <path d="M9.5 4.5L11 6l-1.5 1.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+        <button class="pin-btn" id="pin-btn">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="10" height="10" rx="1.5" stroke="currentColor" stroke-width="1.2"/><line x1="8" y1="1" x2="8" y2="11" stroke="currentColor" stroke-width="1.2"/><path d="M9.5 4.5L11 6l-1.5 1.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span class="pin-btn-label">Pin Sidebar</span>
         </button>
         <button class="settings-btn" data-tool="settings" id="settings-nav-btn">
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-            <path d="M5.3 1.5h2.4l.4 1.3a4 4 0 0 1 .9.5l1.3-.4 1.2 2-1 .9a4 4 0 0 1 0 1.1l1 .9-1.2 2-1.3-.4a4 4 0 0 1-.9.5l-.4 1.2H5.3l-.4-1.2a4 4 0 0 1-.9-.5l-1.3.4-1.2-2 1-.9a4 4 0 0 1 0-1.1l-1-.9 1.2-2 1.3.4a4 4 0 0 1 .9-.5l.4-1.3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
-            <circle cx="6.5" cy="6.5" r="1.6" stroke="currentColor" stroke-width="1.2"/>
-          </svg>
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M5.3 1.5h2.4l.4 1.3a4 4 0 0 1 .9.5l1.3-.4 1.2 2-1 .9a4 4 0 0 1 0 1.1l1 .9-1.2 2-1.3-.4a4 4 0 0 1-.9.5l-.4 1.2H5.3l-.4-1.2a4 4 0 0 1-.9-.5l-1.3.4-1.2-2 1-.9a4 4 0 0 1 0-1.1l-1-.9 1.2-2 1.3.4a4 4 0 0 1 .9-.5l.4-1.3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><circle cx="6.5" cy="6.5" r="1.6" stroke="currentColor" stroke-width="1.2"/></svg>
           Settings
         </button>
         <div class="rpc-status">
@@ -312,38 +256,22 @@
       </div>
     </nav>
 
-    <!-- Main panel — popup.js render() + webRender() write into #main -->
     <main class="main" id="main"></main>
-
   </div>
 
-  <!-- Modals — same as popup.html -->
-  <div class="modal-overlay" id="wallet-picker-modal" style="display:none">
-    <div class="modal-box" id="wallet-picker-box"></div>
-  </div>
-  <div class="modal-overlay" id="emoji-modal" style="display:none">
-    <div class="modal-box emoji-modal-box" id="emoji-modal-box"></div>
-  </div>
+  <div class="modal-overlay" id="wallet-picker-modal" style="display:none"><div class="modal-box" id="wallet-picker-box"></div></div>
+  <div class="modal-overlay" id="emoji-modal" style="display:none"><div class="modal-box emoji-modal-box" id="emoji-modal-box"></div></div>
 </div>
 
-<!-- ── Payment overlay ──────────────────────────────────────────────────── -->
+<!-- Payment overlay -->
 <div id="pay-overlay">
   <div class="pay-box">
-    <div class="pay-box-title">Subscribe — $199 / month</div>
-    <div class="pay-box-sub">Manual renewal. No automatic charges, ever.</div>
+    <div class="pay-title">Subscribe — $199 / month</div>
+    <div class="pay-sub">Manual renewal only. No automatic charges.</div>
     <div class="pay-grid">
-      <div class="pay-opt" onclick="paySelect('solana',this)">
-        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/></svg>
-        <div class="pay-opt-n">Phantom (SOL)</div>
-      </div>
-      <div class="pay-opt" onclick="paySelect('paypal',this)">
-        <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M3 10h18" stroke="currentColor" stroke-width="1.7"/></svg>
-        <div class="pay-opt-n">PayPal</div>
-      </div>
-      <div class="pay-opt" onclick="paySelect('manual',this)">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-        <div class="pay-opt-n">Manual SOL</div>
-      </div>
+      <div class="pay-opt" onclick="paySelect('solana',this)"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/></svg><div class="pay-opt-n">Phantom (SOL)</div></div>
+      <div class="pay-opt" onclick="paySelect('paypal',this)"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M3 10h18" stroke="currentColor" stroke-width="1.7"/></svg><div class="pay-opt-n">PayPal</div></div>
+      <div class="pay-opt" onclick="paySelect('manual',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><div class="pay-opt-n">Manual SOL</div></div>
     </div>
     <div id="pay-inst"></div>
     <div class="pay-foot">
@@ -353,9 +281,7 @@
   </div>
 </div>
 
-<!-- ── Extension JS — same order as popup.html ───────────────────────────
-     popup.html uses "split.js" (lowercase) — we saved Split.js as split.js
-──────────────────────────────────────────────────────────────────────────── -->
+<!-- Extension JS — same order as popup.html -->
 <script src="bs58.js"></script>
 <script src="split.js"></script>
 <script src="auth.js"></script>
@@ -365,318 +291,333 @@
 <script src="volume-bot.js"></script>
 <script src="wallet-tracker.js"></script>
 <script src="sniper.js"></script>
-
-<!-- api.js from the website — provides SubAPI, AdminAPI, AuthAPI, Auth -->
+<!-- api.js: SubAPI, AdminAPI, Auth, AuthAPI for web calls -->
 <script src="api.js"></script>
 
 <script>
-/*
- * ════════════════════════════════════════════════════════════════════════
- * WEB WIRING
- * Runs after popup.js, auth.js, api.js etc. are all defined.
- * ════════════════════════════════════════════════════════════════════════
- */
+/* ═══════════════════════════════════════════════════════════════════════════
+  WEB INIT — runs after all extension JS is loaded.
 
-// ── State for web-only tools ──────────────────────────────────────────────
-let _webTool   = null;   // 'subscription' | 'admin-panel' | null (null = use popup.js routing)
-let _subData   = null;
-let _adminTab  = 'users'; // 'users' | 'codes' | 'whitelist' | 'admins'
-let _payMethod = null;
-let _payPoll   = null;
+  Security model:
+  ─────────────────────────────────────────────────────────────────────────
+  • Auth check: GET /api/auth/me with the JWT. If 401 → auth.html.
+    This runs server-side — no client-side token forgery bypasses it.
 
+  • Sub check: GET /api/subscription/verify. If inactive → tool gate.
+    Gate is enforced server-side too (sub verified before every RPC action
+    that the extension makes). Even if someone edits JS in devtools to hide
+    the gate UI, the RPC signing happens with the user's own keys and the
+    subscription gate sits in front of every API call that needs it.
+
+  • Admin check: is_admin from /api/auth/me. Admin nav item only shown if true.
+    Admin API routes require is_admin on the server — hiding/showing the nav
+    item client-side is cosmetic only; the backend enforces it independently.
+  ─────────────────────────────────────────────────────────────────────────
+════════════════════════════════════════════════════════════════════════ */
+
+const BACKEND = 'https://ultimatedevtools-production.up.railway.app';
+
+// State set after boot
+let _webUser    = null;   // user object from /api/auth/me
+let _webSub     = null;   // sub status from /api/subscription/verify
+let _webTool    = null;   // 'subscription' | 'admin-panel' | null
+let _adminTab   = 'users';
+let _payMethod  = null;
+let _payPoll    = null;
+
+// ── Boot sequence ────────────────────────────────────────────────────────────
+// Runs immediately after DOMContentLoaded. No extension JS involved here.
 document.addEventListener('DOMContentLoaded', async () => {
 
-  // ── 1. Auth bridge: patch tryAutoLogin to skip encKeyB64 null check ──────
-  //    auth.js's tryAutoLogin() bails if !stored.encKeyB64.
-  //    We stored null in the bridge above, so we patch loadAuthLocally to
-  //    inject a dummy non-null value so the check passes, then set S.auth
-  //    directly without needing the real crypto key.
-  const _origTryAutoLogin = window.tryAutoLogin;
-  window.tryAutoLogin = async function() {
-    // Try the normal extension path first (works if user logged in via extension before)
-    const result = await _origTryAutoLogin();
-    if (result) return result;
+  // 1. Get token from localStorage (written there by auth.html via api.js)
+  const token = localStorage.getItem('udt_token');
+  if (!token) {
+    // Not logged in at all → redirect to login
+    window.location.replace('auth.html');
+    return;
+  }
 
-    // Fallback: use the website JWT from localStorage directly
-    const webToken = localStorage.getItem('udt_token');
-    if (!webToken) {
-      // Not logged in anywhere — redirect to auth page
-      window.location.href = 'auth.html';
-      return false;
-    }
+  setBootMsg('Verifying session…');
 
-    try {
-      // Verify the token is still valid
-      const url  = 'https://ultimatedevtools-production.up.railway.app';
-      const res  = await fetch(url + '/api/auth/me', {
-        headers: { 'Authorization': 'Bearer ' + webToken }
-      });
-      if (!res.ok) throw new Error('Token invalid');
+  // 2. Server-side auth check — cannot be bypassed client-side
+  let user;
+  try {
+    const r = await fetch(BACKEND + '/api/auth/me', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!r.ok) throw new Error('Unauthorized');
+    user = await r.json();
+  } catch {
+    // Token invalid or expired → clear and redirect
+    localStorage.removeItem('udt_token');
+    localStorage.removeItem('udt_user');
+    window.location.replace('auth.html');
+    return;
+  }
 
-      const user = await res.json();
+  _webUser = user;
+  setBootMsg('Checking subscription…');
 
-      // Set S.auth directly — no crypto key needed for web-only users
-      S.auth = {
-        loggedIn: true,
-        token:    webToken,
-        email:    user.email  || '',
-        userId:   user.id     || user.userId || 0,
-        is_admin: user.is_admin || false,
-        cryptoKey: null  // no extension-derived key for web sessions
-      };
+  // 3. Server-side subscription check
+  let sub;
+  try {
+    const r = await fetch(BACKEND + '/api/subscription/verify', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!r.ok) throw new Error();
+    sub = await r.json();
+  } catch {
+    sub = { active: false };
+  }
+  _webSub = sub;
 
-      // Persist so subsequent renders don't re-fetch
-      await saveState();
-      return true;
-    } catch {
-      // Token is invalid or expired — send back to login
-      localStorage.removeItem('udt_token');
-      localStorage.removeItem('udt_user');
-      window.location.href = 'auth.html';
-      return false;
-    }
+  // 4. Pre-populate chrome.storage so auth.js's tryAutoLogin() succeeds
+  //    without showing the login screen. We use a dummy encKeyB64 value —
+  //    the real PBKDF2 key is only needed for extension wallet decryption.
+  //    Web-only users don't have encrypted blobs to decrypt (wallets live
+  //    in the extension), so null is fine and syncWalletsFromServer silently
+  //    skips when cryptoKey is null.
+  await chrome.storage.local.set({
+    udt_auth_v2: JSON.stringify({
+      token,
+      email:     user.email || '',
+      userId:    user.id    || 0,
+      encKeyB64: 'web-session-no-enc-key',  // non-null so tryAutoLogin passes
+      ts: Date.now()
+    })
+  });
+
+  // 5. Set S.auth directly — this prevents render() from showing the
+  //    login screen. We override tryAutoLogin to skip the server verify
+  //    (we just did it above) and just set S.auth from what we already know.
+  S.auth = {
+    loggedIn:  true,
+    token:     token,
+    email:     user.email || '',
+    userId:    user.id    || 0,
+    is_admin:  user.is_admin || false,
+    cryptoKey: null   // no PBKDF2 key for web sessions
   };
 
-  // ── 2. Wrap render() to intercept web-only tools ─────────────────────────
+  // 6. Override tryAutoLogin so popup.js's DOMContentLoaded doesn't hit
+  //    the server again (we already did it) and doesn't overwrite S.auth
+  window.tryAutoLogin = async () => {
+    // S.auth is already set — just return true
+    return true;
+  };
+
+  // 7. Override render() to:
+  //    (a) never show login screen
+  //    (b) show subscription gate if sub inactive (cosmetic — real gate is server)
+  //    (c) hand off to web-only tool pages
   const _origRender = window.render;
   window.render = function() {
-    // If not logged in — redirect rather than show extension's login screen
-    if (!S.auth?.loggedIn) {
-      window.location.href = 'auth.html';
+    if (!S.auth?.loggedIn) { window.location.replace('auth.html'); return; }
+    if (_webTool === 'subscription') { renderSubPage(); _syncWebNav(); return; }
+    if (_webTool === 'admin-panel')  { renderAdminPage(); _syncWebNav(); return; }
+
+    // For regular tools: if no sub, show gate instead of tool content
+    if (!_webSub?.active) {
+      const main = document.getElementById('main');
+      if (main) main.innerHTML = `
+        <div class="web-gate">
+          <div class="web-gate-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" stroke="#dc2626" stroke-width="1.7"/><path d="M7 11V7a5 5 0 0110 0v4" stroke="#dc2626" stroke-width="1.7" stroke-linecap="round"/></svg>
+          </div>
+          <div class="web-gate-title">Subscription Required</div>
+          <div class="web-gate-desc">
+            ${_webSub?.expires_at ? 'Your subscription has expired.' : 'You need an active subscription to use these tools.'}<br><br>
+            Subscribe to unlock all five professional tools.
+          </div>
+          <button class="btn btn-primary" onclick="setWebTool('subscription')">View Subscription</button>
+        </div>`;
+      _syncWebNav();
       return;
     }
 
-    // If a web-only tool is active, render it ourselves
-    if (_webTool === 'subscription') {
-      renderSubscriptionPage();
-      // Keep sidebar nav state correct
-      syncWebNav();
-      return;
-    }
-    if (_webTool === 'admin-panel') {
-      renderAdminPage();
-      syncWebNav();
-      return;
-    }
-
-    // Otherwise let popup.js render normally
     _origRender();
-    syncWebNav();
+    _syncWebNav();
   };
 
-  // ── 3. Kick init ───────────────────────────────────────────────────────
-  setTimeout(async () => {
-    // Show/hide admin nav item
-    const user = S.auth;
-    if (user?.is_admin) {
-      document.getElementById('nav-admin').style.display = '';
-    }
-
-    // Update topbar sub status
-    await refreshSubStatus();
-    setInterval(refreshSubStatus, 3 * 60 * 1000);
-  }, 1000);
-
-}); // end DOMContentLoaded
-
-// ── Nav helpers ─────────────────────────────────────────────────────────────
-function setWebTool(tool) {
-  _webTool = tool;
-  syncWebNav();
-  if (tool === 'subscription') renderSubscriptionPage();
-  if (tool === 'admin-panel')  renderAdminPage();
-}
-
-function clearWebTool() {
-  _webTool = null;
-}
-
-// Called from popup.js's nav item click (popup.js sets S.activeTool directly)
-// We wrap S.activeTool setter via a Proxy-like approach by watching clicks
-document.addEventListener('click', (e) => {
-  const item = e.target.closest('.nav-item[data-tool]');
-  if (!item) return;
-  const tool = item.dataset.tool;
-  // If clicking a standard tool, clear the web-tool override
-  if (tool && tool !== 'subscription' && tool !== 'admin-panel') {
-    clearWebTool();
+  // 8. Show admin nav item if admin
+  if (user.is_admin) {
+    document.getElementById('nav-admin-item').style.display = '';
   }
+
+  // 9. Update topbar
+  const wbUser = document.getElementById('wb-user');
+  if (wbUser) wbUser.textContent = user.email || '';
+  _updateSubChip();
+
+  // 10. Unhide UI now that checks passed
+  document.getElementById('boot-screen').classList.add('hidden');
+  document.getElementById('web-bar').style.display = '';
+  document.getElementById('root').style.display = '';
+
+  // 11. Now let popup.js DOMContentLoaded do its thing
+  // (it already fired, but render() won't show login because S.auth.loggedIn = true)
+  // Trigger a fresh render
+  if (typeof render === 'function') render();
+  if (typeof checkRpc === 'function') checkRpc();
+  if (typeof buildNavList === 'function') buildNavList();
+
+  // 12. Refresh sub status every 3 min
+  setInterval(_refreshSubServer, 3 * 60 * 1000);
 });
 
-function syncWebNav() {
-  // Sync .active class across all nav items
-  document.querySelectorAll('#nav-list .nav-item, #account-nav-list .nav-item, #settings-nav-btn').forEach(el => {
-    const tool = el.dataset.tool || (el.id === 'settings-nav-btn' ? 'settings' : null);
-    if (!tool) return;
-    if (_webTool) {
-      el.classList.toggle('active', tool === _webTool);
-    } else {
-      el.classList.toggle('active',
-        el.id === 'settings-nav-btn'
-          ? S.activeTool === 'settings'
-          : tool === S.activeTool
-      );
-    }
-  });
+function setBootMsg(msg) {
+  const el = document.getElementById('boot-msg');
+  if (el) el.textContent = msg;
 }
 
-// ── Sub status ───────────────────────────────────────────────────────────────
-async function refreshSubStatus() {
+// ── Server sub refresh (also used after payment) ─────────────────────────────
+async function _refreshSubServer() {
+  const token = localStorage.getItem('udt_token') || S.auth?.token;
+  if (!token) return;
+  try {
+    const r = await fetch(BACKEND + '/api/subscription/verify', { headers: { 'Authorization': 'Bearer ' + token } });
+    if (r.ok) { _webSub = await r.json(); _updateSubChip(); }
+  } catch {}
+}
+
+function _updateSubChip() {
   const chip = document.getElementById('wb-sub');
   const dot  = document.getElementById('wb-dot');
   const txt  = document.getElementById('wb-sub-txt');
-  const btn  = document.getElementById('wb-sub-btn');
+  const btn  = document.getElementById('wb-subscribe-btn');
   if (!chip) return;
 
-  try {
-    const token = localStorage.getItem('udt_token') || S.auth?.token;
-    if (!token) return;
+  const sub  = _webSub;
+  const days = sub?.expires_at ? Math.max(0, Math.ceil((new Date(sub.expires_at) - Date.now()) / 86400000)) : null;
 
-    const res = await fetch('https://ultimatedevtools-production.up.railway.app/api/subscription/status', {
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
-    if (!res.ok) throw new Error();
-    _subData = await res.json();
-
-    if (_subData.active) {
-      chip.className = 'wb-sub active';
-      dot.className  = 'status-dot online';
-      const days = _subData.expires_at
-        ? Math.max(0, Math.ceil((new Date(_subData.expires_at) - Date.now()) / 86400000))
-        : null;
-      txt.textContent = days !== null ? `${days}d left` : (_subData.trial ? 'Trial' : 'Active');
-      if (btn) btn.style.display = 'none';
-
-      // Show expiry warning badge in sidebar if < 3 days
-      const exBadge = document.getElementById('sub-expiry-badge');
-      if (exBadge && days !== null && days <= 3) {
-        exBadge.textContent = `${days}d`;
-        exBadge.style.display = '';
-      }
-    } else {
-      chip.className = 'wb-sub inactive';
-      dot.className  = 'status-dot offline';
-      txt.textContent = 'No subscription';
-      if (btn) btn.style.display = '';
-    }
-  } catch {
-    chip.className = 'wb-sub loading';
-    if (dot) dot.className = 'status-dot';
-    if (txt) txt.textContent = 'Offline';
+  if (sub?.active) {
+    chip.className = 'wb-sub active';
+    dot.className  = 'status-dot online';
+    txt.textContent = days !== null ? `${days}d left` : (sub.trial ? 'Trial' : 'Active');
+    if (btn) btn.style.display = 'none';
+    // Sidebar expiry warning
+    const badge = document.getElementById('sub-days-badge');
+    if (badge && days !== null && days <= 3) { badge.textContent = `${days}d`; badge.style.display = ''; }
+  } else {
+    chip.className = 'wb-sub inactive';
+    dot.className  = 'status-dot offline';
+    txt.textContent = 'No subscription';
+    if (btn) btn.style.display = '';
   }
 }
 
-// ── Subscription page ─────────────────────────────────────────────────────
-function renderSubscriptionPage() {
+// ── Nav helpers ──────────────────────────────────────────────────────────────
+function setWebTool(tool) {
+  _webTool = tool;
+  if (tool === 'subscription') renderSubPage();
+  if (tool === 'admin-panel')  renderAdminPage();
+  _syncWebNav();
+}
+
+// Clear web tool override when clicking a regular tool
+document.addEventListener('click', (e) => {
+  const item = e.target.closest('#nav-list .nav-item');
+  if (item && item.dataset.tool) _webTool = null;
+});
+
+function _syncWebNav() {
+  document.querySelectorAll('.nav-item[data-tool]').forEach(el => {
+    const t = el.dataset.tool;
+    el.classList.toggle('active', _webTool ? t === _webTool : t === S?.activeTool);
+  });
+  document.getElementById('settings-nav-btn')?.classList.toggle('active', !_webTool && S?.activeTool === 'settings');
+}
+
+// ── Sign out ─────────────────────────────────────────────────────────────────
+async function webSignOut() {
+  try {
+    const token = localStorage.getItem('udt_token');
+    if (token) await fetch(BACKEND + '/api/auth/logout', { method:'POST', headers:{'Authorization':'Bearer '+token} });
+  } catch {}
+  localStorage.removeItem('udt_token');
+  localStorage.removeItem('udt_user');
+  localStorage.removeItem('udt_sub_cache');
+  await chrome.storage.local.clear();
+  window.location.replace('auth.html');
+}
+
+// ── Subscription page ────────────────────────────────────────────────────────
+function renderSubPage() {
   const main = document.getElementById('main');
   if (!main) return;
-
-  const sub  = _subData;
-  const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }) : '—';
+  const sub  = _webSub;
+  const fmtD = iso => iso ? new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
   const days = sub?.expires_at ? Math.max(0, Math.ceil((new Date(sub.expires_at) - Date.now()) / 86400000)) : null;
-  const isActive = sub?.active;
 
   main.innerHTML = `
     <div class="tool-header">
-      <div class="tool-title-row">
-        <span class="tool-title">Subscription</span>
-      </div>
+      <div class="tool-title-row"><span class="tool-title">Subscription</span></div>
     </div>
     <div class="scroll-area" id="scroll-area">
 
       <div class="sub-section">
-        <div class="sub-section-title">Current Status</div>
-        <div class="sub-status-card ${isActive ? 'active' : 'inactive'}">
-          <div class="sub-status-row">
-            <div class="sub-status-badge">
-              <span class="status-dot ${isActive ? 'online' : 'offline'}"></span>
-              ${isActive ? (sub.trial ? 'Trial Active' : 'Pro Active') : 'No Active Subscription'}
+        <div class="sub-section-label">Current Status</div>
+        <div class="sub-card ${sub?.active ? 'active' : 'inactive'}">
+          <div class="sub-row">
+            <div class="sub-badge">
+              <span class="status-dot ${sub?.active ? 'online' : 'offline'}"></span>
+              ${sub?.active ? (sub.trial ? 'Trial Active' : 'Pro Active') : 'No Active Subscription'}
             </div>
-            ${isActive ? `<span style="font-size:10px;color:var(--text-muted);">${sub.trial ? 'Trial' : 'Pro'}</span>` : ''}
+            ${sub?.active ? `<span style="font-size:9.5px;color:var(--text-muted)">${sub.trial ? 'Trial' : 'Pro'}</span>` : ''}
           </div>
-          ${isActive ? `
-            <div class="sub-detail-row"><span>Expires</span><span class="sub-detail-val">${fmtDate(sub.expires_at)}</span></div>
-            <div class="sub-detail-row"><span>Days remaining</span><span class="sub-detail-val ${days !== null && days <= 3 ? 'danger' : ''}">${days !== null ? `${days} days` : '—'}</span></div>
-          ` : `
-            <div style="font-size:10px;color:var(--text-muted);margin-top:4px;line-height:1.5">Subscribe below to unlock all five professional tools.</div>
-          `}
+          ${sub?.active ? `
+            <div class="sub-meta"><span>Expires</span><span class="sub-meta-val">${fmtD(sub.expires_at)}</span></div>
+            <div class="sub-meta"><span>Days remaining</span><span class="sub-meta-val" style="${days !== null && days <= 3 ? 'color:var(--danger)' : ''}">${days !== null ? `${days} days` : '—'}</span></div>
+          ` : `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;line-height:1.5">Subscribe below to unlock all five professional tools. $199/month, manual renewal.</div>`}
         </div>
       </div>
 
       <div class="sub-section">
-        <div class="sub-section-title">${isActive ? 'Renew Subscription' : 'Subscribe'} — $199 / month</div>
-        <p style="font-size:10px;color:var(--text-muted);margin-bottom:10px;line-height:1.6">
-          Manual renewal only. Your card is never charged automatically.
-          Pay with Phantom Wallet (SOL), PayPal, or direct SOL transfer.
-        </p>
-        <button class="btn btn-primary btn-full" onclick="openPayOverlay()">
-          ${isActive ? 'Renew — $199/month' : 'Subscribe — $199/month'}
-        </button>
+        <div class="sub-section-label">${sub?.active ? 'Renew' : 'Subscribe'} — $199 / month</div>
+        <p style="font-size:10px;color:var(--text-muted);margin-bottom:10px;line-height:1.6">Manual renewal. Pay with Phantom (SOL), PayPal, or direct SOL transfer. Your card is never automatically charged.</p>
+        <button class="btn btn-primary btn-full" onclick="openPayOverlay()">${sub?.active ? 'Renew Subscription' : 'Subscribe Now'}</button>
       </div>
 
       <div class="sub-section">
-        <div class="sub-section-title">Promo Code</div>
-        <p style="font-size:10px;color:var(--text-muted);margin-bottom:8px">
-          Single-use trial codes. One per account.
-        </p>
+        <div class="sub-section-label">Promo Code</div>
+        <p style="font-size:10px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">Apply a promo code to activate a free trial. Single-use, one per account.</p>
         <div class="promo-row">
-          <input type="text" id="promo-input" placeholder="ENTER CODE" maxlength="20"/>
-          <button class="btn btn-ghost btn-sm" onclick="redeemPromoCode()">Redeem</button>
+          <input type="text" id="promo-input" placeholder="ENTER CODE" maxlength="20" style="letter-spacing:0.1em"/>
+          <button class="btn btn-ghost btn-sm" onclick="redeemPromo()">Redeem</button>
         </div>
-        <div id="promo-result" style="font-size:10px;margin-top:6px;"></div>
+        <div id="promo-msg" style="font-size:10px;margin-top:6px"></div>
       </div>
 
-    </div>
-  `;
+    </div>`;
 }
 
-async function redeemPromoCode() {
+async function redeemPromo() {
   const code = document.getElementById('promo-input')?.value?.trim().toUpperCase();
-  const res  = document.getElementById('promo-result');
-  if (!code) { if (res) res.innerHTML = '<span style="color:var(--warn)">Enter a code first.</span>'; return; }
-  if (res) res.innerHTML = '<span style="color:var(--text-muted)">Redeeming…</span>';
+  const msg  = document.getElementById('promo-msg');
+  if (!code) { if (msg) msg.innerHTML = '<span style="color:var(--warn)">Enter a code.</span>'; return; }
+  if (msg) msg.innerHTML = '<span style="color:var(--text-muted)">Redeeming…</span>';
   try {
-    const token = localStorage.getItem('udt_token') || S.auth?.token;
-    const r = await fetch('https://ultimatedevtools-production.up.railway.app/api/subscription/redeem-promo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    const token = localStorage.getItem('udt_token');
+    const r = await fetch(BACKEND + '/api/subscription/redeem-promo', {
+      method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
       body: JSON.stringify({ code })
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || 'Failed');
-    if (res) res.innerHTML = `<span style="color:var(--green-dim)">✓ Code applied! ${d.days} day trial activated.</span>`;
-    await refreshSubStatus();
-    renderSubscriptionPage(); // refresh
+    if (msg) msg.innerHTML = `<span style="color:var(--green-dim)">✓ Applied! ${d.days}-day trial activated.</span>`;
+    await _refreshSubServer();
+    renderSubPage();
   } catch (e) {
-    if (res) res.innerHTML = `<span style="color:var(--danger)">${e.message}</span>`;
+    if (msg) msg.innerHTML = `<span style="color:var(--danger)">${e.message}</span>`;
   }
 }
 
-// ── Admin page ───────────────────────────────────────────────────────────────
-const BACKEND = 'https://ultimatedevtools-production.up.railway.app/api';
-let _adminUsers = [], _adminCodes = [], _adminWhitelist = [], _adminAdmins = [];
-let _adminUsersPage = 1, _adminUsersSearch = '', _adminUsersTotal = 0;
-
-async function adminFetch(path, opts = {}) {
-  const token = localStorage.getItem('udt_token') || S.auth?.token;
-  const res = await fetch(BACKEND + path, {
-    ...opts,
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, ...(opts.headers || {}) }
-  });
-  const d = await res.json();
-  if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
-  return d;
-}
-
+// ── Admin panel ───────────────────────────────────────────────────────────────
 function renderAdminPage() {
   const main = document.getElementById('main');
   if (!main) return;
   main.innerHTML = `
-    <div class="tool-header">
-      <div class="tool-title-row">
-        <span class="tool-title">Admin Panel</span>
-      </div>
-    </div>
+    <div class="tool-header"><div class="tool-title-row"><span class="tool-title">Admin Panel</span></div></div>
     <div class="scroll-area" id="scroll-area">
       <div class="admin-tabs">
         <button class="admin-tab ${_adminTab==='users'?'active':''}" onclick="switchAdminTab('users')">Users</button>
@@ -684,290 +625,215 @@ function renderAdminPage() {
         <button class="admin-tab ${_adminTab==='whitelist'?'active':''}" onclick="switchAdminTab('whitelist')">Whitelist</button>
         <button class="admin-tab ${_adminTab==='admins'?'active':''}" onclick="switchAdminTab('admins')">Admins</button>
       </div>
-      <div id="admin-tab-content">
-        <div class="admin-empty">Loading…</div>
-      </div>
-    </div>
-  `;
-  loadAdminTab(_adminTab);
+      <div id="admin-content"><div class="admin-empty">Loading…</div></div>
+    </div>`;
+  _loadAdminTab();
 }
 
-function switchAdminTab(tab) {
-  _adminTab = tab;
-  renderAdminPage();
+function switchAdminTab(tab) { _adminTab = tab; renderAdminPage(); }
+
+async function _adminFetch(path, opts={}) {
+  const token = localStorage.getItem('udt_token');
+  const r = await fetch(BACKEND + '/api' + path, {
+    ...opts,
+    headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+token, ...(opts.headers||{}) }
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+  return d;
 }
 
-async function loadAdminTab(tab) {
-  const el = document.getElementById('admin-tab-content');
+async function _loadAdminTab() {
+  const el = document.getElementById('admin-content');
   if (!el) return;
   try {
-    if (tab === 'users')     await loadAdminUsers(el);
-    if (tab === 'codes')     await loadAdminCodes(el);
-    if (tab === 'whitelist') await loadAdminWhitelist(el);
-    if (tab === 'admins')    await loadAdminAdmins(el);
-  } catch (e) {
-    el.innerHTML = `<div class="admin-empty" style="color:var(--danger)">${e.message}</div>`;
-  }
+    if (_adminTab === 'users')     await _loadUsers(el);
+    if (_adminTab === 'codes')     await _loadCodes(el);
+    if (_adminTab === 'whitelist') await _loadWhitelist(el);
+    if (_adminTab === 'admins')    await _loadAdmins(el);
+  } catch (e) { el.innerHTML = `<div class="admin-empty" style="color:var(--danger)">${e.message}</div>`; }
 }
 
-async function loadAdminUsers(el) {
-  const d = await adminFetch(`/admin/users?page=${_adminUsersPage}&search=${encodeURIComponent(_adminUsersSearch)}`);
-  _adminUsers      = d.users || [];
-  _adminUsersTotal = d.total || 0;
-  const pages      = d.pages || 1;
-  const fmtDate    = iso => iso ? new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'}) : '—';
-
+// Users
+let _usersPage=1, _usersSearch='';
+async function _loadUsers(el) {
+  const d = await _adminFetch(`/admin/users?page=${_usersPage}&search=${encodeURIComponent(_usersSearch)}`);
+  const fmtD = iso => iso ? new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'}) : '—';
   el.innerHTML = `
     <div class="admin-input-row">
-      <input type="text" placeholder="Search by email…" value="${_adminUsersSearch}" id="admin-user-search" oninput="_adminUserSearchDebounce(this.value)" style="flex:1;font-size:11px"/>
+      <input type="text" placeholder="Search by email…" value="${_usersSearch}" id="u-search" oninput="_usersDebounce(this.value)" style="font-size:11px"/>
     </div>
-    <div style="font-size:9.5px;color:var(--text-muted);margin-bottom:8px">${_adminUsersTotal} users</div>
-    <table class="admin-table">
+    <div style="font-size:9.5px;color:var(--text-muted);margin-bottom:8px">${d.total||0} users</div>
+    <table class="admin-tbl">
       <thead><tr><th>Email</th><th>Status</th><th>Expires</th><th>Joined</th><th></th></tr></thead>
       <tbody>
-        ${_adminUsers.length === 0 ? `<tr><td colspan="5"><div class="admin-empty">No users found.</div></td></tr>` :
-          _adminUsers.map(u => `
-            <tr>
-              <td style="font-family:var(--mono);font-size:10px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${u.email}</td>
-              <td>${u.sub_active
-                  ? `<span class="admin-badge ${u.sub_trial ? 'blue' : 'green'}">${u.sub_trial ? 'Trial' : 'Active'}</span>`
-                  : `<span class="admin-badge grey">None</span>`}</td>
-              <td style="font-size:10px;color:var(--text-muted)">${fmtDate(u.sub_expires_at)}</td>
-              <td style="font-size:10px;color:var(--text-muted)">${fmtDate(u.created_at)}</td>
-              <td>${u.sub_active ? `<button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:9px" onclick="adminRevokeSub(${u.id},'${u.email}')">Revoke</button>` : ''}</td>
-            </tr>`).join('')}
+        ${(d.users||[]).length===0?`<tr><td colspan="5"><div class="admin-empty">No users found.</div></td></tr>`:(d.users||[]).map(u=>`
+          <tr>
+            <td style="font-family:var(--mono);font-size:10px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${u.email}</td>
+            <td>${u.sub_active?`<span class="abadge ${u.sub_trial?'b':'g'}">${u.sub_trial?'Trial':'Active'}</span>`:'<span class="abadge n">None</span>'}</td>
+            <td style="font-size:10px;color:var(--text-muted)">${fmtD(u.sub_expires_at)}</td>
+            <td style="font-size:10px;color:var(--text-muted)">${fmtD(u.created_at)}</td>
+            <td>${u.sub_active?`<button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:9px" onclick="adminRevokeSub(${u.id},'${u.email}')">Revoke</button>`:''}</td>
+          </tr>`).join('')}
       </tbody>
     </table>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;font-size:10px;color:var(--text-muted)">
-      <span>Page ${_adminUsersPage} / ${pages}</span>
+      <span>Page ${_usersPage}/${d.pages||1}</span>
       <div style="display:flex;gap:6px">
-        ${_adminUsersPage > 1 ? `<button class="btn btn-ghost btn-sm" onclick="adminUsersPage(${_adminUsersPage-1})">← Prev</button>` : ''}
-        ${_adminUsersPage < pages ? `<button class="btn btn-ghost btn-sm" onclick="adminUsersPage(${_adminUsersPage+1})">Next →</button>` : ''}
+        ${_usersPage>1?`<button class="btn btn-ghost btn-sm" onclick="_usersPage(${_usersPage-1})">← Prev</button>`:''}
+        ${_usersPage<(d.pages||1)?`<button class="btn btn-ghost btn-sm" onclick="_usersPage(${_usersPage+1})">Next →</button>`:''}
       </div>
-    </div>
-  `;
+    </div>`;
 }
-
-let _userSearchTimer;
-window._adminUserSearchDebounce = (v) => {
-  clearTimeout(_userSearchTimer);
-  _userSearchTimer = setTimeout(() => { _adminUsersSearch = v; _adminUsersPage = 1; loadAdminUsers(document.getElementById('admin-tab-content')); }, 320);
+let _uSearchT;
+window._usersDebounce = v => { clearTimeout(_uSearchT); _uSearchT=setTimeout(()=>{_usersSearch=v;_usersPage=1;_loadUsers(document.getElementById('admin-content'));},320); };
+window._usersPage = p => { _usersPage=p; _loadUsers(document.getElementById('admin-content')); };
+window.adminRevokeSub = async (id,email) => {
+  if (!confirm(`Revoke subscription for ${email}?`)) return;
+  await _adminFetch('/admin/users/revoke-sub',{method:'POST',body:JSON.stringify({user_id:id})});
+  showToast('Revoked'); _loadUsers(document.getElementById('admin-content'));
 };
 
-function adminUsersPage(p) { _adminUsersPage = p; loadAdminUsers(document.getElementById('admin-tab-content')); }
-
-async function adminRevokeSub(id, email) {
-  if (!confirm(`Revoke subscription for ${email}?`)) return;
-  await adminFetch('/admin/users/revoke-sub', { method:'POST', body: JSON.stringify({ user_id: id }) });
-  showToast('Subscription revoked');
-  loadAdminUsers(document.getElementById('admin-tab-content'));
-}
-
-async function loadAdminCodes(el) {
-  const d = await adminFetch('/admin/promo/list');
-  _adminCodes = d.codes || [];
-  const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'}) : '—';
-
+// Codes
+async function _loadCodes(el) {
+  const d = await _adminFetch('/admin/promo/list');
+  const fmtD = iso => iso ? new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'}) : '—';
   el.innerHTML = `
-    <div class="admin-section-title">Generate Code</div>
+    <div class="admin-sec-lbl">Generate Code</div>
     <div class="admin-input-row">
-      <input type="number" id="code-days" value="5" min="1" max="90" style="width:60px" placeholder="Days"/>
-      <input type="text" id="code-label" placeholder="Label (optional)" style="flex:1"/>
-      <button class="btn btn-primary btn-sm" onclick="adminGenerateCode()">Generate</button>
+      <input type="number" id="c-days" value="5" min="1" max="90" style="width:60px" placeholder="Days"/>
+      <input type="text"   id="c-label" placeholder="Label (optional)" style="flex:1"/>
+      <button class="btn btn-primary btn-sm" onclick="_genCode()">Generate</button>
     </div>
-    <div id="new-code-result" style="margin-bottom:10px"></div>
-
-    <div class="admin-section-title">All Codes</div>
-    <table class="admin-table">
+    <div id="code-result" style="margin-bottom:10px"></div>
+    <div class="admin-sec-lbl">All Codes</div>
+    <table class="admin-tbl">
       <thead><tr><th>Code</th><th>Days</th><th>Status</th><th>Redeemed By</th><th>Date</th><th></th></tr></thead>
       <tbody>
-        ${_adminCodes.length === 0 ? `<tr><td colspan="6"><div class="admin-empty">No codes yet.</div></td></tr>` :
-          _adminCodes.map(c => `
-            <tr>
-              <td><span class="admin-code-chip" onclick="navigator.clipboard.writeText('${c.code}');showToast('Copied!')">${c.code}</span></td>
-              <td>${c.days}</td>
-              <td>${c.disabled ? '<span class="admin-badge grey">Disabled</span>' : c.redeemed_by ? '<span class="admin-badge blue">Used</span>' : '<span class="admin-badge green">Available</span>'}</td>
-              <td style="font-family:var(--mono);font-size:9.5px;color:var(--text-muted)">${c.redeemed_by || '—'}</td>
-              <td style="font-size:9.5px;color:var(--text-muted)">${fmtDate(c.redeemed_at || c.created_at)}</td>
-              <td>${!c.redeemed_by && !c.disabled ? `<button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:9px" onclick="adminDisableCode('${c.code}')">Disable</button>` : ''}</td>
-            </tr>`).join('')}
+        ${(d.codes||[]).length===0?`<tr><td colspan="6"><div class="admin-empty">No codes yet.</div></td></tr>`:(d.codes||[]).map(c=>`
+          <tr>
+            <td><span class="code-chip" onclick="navigator.clipboard.writeText('${c.code}');showToast('Copied!')">${c.code}</span></td>
+            <td>${c.days}</td>
+            <td>${c.disabled?'<span class="abadge n">Disabled</span>':c.redeemed_by?'<span class="abadge b">Used</span>':'<span class="abadge g">Available</span>'}</td>
+            <td style="font-family:var(--mono);font-size:9.5px;color:var(--text-muted)">${c.redeemed_by||'—'}</td>
+            <td style="font-size:9.5px;color:var(--text-muted)">${fmtD(c.redeemed_at||c.created_at)}</td>
+            <td>${!c.redeemed_by&&!c.disabled?`<button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:9px" onclick="_disableCode('${c.code}')">Disable</button>`:''}</td>
+          </tr>`).join('')}
       </tbody>
-    </table>
-  `;
+    </table>`;
 }
-
-async function adminGenerateCode() {
-  const days  = parseInt(document.getElementById('code-days')?.value) || 5;
-  const label = document.getElementById('code-label')?.value?.trim() || '';
-  const res   = document.getElementById('new-code-result');
+window._genCode = async () => {
+  const days=parseInt(document.getElementById('c-days')?.value)||5, label=document.getElementById('c-label')?.value?.trim()||'';
+  const res=document.getElementById('code-result');
   try {
-    const d = await adminFetch('/admin/promo/generate', { method:'POST', body: JSON.stringify({ days, label }) });
-    if (res) res.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:6px 0"><span class="admin-code-chip" onclick="navigator.clipboard.writeText('${d.code}');showToast('Copied!')">${d.code}</span><span style="font-size:10px;color:var(--text-muted)">${days} days · click to copy</span></div>`;
-    loadAdminCodes(document.getElementById('admin-tab-content'));
-  } catch (e) { if (res) res.innerHTML = `<span style="font-size:10px;color:var(--danger)">${e.message}</span>`; }
-}
+    const d=await _adminFetch('/admin/promo/generate',{method:'POST',body:JSON.stringify({days,label})});
+    if(res) res.innerHTML=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0"><span class="code-chip" onclick="navigator.clipboard.writeText('${d.code}');showToast('Copied!')">${d.code}</span><span style="font-size:10px;color:var(--text-muted)">${days} days</span></div>`;
+    _loadCodes(document.getElementById('admin-content'));
+  } catch(e) { if(res) res.innerHTML=`<span style="font-size:10px;color:var(--danger)">${e.message}</span>`; }
+};
+window._disableCode = async (code) => {
+  if(!confirm(`Disable ${code}?`)) return;
+  await _adminFetch('/admin/promo/disable',{method:'POST',body:JSON.stringify({code})});
+  showToast('Disabled'); _loadCodes(document.getElementById('admin-content'));
+};
 
-async function adminDisableCode(code) {
-  if (!confirm(`Disable code ${code}?`)) return;
-  await adminFetch('/admin/promo/disable', { method:'POST', body: JSON.stringify({ code }) });
-  showToast('Code disabled');
-  loadAdminCodes(document.getElementById('admin-tab-content'));
-}
-
-async function loadAdminWhitelist(el) {
-  const d = await adminFetch('/admin/whitelist/list');
-  _adminWhitelist = d.emails || [];
-  const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'}) : '—';
-
+// Whitelist
+async function _loadWhitelist(el) {
+  const d = await _adminFetch('/admin/whitelist/list');
+  const fmtD = iso => iso ? new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'}) : '—';
   el.innerHTML = `
-    <div class="admin-section-title">Add Email</div>
+    <div class="admin-sec-lbl">Add Email</div>
     <div class="admin-input-row">
-      <input type="email" id="wl-email" placeholder="user@example.com" style="flex:1"/>
-      <button class="btn btn-primary btn-sm" onclick="adminAddWhitelist()">Add</button>
+      <input type="email" id="wl-input" placeholder="user@example.com" style="flex:1"/>
+      <button class="btn btn-primary btn-sm" onclick="_addWl()">Add</button>
     </div>
-    <div class="admin-section-title">Whitelisted Emails</div>
-    ${_adminWhitelist.length === 0 ? '<div class="admin-empty">No emails whitelisted.</div>' :
-      _adminWhitelist.map(w => `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
-          <span style="font-family:var(--mono);font-size:10.5px">${w.email}</span>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:9.5px;color:var(--text-muted)">${fmtDate(w.added_at)}</span>
-            <button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:9px" onclick="adminRemoveWhitelist('${w.email}')">Remove</button>
-          </div>
-        </div>`).join('')}
-  `;
+    <div class="admin-sec-lbl">Whitelisted</div>
+    ${(d.emails||[]).length===0?'<div class="admin-empty">No emails whitelisted.</div>':(d.emails||[]).map(w=>`
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
+        <span style="font-family:var(--mono);font-size:10.5px">${w.email}</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:9.5px;color:var(--text-muted)">${fmtD(w.added_at)}</span>
+          <button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:9px" onclick="_removeWl('${w.email}')">Remove</button>
+        </div>
+      </div>`).join('')}`;
 }
+window._addWl = async () => {
+  const e=document.getElementById('wl-input')?.value?.trim(); if(!e) return;
+  await _adminFetch('/admin/whitelist',{method:'POST',body:JSON.stringify({email:e})});
+  showToast(`✓ ${e} whitelisted`); _loadWhitelist(document.getElementById('admin-content'));
+};
+window._removeWl = async (email) => {
+  if(!confirm(`Remove ${email}?`)) return;
+  await _adminFetch('/admin/whitelist/remove',{method:'POST',body:JSON.stringify({email})});
+  showToast('Removed'); _loadWhitelist(document.getElementById('admin-content'));
+};
 
-async function adminAddWhitelist() {
-  const email = document.getElementById('wl-email')?.value?.trim();
-  if (!email) return;
-  await adminFetch('/admin/whitelist', { method:'POST', body: JSON.stringify({ email }) });
-  showToast(`✓ ${email} whitelisted`);
-  loadAdminWhitelist(document.getElementById('admin-tab-content'));
-}
-
-async function adminRemoveWhitelist(email) {
-  if (!confirm(`Remove ${email} from whitelist?`)) return;
-  await adminFetch('/admin/whitelist/remove', { method:'POST', body: JSON.stringify({ email }) });
-  showToast('Removed');
-  loadAdminWhitelist(document.getElementById('admin-tab-content'));
-}
-
-async function loadAdminAdmins(el) {
-  const d = await adminFetch('/admin/admins/list');
-  _adminAdmins = d.admins || [];
-
+// Admins
+async function _loadAdmins(el) {
+  const d = await _adminFetch('/admin/admins/list');
   el.innerHTML = `
-    <div class="admin-section-title">Grant Admin Access</div>
-    <p style="font-size:10px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">Only grant to trusted accounts. Admins have full access to this panel.</p>
+    <div class="admin-sec-lbl">Grant Admin</div>
+    <p style="font-size:10px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">Admins have full access to this panel. Only grant to trusted accounts.</p>
     <div class="admin-input-row">
-      <input type="email" id="admin-email-input" placeholder="user@example.com" style="flex:1"/>
-      <button class="btn btn-primary btn-sm" onclick="adminGrantAdmin()">Grant</button>
+      <input type="email" id="adm-input" placeholder="user@example.com" style="flex:1"/>
+      <button class="btn btn-primary btn-sm" onclick="_grantAdmin()">Grant</button>
     </div>
-    <div class="admin-section-title">Current Admins</div>
-    ${_adminAdmins.length === 0 ? '<div class="admin-empty">No admins found.</div>' :
-      _adminAdmins.map(a => `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
-          <div style="display:flex;align-items:center;gap:8px">
-            <div style="width:22px;height:22px;border-radius:50%;background:var(--navy-ghost2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--navy)">${(a.email[0]||'?').toUpperCase()}</div>
-            <span style="font-family:var(--mono);font-size:10.5px">${a.email}</span>
-            ${a.is_superadmin ? '<span class="admin-badge blue">Superadmin</span>' : ''}
-          </div>
-          ${!a.is_superadmin ? `<button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:9px" onclick="adminRemoveAdmin('${a.email}')">Remove</button>` : ''}
-        </div>`).join('')}
-  `;
+    <div class="admin-sec-lbl">Current Admins</div>
+    ${(d.admins||[]).length===0?'<div class="admin-empty">No admins.</div>':(d.admins||[]).map(a=>`
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:22px;height:22px;border-radius:50%;background:var(--navy-ghost2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--navy)">${(a.email[0]||'?').toUpperCase()}</div>
+          <span style="font-family:var(--mono);font-size:10.5px">${a.email}</span>
+          ${a.is_superadmin?'<span class="abadge b">Superadmin</span>':''}
+        </div>
+        ${!a.is_superadmin?`<button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:9px" onclick="_removeAdmin('${a.email}')">Remove</button>`:''}
+      </div>`).join('')}`;
 }
+window._grantAdmin = async () => {
+  const e=document.getElementById('adm-input')?.value?.trim(); if(!e||!confirm(`Grant admin to ${e}?`)) return;
+  await _adminFetch('/admin/admins/add',{method:'POST',body:JSON.stringify({email:e})});
+  showToast(`✓ ${e} is now admin`); _loadAdmins(document.getElementById('admin-content'));
+};
+window._removeAdmin = async (email) => {
+  if(!confirm(`Remove admin from ${email}?`)) return;
+  await _adminFetch('/admin/admins/remove',{method:'POST',body:JSON.stringify({email})});
+  showToast('Removed'); _loadAdmins(document.getElementById('admin-content'));
+};
 
-async function adminGrantAdmin() {
-  const email = document.getElementById('admin-email-input')?.value?.trim();
-  if (!email) return;
-  if (!confirm(`Grant admin access to ${email}?`)) return;
-  await adminFetch('/admin/admins/add', { method:'POST', body: JSON.stringify({ email }) });
-  showToast(`✓ ${email} is now admin`);
-  loadAdminAdmins(document.getElementById('admin-tab-content'));
-}
-
-async function adminRemoveAdmin(email) {
-  if (!confirm(`Remove admin from ${email}?`)) return;
-  await adminFetch('/admin/admins/remove', { method:'POST', body: JSON.stringify({ email }) });
-  showToast('Admin removed');
-  loadAdminAdmins(document.getElementById('admin-tab-content'));
-}
-
-// ── Sign out ────────────────────────────────────────────────────────────────
-async function webSignOut() {
-  try { if (typeof authLogout === 'function') await authLogout(); } catch {}
-  try { localStorage.removeItem('udt_token'); localStorage.removeItem('udt_user'); localStorage.removeItem('udt_sub_cache'); } catch {}
-  window.location.href = 'auth.html';
-}
-
-// ── Payment overlay ─────────────────────────────────────────────────────────
+// ── Payment overlay ───────────────────────────────────────────────────────────
 function openPayOverlay() {
-  _payMethod = null;
-  document.querySelectorAll('.pay-opt').forEach(o => o.classList.remove('sel'));
-  document.getElementById('pay-inst').innerHTML = '';
-  const btn = document.getElementById('pay-gen-btn');
-  if (btn) { btn.disabled = false; btn.textContent = 'Generate Details'; }
-  document.getElementById('pay-overlay').style.display = 'flex';
+  _payMethod=null;
+  document.querySelectorAll('.pay-opt').forEach(o=>o.classList.remove('sel'));
+  document.getElementById('pay-inst').innerHTML='';
+  const btn=document.getElementById('pay-gen-btn'); if(btn){btn.disabled=false;btn.textContent='Generate Details';}
+  document.getElementById('pay-overlay').style.display='flex';
 }
-
-function paySelect(method, el) {
-  _payMethod = method;
-  document.querySelectorAll('.pay-opt').forEach(o => o.classList.remove('sel'));
-  el.classList.add('sel');
-  document.getElementById('pay-inst').innerHTML = '';
-}
-
+function paySelect(m,el) { _payMethod=m; document.querySelectorAll('.pay-opt').forEach(o=>o.classList.remove('sel')); el.classList.add('sel'); document.getElementById('pay-inst').innerHTML=''; }
 async function payGenerate() {
-  if (!_payMethod) { showToast('Select a payment method first'); return; }
-  const btn = document.getElementById('pay-gen-btn');
-  btn.disabled = true; btn.textContent = 'Loading…';
+  if(!_payMethod){showToast('Select a payment method');return;}
+  const btn=document.getElementById('pay-gen-btn'); btn.disabled=true; btn.textContent='Loading…';
+  const token=localStorage.getItem('udt_token');
   try {
-    const token = localStorage.getItem('udt_token') || S.auth?.token;
-    const r = await fetch('https://ultimatedevtools-production.up.railway.app/api/subscription/payment/init', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ method: _payMethod })
-    });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.error || 'Failed');
-
-    const inst = document.getElementById('pay-inst');
-    if (_payMethod === 'paypal') {
-      inst.innerHTML = `<a href="${d.paypal_url}" target="_blank" class="btn btn-primary btn-full" style="display:block;text-align:center;text-decoration:none;margin-top:8px">Open PayPal →</a>`;
+    const r=await fetch(BACKEND+'/api/subscription/payment/init',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({method:_payMethod})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.error||'Failed');
+    const inst=document.getElementById('pay-inst');
+    if(_payMethod==='paypal') {
+      inst.innerHTML=`<a href="${d.paypal_url}" target="_blank" class="btn btn-primary btn-full" style="display:block;text-align:center;text-decoration:none;margin-top:8px">Open PayPal →</a>`;
     } else {
-      const addrId = 'addr-' + Date.now();
-      inst.innerHTML = `
-        <div style="font-size:9.5px;color:var(--text-muted);margin-bottom:3px">Send exactly:</div>
-        <div class="pay-amt">${d.amount_sol} SOL</div>
-        <div style="font-size:9.5px;color:var(--text-muted);margin:6px 0 2px">To (click to copy):</div>
-        <div class="pay-addr" id="${addrId}">${d.address}</div>
-        <div class="pay-watch"><div class="pay-spin"></div>Watching for confirmation…</div>`;
-      document.getElementById(addrId)?.addEventListener('click', () => {
-        navigator.clipboard.writeText(d.address); showToast('Address copied!');
-      });
-      if (_payPoll) clearInterval(_payPoll);
-      _payPoll = setInterval(async () => {
+      const aid='addr-'+Date.now();
+      inst.innerHTML=`<div style="font-size:9.5px;color:var(--text-muted);margin-bottom:3px">Send exactly:</div><div class="pay-amt">${d.amount_sol} SOL</div><div style="font-size:9.5px;color:var(--text-muted);margin:6px 0 2px">To (click to copy):</div><div class="pay-addr" id="${aid}">${d.address}</div><div class="pay-watch"><div class="pay-spin"></div>Watching for confirmation…</div>`;
+      document.getElementById(aid)?.addEventListener('click',()=>{navigator.clipboard.writeText(d.address);showToast('Copied!');});
+      if(_payPoll) clearInterval(_payPoll);
+      _payPoll=setInterval(async()=>{
         try {
-          const pr = await fetch(`https://ultimatedevtools-production.up.railway.app/api/subscription/payment/check/${d.payment_id}`, {
-            headers: { 'Authorization': 'Bearer ' + token }
-          });
-          const pd = await pr.json();
-          if (pd.confirmed) {
-            clearInterval(_payPoll);
-            document.getElementById('pay-overlay').style.display = 'none';
-            showToast('Payment confirmed! 🎉');
-            await refreshSubStatus();
-            if (_webTool === 'subscription') renderSubscriptionPage();
-          }
+          const pr=await fetch(BACKEND+`/api/subscription/payment/check/${d.payment_id}`,{headers:{'Authorization':'Bearer '+token}});
+          const pd=await pr.json();
+          if(pd.confirmed){clearInterval(_payPoll);document.getElementById('pay-overlay').style.display='none';showToast('Payment confirmed! 🎉');await _refreshSubServer();if(_webTool==='subscription')renderSubPage();}
         } catch {}
-      }, 5000);
+      },5000);
     }
-    btn.textContent = '✓ Generated';
-  } catch (e) {
-    showToast(e.message || 'Failed');
-    btn.disabled = false; btn.textContent = 'Generate Details';
-  }
+    btn.textContent='✓ Generated';
+  } catch(e){showToast(e.message||'Failed');btn.disabled=false;btn.textContent='Generate Details';}
 }
 </script>
 </body>
