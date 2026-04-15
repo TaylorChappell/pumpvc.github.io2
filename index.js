@@ -245,48 +245,26 @@ async function solRpc(method, params) {
 }
 
 // ── Build + sign + serialize a SOL transfer transaction ─────────────────────────
-// Pure bytes — no SDK. Works with any valid Ed25519 keypair.
 function buildTransferTx(fromKp, toPubkeyBytes, lamports, blockhashBytes) {
-  const from     = fromKp.publicKey;            // Uint8Array(32)
-  const to       = toPubkeyBytes;               // Uint8Array(32)
-  const sysProg  = new Uint8Array(32);          // System Program = 32 zero bytes
-  const bh       = blockhashBytes;              // Uint8Array(32)
+  // Simple transfer using @solana/web3.js (much more reliable than manual bytes)
+  const tx = new web3.Transaction({
+    recentBlockhash: bs58.encode(blockhashBytes),
+    feePayer: fromKp.publicKey
+  });
 
-  // Compact-u16 encoding (Solana uses this for array lengths in messages)
-  const cu16 = n => n <= 0x7f ? [n] : [n & 0x7f | 0x80, n >> 7];
+  tx.add(
+    web3.SystemProgram.transfer({
+      fromPubkey: fromKp.publicKey,
+      toPubkey: new web3.PublicKey(toPubkeyBytes),
+      lamports: lamports
+    })
+  );
 
-  // Instruction data: u32 LE type=2 (transfer) + u64 LE lamports
-  const ib = new ArrayBuffer(12);
-  const dv = new DataView(ib);
-  dv.setUint32(0, 2, true);                          // instruction type: transfer
-  dv.setUint32(4, lamports >>> 0, true);             // lo 32 bits
-  dv.setUint32(8, Math.floor(lamports / 0x100000000), true); // hi 32 bits
-  const instrData = new Uint8Array(ib);
+  // Sign the transaction
+  tx.sign(fromKp);
 
-  // Message layout:
-  //   [1] num_required_signatures
-  //   [1] num_readonly_signed
-  //   [1] num_readonly_unsigned
-  //   [cu16] account_keys length
-  //   [32*3] accounts: from, to, system_program
-  //   [32]   recent_blockhash
-  //   [cu16] instructions length
-  //   instruction: [1] program_idx, [cu16] accounts_len, [1,1] account_idxs, [cu16] data_len, [12] data
-  const msg = new Uint8Array([
-    1, 0, 1,                                               // header
-    ...cu16(3), ...from, ...to, ...sysProg,                // accounts
-    ...bh,                                                 // recent blockhash
-    ...cu16(1),                                            // 1 instruction
-    2,                                                     // program index (system program = idx 2)
-    ...cu16(2), 0, 1,                                      // 2 account indexes: from=0, to=1
-    ...cu16(instrData.length), ...instrData,               // instruction data
-  ]);
-
-  // Sign the message
-  const sig = nacl.sign.detached(msg, fromKp.secretKey);
-
-  // Wire format: [cu16(1)] [sig(64)] [message]
-  return new Uint8Array([...cu16(1), ...sig, ...msg]);
+  // Serialize to base64 for sendTransaction
+  return tx.serialize();
 }
 
 // ── Decode b58 blockhash string to 32 bytes ─────────────────────────────────────
