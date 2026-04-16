@@ -283,6 +283,34 @@ function buildBundleCreateTab() {
   const open = !!S.bundle._createSourceOpen;
 
   return `
+
+    <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
+      <div class="settings-section-title" style="display:flex;align-items:center;gap:6px">
+        <span>Min SOL Per Wallet</span>
+        <button class="help-q"
+          data-action="show-help"
+          data-title="Min SOL Per Wallet"
+          data-body="Optional minimum for every generated wallet. Leave blank or 0 for no minimum.">
+          ?
+        </button>
+        <span style="font-size:9px;font-weight:400;color:var(--text-muted)">(optional)</span>
+      </div>
+
+      <div class="add-row" style="align-items:center">
+        <input
+          type="number"
+          id="cb-min-sol"
+          value="${c.minSolPerWallet || ''}"
+          min="0"
+          step="0.01"
+          placeholder="No minimum"
+          style="width:100px"
+          data-bind-bundle-create="minSolPerWallet"
+        />
+        <span style="font-size:10px;color:var(--text-muted)">SOL minimum per wallet</span>
+      </div>
+    </div>
+
     <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
       <div class="settings-section-title" style="display:flex;align-items:center;gap:6px">
         <span>Source Wallet</span>
@@ -674,33 +702,123 @@ function buildBundleLoading(p) {
 // ══════════════════════════════════════════
 // CREATE BUNDLE LOGIC
 // ══════════════════════════════════════════
-function bundleDistributeSOL(totalSol, walletCount, distribMode, maxPerWallet) {
+function bundleDistributeSOL(totalSol, walletCount, distribMode, minPerWallet, maxPerWallet) {
   const total = parseFloat(totalSol);
+  const min = parseFloat(minPerWallet) > 0 ? parseFloat(minPerWallet) : 0;
   const max = parseFloat(maxPerWallet) > 0 ? parseFloat(maxPerWallet) : Infinity;
-  const amounts = [];
+
+  if (!Number.isFinite(total) || total <= 0) {
+    throw new Error('Invalid total SOL');
+  }
+
+  if (!Number.isFinite(walletCount) || walletCount < 1) {
+    throw new Error('Invalid wallet count');
+  }
+
+  if (min > max) {
+    throw new Error('Min SOL per wallet cannot be greater than max SOL per wallet');
+  }
+
+  if ((min * walletCount) > total) {
+    throw new Error(`Total SOL is too low. You need at least ${(min * walletCount).toFixed(6)} SOL for ${walletCount} wallets with a minimum of ${min} SOL each.`);
+  }
+
+  if (Number.isFinite(max) && (max * walletCount) < total) {
+    throw new Error(`Total SOL is too high for the current max cap. Maximum distributable is ${(max * walletCount).toFixed(6)} SOL.`);
+  }
+
+  const amounts = Array(walletCount).fill(min);
+  let remaining = total - (min * walletCount);
+
+  if (remaining <= 0) {
+    return amounts.map(v => parseFloat(v.toFixed(6)));
+  }
 
   if (distribMode === 'equal') {
-    const each = total / walletCount;
-    for (let i = 0; i < walletCount; i++) {
-      amounts.push(parseFloat(Math.min(each, max).toFixed(6)));
-    }
-  } else {
-    const weights = Array.from({ length: walletCount }, () => Math.random());
-    const wSum = weights.reduce((a, b) => a + b, 0);
-    let remaining = total;
+    const extraEach = remaining / walletCount;
 
     for (let i = 0; i < walletCount; i++) {
-      if (i === walletCount - 1) {
-        amounts.push(parseFloat(Math.max(0, Math.min(remaining, max)).toFixed(6)));
-      } else {
-        const share = parseFloat(Math.min((weights[i] / wSum) * total, max).toFixed(6));
-        amounts.push(share);
-        remaining -= share;
+      amounts[i] += extraEach;
+      if (amounts[i] > max) {
+        throw new Error('Equal distribution exceeds the max SOL per wallet cap');
+      }
+    }
+
+    return amounts.map(v => parseFloat(v.toFixed(6)));
+  }
+
+  const capacities = amounts.map(v => max - v);
+  const finiteCapTotal = capacities.reduce((sum, cap) => sum + (Number.isFinite(cap) ? cap : remaining), 0);
+
+  if (finiteCapTotal < remaining && Number.isFinite(max)) {
+    throw new Error('Not enough room to distribute remaining SOL within the max cap');
+  }
+
+  let safety = 0;
+  while (remaining > 0.000001 && safety < 1000) {
+    safety++;
+
+    const openIndexes = amounts
+      .map((v, i) => ({ i, room: max - v }))
+      .filter(x => x.room > 0.000001);
+
+    if (!openIndexes.length) break;
+
+    const weights = openIndexes.map(() => Math.random());
+    const weightSum = weights.reduce((a, b) => a + b, 0);
+
+    let distributedThisPass = 0;
+
+    for (let n = 0; n < openIndexes.length; n++) {
+      const { i, room } = openIndexes[n];
+      const share = (weights[n] / weightSum) * remaining;
+      const add = Math.min(room, share);
+
+      amounts[i] += add;
+      distributedThisPass += add;
+    }
+
+    remaining -= distributedThisPass;
+
+    if (distributedThisPass <= 0.000001) break;
+  }
+
+  if (remaining > 0.000001) {
+    for (let i = 0; i < amounts.length && remaining > 0.000001; i++) {
+      const room = max - amounts[i];
+      if (room <= 0) continue;
+
+      const add = Math.min(room, remaining);
+      amounts[i] += add;
+      remaining -= add;
+    }
+  }
+
+  if (remaining > 0.00001) {
+    throw new Error('Could not distribute SOL within the min/max wallet constraints');
+  }
+
+  const rounded = amounts.map(v => parseFloat(v.toFixed(6)));
+  let roundedTotal = rounded.reduce((a, b) => a + b, 0);
+  let diff = parseFloat((total - roundedTotal).toFixed(6));
+
+  for (let i = 0; Math.abs(diff) >= 0.000001 && i < rounded.length * 10; i++) {
+    const idx = i % rounded.length;
+
+    if (diff > 0) {
+      if (rounded[idx] + 0.000001 <= max) {
+        rounded[idx] = parseFloat((rounded[idx] + 0.000001).toFixed(6));
+        diff = parseFloat((diff - 0.000001).toFixed(6));
+      }
+    } else {
+      if (rounded[idx] - 0.000001 >= min) {
+        rounded[idx] = parseFloat((rounded[idx] - 0.000001).toFixed(6));
+        diff = parseFloat((diff + 0.000001).toFixed(6));
       }
     }
   }
 
-  return amounts;
+  return rounded;
 }
 
 function bundleGenerateKeypair() {
@@ -742,6 +860,7 @@ async function runCreateBundle() {
   const sourcePriv = (c.sourceWalletPrivKey || sourceWallet?.privateKey || '').trim();
   const walletCount = Math.max(1, Math.min(50, parseInt(c.walletCount) || 5));
   const totalSol = parseFloat(c.totalSol);
+  const minPerWallet = parseFloat(c.minSolPerWallet) || 0;
   const maxPerWallet = parseFloat(c.maxSolPerWallet) || 0;
   const distrib = c.distribMode || 'equal';
 
@@ -771,7 +890,13 @@ async function runCreateBundle() {
 
   // 2) Work out SOL split amounts after wallets exist
   setStep('Calculating distribution…', 18);
-  const amounts = bundleDistributeSOL(totalSol, walletCount, distrib, maxPerWallet);
+  const amounts = bundleDistributeSOL(
+    totalSol,
+    walletCount,
+    distrib,
+    minPerWallet,
+    maxPerWallet
+  );
 
   // 3) Build payload using generated wallet addresses
   const splits = generatedWallets.map((wallet, i) => {
@@ -1494,7 +1619,13 @@ async function runCreateBundle() {
 
   // 2) Work out SOL split amounts after wallets exist
   setStep('Calculating distribution…', 18);
-  const amounts = bundleDistributeSOL(totalSol, walletCount, distrib, maxPerWallet);
+  const amounts = bundleDistributeSOL(
+    totalSol,
+    walletCount,
+    distrib,
+    minPerWallet,
+    maxPerWallet
+  );
 
   // 3) Build payload using generated wallet addresses
   const splits = generatedWallets.map((wallet, i) => {
