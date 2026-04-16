@@ -7,8 +7,6 @@
 
 const PUMPFUN_PROGRAM  = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBymMDer';
 const RAYDIUM_AMM      = '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8';
-const SPLITNOW_KEY     = '...';
-const SPLITNOW_BASE    = 'https://splitnow.io/api/v1';
 
 function getBundleRpc() {
   return (typeof S !== 'undefined' && S.settings?.rpcEndpoint)
@@ -29,7 +27,6 @@ async function bundleRpc(method, params) {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-// ── SplitNow API helper ──────────────────
 async function splitNowReq(method, path, body) {
   const token = localStorage.getItem('udt_token') || S.auth?.token;
   if (!token) throw new Error('Not logged in');
@@ -46,9 +43,9 @@ async function splitNowReq(method, path, body) {
   if (method === 'POST' && path === '/create-bundle') {
     url = BACKEND + '/api/proxy/splitnow/create-bundle';
     opts.body = JSON.stringify(body || {});
-  } else if (method === 'GET' && path.startsWith('/status/')) {
-    const jobId = path.split('/status/')[1];
-    url = BACKEND + '/api/proxy/splitnow/status/' + encodeURIComponent(jobId);
+  } else if (method === 'GET' && path.startsWith('/order/')) {
+    const id = path.split('/order/')[1];
+    url = BACKEND + '/api/proxy/splitnow/order/' + encodeURIComponent(id);
   } else {
     throw new Error(`Unsupported SplitNow proxy route: ${method} ${path}`);
   }
@@ -530,64 +527,85 @@ async function runCreateBundle() {
     if (!S.bundle.create) S.bundle.create = {};
     S.bundle.create.runStep = step;
     S.bundle.create.runPct  = pct;
-    // Update progress bar in DOM without full re-render
+
     const stepEl = document.querySelector('.loading-step');
     const barEl  = document.querySelector('.loading-bar');
     const pctEl  = document.querySelector('.loading-pct');
-    if (stepEl) stepEl.textContent     = step;
-    if (barEl)  barEl.style.width      = pct + '%';
-    if (pctEl)  pctEl.textContent      = pct + '%';
+    if (stepEl) stepEl.textContent = step;
+    if (barEl)  barEl.style.width  = pct + '%';
+    if (pctEl)  pctEl.textContent  = pct + '%';
   };
 
-  // Step 1 — generate keypairs
+  // 1) Generate destination wallets
   setStep('Generating wallets…', 10);
   await sleep(200);
+
   const amounts  = distributeSOL(totalSol, walletCount, distrib, maxPerWallet);
   const keypairs = Array.from({ length: walletCount }, () => generateKeypair());
 
-  // Step 2 — submit to SplitNow
-  setStep('Submitting to SplitNow…', 30);
   const splits = keypairs.map((kp, i) => ({
     address: kp.publicKey,
     amount:  amounts[i],
   }));
 
-  let splitJob = null;
-  try {
-    const proxyResult = await splitNowReq('POST', '/create-bundle', {
-      source_private_key: sourcePriv,
-      splits,
-    });
+  // 2) Create quote + order + deposit through backend proxy
+  setStep('Creating SplitNow quote…', 25);
+  const createRes = await splitNowReq('POST', '/create-bundle', {
+    source_private_key: sourcePriv,
+    splits,
+    exchanger_id: 'binance',
+  });
 
-    splitJob = proxyResult?.data || proxyResult;
-  } catch (e) {
-    throw new Error(`SplitNow API unreachable: ${e.message}`);
-  }
+  const data = createRes?.data || {};
+  const orderId = data.orderId || data.shortId;
+  if (!orderId) throw new Error('SplitNow did not return an order ID');
 
-  // Step 3 — poll for completion
-  setStep('Routing through exchange…', 55);
-  const jobId = splitJob?.id || splitJob?.job_id || splitJob?.transaction_id || splitJob?.split_id;
-  if (jobId) {
-    for (let attempt = 0; attempt < 24; attempt++) {
-      await sleep(3500);
-      setStep(`Confirming on-chain… (${attempt+1}/24)`, 55 + Math.floor(attempt * 1.5));
-      try {
-        const status = await splitNowReq('GET', `/status/${jobId}`);
-        const st = (status?.status || status?.state || '').toLowerCase();
-        if (['completed','confirmed','success','done','complete'].includes(st)) break;
-        if (['failed','error','cancelled'].includes(st)) throw new Error(`Split failed: ${status?.error||status?.message||st}`);
-      } catch (e) {
-        if (e.message.startsWith('Split failed')) throw e;
-      }
+  setStep('Deposit sent — waiting for SplitNow…', 45);
+
+  // 3) Poll order status
+  let latestOrder = data.fetchedOrder || null;
+  let completed = false;
+
+  for (let attempt = 0; attempt < 40; attempt++) {
+    await sleep(5000);
+
+    const orderRes = await splitNowReq('GET', `/order/${orderId}`);
+    latestOrder = orderRes;
+    const orderData = orderRes?.data || orderRes;
+
+    const statusShort = String(orderData?.statusShort || '').toLowerCase();
+    const statusText  = String(orderData?.statusText || '').toLowerCase();
+    const rawStatus   = String(orderData?.status || '').toLowerCase();
+
+    const pct = Math.min(95, 45 + Math.floor(((attempt + 1) / 40) * 45));
+    setStep(`Processing order… ${orderData?.statusShort || orderData?.statusText || orderData?.status || 'pending'}`, pct);
+
+    if (
+      statusShort === 'completed' ||
+      statusText === 'completed' ||
+      rawStatus === 'completed'
+    ) {
+      completed = true;
+      break;
     }
-  } else {
-    // No job ID returned — wait a fixed time for funds to propagate
-    setStep('Waiting for exchange routing…', 60);
-    await sleep(8000);
+
+    if (
+      statusShort === 'failed' ||
+      statusText === 'failed' ||
+      rawStatus === 'failed' ||
+      statusShort === 'cancelled' ||
+      rawStatus === 'cancelled'
+    ) {
+      throw new Error(`SplitNow order failed: ${orderData?.statusText || orderData?.status || 'unknown status'}`);
+    }
   }
 
-  setStep('Finalising…', 95);
-  await sleep(500);
+  if (!completed) {
+    throw new Error('SplitNow order timed out before completion');
+  }
+
+  setStep('Finalising…', 98);
+  await sleep(400);
 
   const wallets = keypairs.map((kp, i) => ({
     publicKey:  kp.publicKey,
@@ -603,26 +621,35 @@ async function runCreateBundle() {
     distribMode: distrib,
     groupName:   c.groupName?.trim() || `Bundle ${new Date().toLocaleDateString('en-GB')}`,
     addToGroup:  !!c.addToGroup,
-    jobId:       jobId || null,
+    orderId:     data.orderId || null,
+    shortId:     data.shortId || null,
+    depositTxSig:data.depositTxSig || null,
+    depositAddress: data.depositAddress || null,
+    depositAmount: data.depositAmount || null,
+    orderData:   latestOrder,
   };
 
-  // Save to history
   if (!S.bundle.createHistory) S.bundle.createHistory = [];
   S.bundle.createHistory.push(result);
   if (S.bundle.createHistory.length > 20) S.bundle.createHistory = S.bundle.createHistory.slice(-20);
 
-  // Add to wallet group
   if (c.addToGroup) {
     const groupName = result.groupName;
     const groupId   = uid();
     S.walletGroups  = S.walletGroups || [];
     S.walletGroups.push({ id: groupId, name: groupName, emoji: '📦', collapsed: false });
+
     wallets.forEach((w, i) => {
       S.savedWallets.push({
-        id: uid(), name: `${groupName} W${i+1}`, emoji: '💼',
-        publicKey: w.publicKey, privateKey: w.privateKey, groupId,
+        id: uid(),
+        name: `${groupName} W${i+1}`,
+        emoji: '💼',
+        publicKey: w.publicKey,
+        privateKey: w.privateKey,
+        groupId,
       });
     });
+
     if (typeof syncWalletsToServer === 'function') await syncWalletsToServer();
     showToast(`✓ ${wallets.length} wallets saved to "${groupName}"`);
   }

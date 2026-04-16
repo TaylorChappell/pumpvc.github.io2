@@ -30,7 +30,7 @@ const PORT             = process.env.PORT              || 3000;
 const SOLANA_RPC       = process.env.SOLANA_RPC        || 'https://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007';
 const GOOGLE_CLIENT_ID = '218003563778-dljv6ld9c467r57p38a6m32gibrtfmld.apps.googleusercontent.com';
 const SPLITNOW_KEY  = process.env.SPLITNOW_KEY || '9a7d704f-fa8f-435d-9231-5bf467e141d0';
-const SPLITNOW_BASE = 'https://splitnow.io/api/v1';
+const SPLITNOW_BASE = 'https://splitnow.io/api';
 
 // ─── DB ─────────────────────────────────────────────────────────────────────
 const db = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
@@ -120,6 +120,142 @@ function authMiddleware(req, res, next) {
   if (!h?.startsWith('Bearer ')) return res.status(401).json({ error: 'No token' });
   try { req.user = jwt.verify(h.slice(7), JWT_SECRET); next(); }
   catch { res.status(401).json({ error: 'Invalid token' }); }
+}
+
+function calcPctBipsFromSplits(splits) {
+  const total = splits.reduce((sum, s) => sum + Number(s.amount || 0), 0);
+  if (!total || total <= 0) throw new Error('Invalid splits total');
+
+  const raw = splits.map(s => ({
+    ...s,
+    pct: Math.floor((Number(s.amount) / total) * 10000),
+  }));
+
+  let used = raw.reduce((sum, s) => sum + s.pct, 0);
+  let diff = 10000 - used;
+
+  // distribute rounding remainder
+  let i = 0;
+  while (diff > 0) {
+    raw[i % raw.length].pct += 1;
+    diff--;
+    i++;
+  }
+
+  return raw.map(s => ({
+    address: s.address,
+    amount: Number(s.amount),
+    pctBips: s.pct,
+  }));
+}
+
+async function splitNowRequest(method, path, body) {
+  const url = SPLITNOW_BASE + path;
+
+  const res = await fetch(url, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': SPLITNOW_KEY,
+      'Accept': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  const text = await res.text();
+
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = null;
+  }
+
+  if (!res.ok) {
+    console.error('[splitnow] HTTP fail', {
+      url,
+      status: res.status,
+      statusText: res.statusText,
+      responseText: text,
+      responseJson: data,
+    });
+
+    const msg =
+      (data && typeof data.message === 'string' && data.message) ||
+      (data && typeof data.error === 'string' && data.error) ||
+      (text && text.trim()) ||
+      `SplitNow API error ${res.status}`;
+
+    throw new Error(msg);
+  }
+
+  return data ?? { success: true };
+}
+
+async function createSplitNowQuote(totalSol) {
+  const payload = {
+    type: 'floating_rate',
+    quoteInput: {
+      fromAmount: Number(totalSol),
+      fromAssetId: 'sol',
+      fromNetworkId: 'solana',
+    },
+    quoteOutputs: [
+      {
+        toPctBips: 10000,
+        toAssetId: 'sol',
+        toNetworkId: 'solana',
+      }
+    ],
+    customSignature: '',
+  };
+
+  const quoteRes = await splitNowRequest('POST', '/quotes/', payload);
+  const quoteId = quoteRes?.data;
+  if (!quoteId) throw new Error('SplitNow quote did not return a quote ID');
+
+  return { quoteId, raw: quoteRes };
+}
+
+async function createSplitNowOrder({ quoteId, totalSol, splits, exchangerId = 'binance' }) {
+  const outputs = calcPctBipsFromSplits(splits).map(s => ({
+    toAddress: s.address,
+    toPctBips: s.pctBips,
+    toAssetId: 'sol',
+    toNetworkId: 'solana',
+    toExchangerId: exchangerId,
+  }));
+
+  const payload = {
+    type: 'floating_rate',
+    quoteId,
+    orderInput: {
+      fromAmount: Number(totalSol),
+      fromAssetId: 'sol',
+      fromNetworkId: 'solana',
+    },
+    orderOutputs: outputs,
+    staggerMode: false,
+    staggerMinMs: 30000,
+    staggerMaxMs: 60000,
+    customSignature: '',
+  };
+
+  const orderRes = await splitNowRequest('POST', '/orders/', payload);
+  const orderId = orderRes?.data?.orderId || orderRes?.data?.shortId || null;
+
+  if (!orderId) throw new Error('SplitNow order did not return an order ID');
+
+  return {
+    orderId: orderRes.data.orderId,
+    shortId: orderRes.data.shortId,
+    raw: orderRes,
+  };
+}
+
+async function fetchSplitNowOrder(id) {
+  const orderRes = await splitNowRequest('GET', `/orders/${encodeURIComponent(id)}`);
+  return orderRes;
 }
 
 async function adminMiddleware(req, res, next) {
@@ -1001,6 +1137,102 @@ app.post('/api/proxy/jupiter/swap', async (req, res) => {
     const d = await r.json();
     res.status(r.status).json(d);
   } catch(e) { res.status(502).json({ error: 'Jupiter swap failed: ' + e.message }); }
+});
+
+// =============================================================================
+// SPLITNOW PROXY
+// =============================================================================
+
+app.post('/api/proxy/splitnow/create-bundle', authMiddleware, async (req, res) => {
+  try {
+    const { source_private_key, splits, exchanger_id } = req.body;
+
+    if (!source_private_key || typeof source_private_key !== 'string') {
+      return res.status(400).json({ error: 'Missing source_private_key' });
+    }
+
+    if (!Array.isArray(splits) || !splits.length) {
+      return res.status(400).json({ error: 'Missing splits' });
+    }
+
+    if (splits.some(s => !s.address || !Number(s.amount))) {
+      return res.status(400).json({ error: 'Each split needs address and amount' });
+    }
+
+    const totalSol = splits.reduce((sum, s) => sum + Number(s.amount || 0), 0);
+    if (totalSol <= 0) {
+      return res.status(400).json({ error: 'Invalid total SOL' });
+    }
+
+    // 1) quote
+    const { quoteId, raw: quoteRaw } = await createSplitNowQuote(totalSol);
+
+    // 2) order
+    const { orderId, shortId, raw: orderRaw } = await createSplitNowOrder({
+      quoteId,
+      totalSol,
+      splits,
+      exchangerId: exchanger_id || 'binance',
+    });
+
+    // 3) fetch order to get deposit address/amount
+    const fetched = await fetchSplitNowOrder(orderId || shortId);
+    const orderData = fetched?.data || fetched;
+
+    const depositAddress =
+      orderData?.depositWalletAddress ||
+      orderData?.depositAddress ||
+      orderData?.deposit_address ||
+      null;
+
+    const depositAmount =
+      Number(orderData?.orderInput?.fromAmount) ||
+      Number(orderData?.depositAmount) ||
+      totalSol;
+
+    if (!depositAddress) {
+      return res.status(502).json({
+        error: 'SplitNow order did not return a deposit wallet address',
+        quote: quoteRaw,
+        order: orderRaw,
+        fetched,
+      });
+    }
+
+    // 4) send SOL from source wallet to SplitNow deposit address
+    const fromKeypair = keypairFromB58(source_private_key);
+    const lamports = Math.floor(depositAmount * LAMPORTS_PER_SOL);
+    const depositTxSig = await sendSolTransfer(fromKeypair, depositAddress, lamports);
+
+    res.json({
+      success: true,
+      data: {
+        quoteId,
+        orderId,
+        shortId,
+        depositAddress,
+        depositAmount,
+        depositTxSig,
+        fetchedOrder: fetched,
+      }
+    });
+  } catch (e) {
+    console.error('[splitnow/create-bundle]', e.message, e.stack);
+    res.status(502).json({ error: e.message });
+  }
+});
+
+app.get('/api/proxy/splitnow/order/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ error: 'Missing order ID' });
+
+    const order = await fetchSplitNowOrder(id);
+    res.json(order);
+  } catch (e) {
+    console.error('[splitnow/order]', e.message);
+    res.status(502).json({ error: e.message });
+  }
 });
 
 // =============================================================================
