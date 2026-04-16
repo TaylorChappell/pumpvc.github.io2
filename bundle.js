@@ -173,17 +173,11 @@ function buildBundleCheckTab() {
 function buildBundleCreateTab() {
   const c          = S.bundle.create || {};
   const allWallets = (S.savedWallets || []).filter(w => w.publicKey && w.privateKey);
-  const selSource  = allWallets.find(w => w.id === c.sourceWalletId);
+  const selSource  = allWallets.find(w => w.privateKey === c.sourceWalletPrivKey) || allWallets.find(w => w.id === c.sourceWalletId);
   const distrib    = c.distribMode || 'equal';
   const count      = parseInt(c.walletCount) || 5;
   const running    = !!c.running;
-
-  const sourceLabel = c.sourceWalletPrivKey
-    ? (selSource && selSource.privateKey === c.sourceWalletPrivKey
-        ? `${selSource.emoji||'💼'} ${selSource.name} · ${short(selSource.publicKey)}`
-        : `Custom private key · ${short(bs58encode(bs58decode(c.sourceWalletPrivKey).slice(32, 64)))}`
-      )
-    : '⚡ Select source wallet…';
+  const open       = !!S.bundle._createSourceOpen;
 
   return `
     <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
@@ -193,44 +187,45 @@ function buildBundleCreateTab() {
       </p>
 
       <div class="cpicker-wrap">
-        <div class="cpicker-btn ${c.sourceWalletPrivKey ? 'cpicker-selected' : ''}" data-action="bundle-src-toggle">
-          ${c.sourceWalletPrivKey
-            ? `<span style="font-size:11px;color:var(--navy)">${sourceLabel}</span>`
-            : `<span style="color:var(--text-muted);font-size:11px">Select wallet…</span>`
+        <div class="cpicker-btn ${selSource || c.sourceWalletPrivKey ? 'cpicker-selected' : ''}" data-action="bundle-src-toggle">
+          ${
+            selSource
+              ? `<span>${selSource.emoji||'💼'}</span>
+                 <span class="cpicker-name">${selSource.name||'Wallet'}</span>
+                 <span class="cpicker-addr">${short(selSource.publicKey)}</span>`
+              : c.sourceWalletPrivKey
+                ? `<span>🔑</span>
+                   <span class="cpicker-name">Custom Private Key</span>
+                   <span class="cpicker-addr">Saved in form</span>`
+                : `<span style="color:var(--text-muted);font-size:11px">Select wallet…</span>`
           }
-          <span class="cpicker-chevron ${(S.bundle._createSourceOpen ? 'open' : '')}">›</span>
+          <span class="cpicker-chevron ${open?'open':''}">›</span>
         </div>
 
-        ${S.bundle._createSourceOpen ? `
+        ${open ? `
           <div class="cpicker-dropdown">
-            ${allWallets.length === 0
-              ? `<div class="cpicker-empty">No saved wallets with private keys.<br>Add one in the Wallets tab.</div>`
-              : allWallets.map(w => `
-                <div class="cpicker-row ${(c.sourceWalletPrivKey === w.privateKey) ? 'active' : ''}"
-                     data-action="bundle-src-pick"
-                     data-wallet-id="${w.id}"
-                     data-priv="${encodeURIComponent(w.privateKey)}">
-                  <span>${w.emoji||'💼'}</span>
-                  <div class="cpicker-row-info">
-                    <span class="cpicker-name">${w.name||'Wallet'}</span>
-                    <span class="cpicker-addr">${short(w.publicKey)}</span>
+            ${
+              allWallets.length === 0
+                ? `<div class="cpicker-empty">No saved wallets with private keys.<br>Add one in the Wallets tab.</div>`
+                : allWallets.map(w => `
+                  <div class="cpicker-row ${(c.sourceWalletPrivKey === w.privateKey) ? 'active' : ''}"
+                       data-action="bundle-src-pick"
+                       data-wallet-id="${w.id}"
+                       data-priv="${encodeURIComponent(w.privateKey)}">
+                    <span>${w.emoji||'💼'}</span>
+                    <div class="cpicker-row-info">
+                      <span class="cpicker-name">${w.name||'Wallet'}</span>
+                      <span class="cpicker-addr">${short(w.publicKey)}</span>
+                    </div>
+                    ${w.solBalance != null ? `<span class="cpicker-bal">${w.solBalance} SOL</span>` : ''}
                   </div>
-                  ${w.solBalance != null ? `<span class="cpicker-bal">${w.solBalance} SOL</span>` : ''}
-                </div>
-              `).join('')
+                `).join('')
             }
 
             <div class="cpicker-divider"></div>
             <div class="cpicker-paste-label">Or paste private key</div>
             <div style="display:flex;gap:5px;padding:0 8px 8px">
-              <input
-                type="password"
-                id="bundle-source-priv"
-                value="${c.sourceWalletPrivKey || ''}"
-                placeholder="Base58 private key…"
-                style="flex:1;font-size:10.5px"
-                data-bind-bundle-create="sourceWalletPrivKey"
-              />
+              <input type="password" id="bundle-source-priv" value="${c.sourceWalletPrivKey || ''}" placeholder="Base58 private key…" style="flex:1;font-size:10.5px"/>
               <button class="btn btn-ghost btn-sm" data-action="bundle-src-paste">Use</button>
             </div>
           </div>
@@ -505,7 +500,7 @@ async function runCreateBundle() {
   const maxPerWallet = parseFloat(c.maxSolPerWallet)||0;
   const distrib      = c.distribMode || 'equal';
 
-  if (!sourcePriv) throw new Error('Select or paste a source wallet private key');
+  if (!sourcePriv) throw new Error('Select a source wallet with a private key');
   if (!totalSol || totalSol <= 0) throw new Error('Enter a valid SOL amount');
 
   const setStep = (step, pct) => {

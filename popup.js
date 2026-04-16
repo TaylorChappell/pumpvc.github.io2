@@ -1930,7 +1930,39 @@ async function handleClick(e) {
 
   } else if (a === 'clear-account-confirm') {
     await authClearAccount();
-  }
+
+  } else if (a === 'bundle-src-toggle') {
+  S.bundle._createSourceOpen = !S.bundle._createSourceOpen;
+  await saveState();
+  render();
+
+  } else if (a === 'bundle-src-pick') {
+    if (!S.bundle.create) S.bundle.create = {};
+    S.bundle.create.sourceWalletId = el.dataset.walletId || '';
+    S.bundle.create.sourceWalletPrivKey = decodeURIComponent(el.dataset.priv || '');
+    S.bundle._createSourceOpen = false;
+    await saveState();
+    render();
+    showToast('Source wallet selected');
+
+  } else if (a === 'bundle-src-paste') {
+    if (!S.bundle.create) S.bundle.create = {};
+    const priv = document.getElementById('bundle-source-priv')?.value?.trim() || '';
+    if (!priv) {
+      showToast('Paste a private key first');
+      return;
+    }
+
+    S.bundle.create.sourceWalletPrivKey = priv;
+
+    const match = (S.savedWallets || []).find(w => w.privateKey === priv);
+    S.bundle.create.sourceWalletId = match ? match.id : '';
+
+    S.bundle._createSourceOpen = false;
+    await saveState();
+    render();
+    showToast('Custom source wallet set');
+    }
 }
 
 // ─────────────────────────────────────────
