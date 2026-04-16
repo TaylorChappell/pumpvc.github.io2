@@ -1,7 +1,12 @@
 /* ═══════════════════════════════════════════
    bundle.js — Bundle Engine + Create Bundle
    Essor Studios / Ultimate Dev Tools
-   Cleaned for SplitNOW quote/order backend proxy flow
+   SplitNOW flow:
+   1) Generate wallets
+   2) Build splits from generated wallet addresses
+   3) Send to backend proxy
+   4) Poll order
+   5) Save/show generated wallets
 ════════════════════════════════════════════ */
 
 'use strict';
@@ -28,7 +33,7 @@ async function bundleRpc(method, params) {
   }
 }
 
-function sleep(ms) {
+function bundleSleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
@@ -479,7 +484,7 @@ function buildBundleLoading(p) {
 // ══════════════════════════════════════════
 // CREATE BUNDLE LOGIC
 // ══════════════════════════════════════════
-function distributeSOL(totalSol, walletCount, distribMode, maxPerWallet) {
+function bundleDistributeSOL(totalSol, walletCount, distribMode, maxPerWallet) {
   const total = parseFloat(totalSol);
   const max = parseFloat(maxPerWallet) > 0 ? parseFloat(maxPerWallet) : Infinity;
   const amounts = [];
@@ -508,15 +513,37 @@ function distributeSOL(totalSol, walletCount, distribMode, maxPerWallet) {
   return amounts;
 }
 
-function generateKeypair() {
-  if (window.solanaWeb3?.Keypair) {
-    const kp = window.solanaWeb3.Keypair.generate();
-    return {
-      publicKey: kp.publicKey.toBase58(),
-      privateKey: bs58encode(kp.secretKey),
-    };
+function bundleGenerateKeypair() {
+  if (!window.solanaWeb3?.Keypair) {
+    throw new Error('Solana web3 SDK not loaded — cannot generate keypairs');
   }
-  throw new Error('Solana web3 SDK not loaded — cannot generate keypairs');
+
+  const kp = window.solanaWeb3.Keypair.generate();
+
+  if (!kp?.publicKey?.toBase58 || !kp?.secretKey) {
+    throw new Error('Generated keypair is missing expected fields');
+  }
+
+  return {
+    publicKey: kp.publicKey.toBase58(),
+    privateKey: bs58encode(kp.secretKey),
+  };
+}
+
+function bundleBuildGeneratedWallets(walletCount) {
+  const wallets = [];
+
+  for (let i = 0; i < walletCount; i++) {
+    const kp = bundleGenerateKeypair();
+
+    if (!kp.publicKey || !kp.privateKey) {
+      throw new Error(`Generated wallet ${i + 1} is invalid`);
+    }
+
+    wallets.push(kp);
+  }
+
+  return wallets;
 }
 
 async function runCreateBundle() {
@@ -539,25 +566,39 @@ async function runCreateBundle() {
     const stepEl = document.querySelector('.loading-step');
     const barEl = document.querySelector('.loading-bar');
     const pctEl = document.querySelector('.loading-pct');
+
     if (stepEl) stepEl.textContent = step;
     if (barEl) barEl.style.width = pct + '%';
     if (pctEl) pctEl.textContent = pct + '%';
   };
 
-  setStep('Generating wallets…', 10);
-  await sleep(200);
+  // 1) Generate brand new wallets first
+  setStep('Generating fresh wallets…', 10);
+  await bundleSleep(150);
 
-  const amounts = distributeSOL(totalSol, walletCount, distrib, maxPerWallet);
-  const keypairs = Array.from({ length: walletCount }, () => generateKeypair());
+  const generatedWallets = bundleBuildGeneratedWallets(walletCount);
+  console.log('[bundle] generated wallets', generatedWallets);
 
-  const splits = keypairs.map((kp, i) => ({
-    address: kp.publicKey,
-    amount: amounts[i],
-  }));
+  // 2) Work out SOL split amounts after wallets exist
+  setStep('Calculating distribution…', 18);
+  const amounts = bundleDistributeSOL(totalSol, walletCount, distrib, maxPerWallet);
+
+  // 3) Build payload using generated wallet addresses
+  const splits = generatedWallets.map((wallet, i) => {
+    if (!wallet?.publicKey) {
+      throw new Error(`Generated wallet ${i + 1} is missing a publicKey`);
+    }
+
+    return {
+      address: wallet.publicKey,
+      amount: amounts[i],
+    };
+  });
 
   console.log('[bundle] splits payload', splits);
 
-  setStep('Creating SplitNow quote…', 25);
+  // 4) Send SplitNow create request only after wallets are ready
+  setStep('Creating SplitNow quote/order…', 25);
   const createRes = await splitNowReq('POST', '/create-bundle', {
     source_private_key: sourcePriv,
     splits,
@@ -568,13 +609,14 @@ async function runCreateBundle() {
   const orderId = data.orderId || data.shortId;
   if (!orderId) throw new Error('SplitNow did not return an order ID');
 
+  // 5) Poll order progress
   setStep('Deposit sent — waiting for SplitNow…', 45);
 
   let latestOrder = data.fetchedOrder || null;
   let completed = false;
 
   for (let attempt = 0; attempt < 40; attempt++) {
-    await sleep(5000);
+    await bundleSleep(5000);
 
     const orderRes = await splitNowReq('GET', `/order/${orderId}`);
     latestOrder = orderRes;
@@ -607,12 +649,13 @@ async function runCreateBundle() {
     throw new Error('SplitNow order timed out before completion');
   }
 
+  // 6) Finalise using the already-generated wallets
   setStep('Finalising…', 98);
-  await sleep(400);
+  await bundleSleep(250);
 
-  const wallets = keypairs.map((kp, i) => ({
-    publicKey: kp.publicKey,
-    privateKey: kp.privateKey,
+  const wallets = generatedWallets.map((wallet, i) => ({
+    publicKey: wallet.publicKey,
+    privateKey: wallet.privateKey,
     sol: amounts[i],
   }));
 
@@ -641,21 +684,30 @@ async function runCreateBundle() {
   if (c.addToGroup) {
     const groupName = result.groupName;
     const groupId = uid();
-    S.walletGroups = S.walletGroups || [];
-    S.walletGroups.push({ id: groupId, name: groupName, emoji: '📦', collapsed: false });
 
-    wallets.forEach((w, i) => {
+    S.walletGroups = S.walletGroups || [];
+    S.walletGroups.push({
+      id: groupId,
+      name: groupName,
+      emoji: '📦',
+      collapsed: false,
+    });
+
+    wallets.forEach((wallet, i) => {
       S.savedWallets.push({
         id: uid(),
         name: `${groupName} W${i + 1}`,
         emoji: '💼',
-        publicKey: w.publicKey,
-        privateKey: w.privateKey,
+        publicKey: wallet.publicKey,
+        privateKey: wallet.privateKey,
         groupId,
       });
     });
 
-    if (typeof syncWalletsToServer === 'function') await syncWalletsToServer();
+    if (typeof syncWalletsToServer === 'function') {
+      await syncWalletsToServer();
+    }
+
     showToast(`✓ ${wallets.length} wallets saved to "${groupName}"`);
   }
 
@@ -761,7 +813,7 @@ async function analyzeBundles(mintAddress, onProgress) {
     }
 
     prog(`Analysing transactions… (${Math.min(i + batchSize, sigs.length)}/${Math.min(sigs.length, 80)})`, 15 + Math.floor((i / 80) * 45));
-    await sleep(150);
+    await bundleSleep(150);
   }
 
   if (!buyers.length) throw new Error('No buy transactions found');
@@ -773,7 +825,7 @@ async function analyzeBundles(mintAddress, onProgress) {
   for (let i = 0; i < uniqueWallets.length; i++) {
     fundingMap[uniqueWallets[i]] = await traceFundingSource(uniqueWallets[i]);
     prog(`Tracing wallets… (${i + 1}/${uniqueWallets.length})`, 62 + Math.floor((i / uniqueWallets.length) * 25));
-    await sleep(100);
+    await bundleSleep(100);
   }
 
   prog('Detecting bundles…', 88);
@@ -899,7 +951,7 @@ async function analyzeWalletConnections(addresses, onProgress) {
   for (let i = 0; i < addresses.length; i++) {
     results[addresses[i]] = await traceFundingSource(addresses[i]);
     prog(`Tracing ${i + 1}/${addresses.length}…`, 5 + Math.floor((i / addresses.length) * 80));
-    await sleep(120);
+    await bundleSleep(120);
   }
 
   prog('Comparing sources…', 88);
