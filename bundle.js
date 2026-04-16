@@ -286,33 +286,6 @@ function buildBundleCreateTab() {
 
     <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
       <div class="settings-section-title" style="display:flex;align-items:center;gap:6px">
-        <span>Min SOL Per Wallet</span>
-        <button class="help-q"
-          data-action="show-help"
-          data-title="Min SOL Per Wallet"
-          data-body="Optional minimum for every generated wallet. Leave blank or 0 for no minimum.">
-          ?
-        </button>
-        <span style="font-size:9px;font-weight:400;color:var(--text-muted)">(optional)</span>
-      </div>
-
-      <div class="add-row" style="align-items:center">
-        <input
-          type="number"
-          id="cb-min-sol"
-          value="${c.minSolPerWallet || ''}"
-          min="0"
-          step="0.01"
-          placeholder="No minimum"
-          style="width:100px"
-          data-bind-bundle-create="minSolPerWallet"
-        />
-        <span style="font-size:10px;color:var(--text-muted)">SOL minimum per wallet</span>
-      </div>
-    </div>
-
-    <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
-      <div class="settings-section-title" style="display:flex;align-items:center;gap:6px">
         <span>Source Wallet</span>
         <button class="help-q"
           data-action="show-help"
@@ -458,6 +431,33 @@ function buildBundleCreateTab() {
           data-bind-bundle-create="maxSolPerWallet"
         />
         <span style="font-size:10px;color:var(--text-muted)">SOL max per wallet</span>
+      </div>
+    </div>
+
+    <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
+      <div class="settings-section-title" style="display:flex;align-items:center;gap:6px">
+        <span>Min SOL Per Wallet</span>
+        <button class="help-q"
+          data-action="show-help"
+          data-title="Min SOL Per Wallet"
+          data-body="Optional minimum for every generated wallet. Leave blank or 0 for no minimum.">
+          ?
+        </button>
+        <span style="font-size:9px;font-weight:400;color:var(--text-muted)">(optional)</span>
+      </div>
+
+      <div class="add-row" style="align-items:center">
+        <input
+          type="number"
+          id="cb-min-sol"
+          value="${c.minSolPerWallet || ''}"
+          min="0"
+          step="0.01"
+          placeholder="No minimum"
+          style="width:100px"
+          data-bind-bundle-create="minSolPerWallet"
+        />
+        <span style="font-size:10px;color:var(--text-muted)">SOL minimum per wallet</span>
       </div>
     </div>
 
