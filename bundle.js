@@ -615,7 +615,9 @@ async function runCreateBundle() {
   let latestOrder = data.fetchedOrder || null;
   let completed = false;
 
-  for (let attempt = 0; attempt < 40; attempt++) {
+  const MAX_POLLS = 90; // 90 * 5s = 7.5 minutes
+
+  for (let attempt = 0; attempt < MAX_POLLS; attempt++) {
     await bundleSleep(5000);
 
     const orderRes = await splitNowReq('GET', `/order/${orderId}`);
@@ -626,27 +628,46 @@ async function runCreateBundle() {
     const statusText = String(orderData?.statusText || '').toLowerCase();
     const rawStatus = String(orderData?.status || '').toLowerCase();
 
-    const pct = Math.min(95, 45 + Math.floor(((attempt + 1) / 40) * 45));
-    setStep(`Processing order… ${orderData?.statusShort || orderData?.statusText || orderData?.status || 'pending'}`, pct);
+    console.log('[bundle] polled order status', {
+      attempt: attempt + 1,
+      status: rawStatus,
+      statusShort,
+      statusText,
+      orderData
+    });
 
-    if (statusShort === 'completed' || statusText === 'completed' || rawStatus === 'completed') {
+    const pct = Math.min(95, 45 + Math.floor(((attempt + 1) / MAX_POLLS) * 45));
+    setStep(
+      `Processing order… ${orderData?.statusText || orderData?.statusShort || orderData?.status || 'pending'}`,
+      pct
+    );
+
+    if (
+      rawStatus === 'completed' ||
+      statusShort === 'completed' ||
+      statusText === 'completed'
+    ) {
       completed = true;
       break;
     }
 
     if (
-      statusShort === 'failed' ||
-      statusText === 'failed' ||
       rawStatus === 'failed' ||
+      rawStatus === 'cancelled' ||
+      statusShort === 'failed' ||
       statusShort === 'cancelled' ||
-      rawStatus === 'cancelled'
+      statusText === 'failed' ||
+      statusText === 'cancelled'
     ) {
       throw new Error(`SplitNow order failed: ${orderData?.statusText || orderData?.status || 'unknown status'}`);
     }
   }
 
   if (!completed) {
-    throw new Error('SplitNow order timed out before completion');
+    const last = latestOrder?.data || latestOrder || {};
+    throw new Error(
+      `SplitNow order timed out. Last status: ${last.statusText || last.statusShort || last.status || 'unknown'}`
+    );
   }
 
   // 6) Finalise using the already-generated wallets
@@ -1037,7 +1058,8 @@ function buildBundleWalletResult() {
         <button class="btn btn-ghost btn-sm" data-action="bundle-back">← Back</button>
       </div>
     </div>
-    <div class="scroll-area" id="scroll-area">
+    <div class="scroll-area" id="scroll-area">let latestOrder = data.fetchedOrder || null;
+
       ${linked.length === 0 ? `
         <div style="background:var(--green-bg);border:1px solid rgba(34,197,94,0.25);border-radius:var(--r);padding:14px;text-align:center">
           <div style="font-size:14px;margin-bottom:5px">✅</div>
