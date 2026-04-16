@@ -1703,6 +1703,60 @@ async function handleClick(e) {
     inp.value = '';
     await saveState(); render();
 
+  } else if (a === 'bundle-check-wallet-toggle') {
+    S.bundle._walletPickerOpen = !S.bundle._walletPickerOpen;
+    await saveState();
+    render();
+
+  } else if (a === 'bundle-check-wallet-pick') {
+    const pub = el.dataset.pub;
+    S.bundle.walletAddresses = S.bundle.walletAddresses || [];
+    const idx = S.bundle.walletAddresses.indexOf(pub);
+
+    if (idx >= 0) S.bundle.walletAddresses.splice(idx, 1);
+    else S.bundle.walletAddresses.push(pub);
+
+    await saveState();
+    render();
+
+  } else if (a === 'bundle-check-wallet-group') {
+    const gid = el.dataset.gid;
+    const gW = (S.savedWallets || []).filter(w => w.groupId === gid && w.publicKey);
+
+    S.bundle.walletAddresses = S.bundle.walletAddresses || [];
+    const allSel = gW.every(w => S.bundle.walletAddresses.includes(w.publicKey));
+
+    if (allSel) {
+      S.bundle.walletAddresses = S.bundle.walletAddresses.filter(addr => !gW.find(w => w.publicKey === addr));
+    } else {
+      gW.forEach(w => {
+        if (!S.bundle.walletAddresses.includes(w.publicKey)) {
+          S.bundle.walletAddresses.push(w.publicKey);
+        }
+      });
+    }
+
+    await saveState();
+    render();
+
+  } else if (a === 'bundle-check-wallet-paste') {
+    const inp = document.getElementById('bundle-check-paste');
+    const addr = inp?.value?.trim();
+
+    if (!addr || addr.length < 32) {
+      showToast('Enter a valid address');
+      return;
+    }
+
+    S.bundle.walletAddresses = S.bundle.walletAddresses || [];
+    if (!S.bundle.walletAddresses.includes(addr)) {
+      S.bundle.walletAddresses.push(addr);
+    }
+
+    await saveState();
+    render();
+    showToast('Address added');
+
   } else if (a === 'bc-wallet-remove') {
     const idx = parseInt(el.dataset.idx);
     if (!isNaN(idx)) S.bundle.walletAddresses.splice(idx, 1);

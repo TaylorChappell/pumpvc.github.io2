@@ -114,6 +114,85 @@ function buildBundleLanding() {
   `;
 }
 
+function buildBundleCheckWalletPicker() {
+  const b = S.bundle;
+  const open = !!b._walletPickerOpen;
+  const selected = new Set(b.walletAddresses || []);
+  const allWallets = (S.savedWallets || []).filter(w => w.publicKey);
+  const groups = S.walletGroups || [];
+  const ungrouped = allWallets.filter(w => !w.groupId);
+  const count = selected.size;
+
+  return `
+    <div class="cpicker-wrap">
+      <div class="cpicker-btn ${count > 0 ? 'cpicker-selected' : ''}" data-action="bundle-check-wallet-toggle">
+        <span style="font-size:11px;font-weight:600;flex:1;color:${count > 0 ? 'var(--navy)' : 'var(--text-muted)'}">
+          ${count > 0 ? `${count} wallet${count !== 1 ? 's' : ''} selected` : 'Select wallets, groups, or paste address…'}
+        </span>
+        <span class="cpicker-chevron ${open ? 'open' : ''}">›</span>
+      </div>
+
+      ${open ? `
+        <div class="cpicker-dropdown">
+          ${groups.map(g => {
+            const gW = allWallets.filter(w => w.groupId === g.id && w.publicKey);
+            if (!gW.length) return '';
+
+            const selCount = gW.filter(w => selected.has(w.publicKey)).length;
+            const allSel = selCount === gW.length;
+            const partial = selCount > 0 && !allSel;
+
+            return `
+              <div class="tpicker-group-row ${allSel ? 'selected' : ''} ${partial ? 'partial' : ''}"
+                   data-action="bundle-check-wallet-group"
+                   data-gid="${g.id}">
+                <div class="tpicker-check ${allSel ? 'checked' : ''} ${partial ? 'partial' : ''}"></div>
+                <span>${g.emoji || '📁'}</span>
+                <span class="tpicker-group-name">${g.name}</span>
+                <span class="tpicker-count">${gW.length}</span>
+              </div>
+              ${gW.map(w => `
+                <div class="tpicker-wallet-row ${selected.has(w.publicKey) ? 'selected' : ''}"
+                     data-action="bundle-check-wallet-pick"
+                     data-pub="${w.publicKey}">
+                  <div class="tpicker-check ${selected.has(w.publicKey) ? 'checked' : ''}"></div>
+                  <span>${w.emoji || '💼'}</span>
+                  <div class="tpicker-info">
+                    <span class="tpicker-name">${w.name || 'Wallet'}</span>
+                    <span class="tpicker-addr">${short(w.publicKey)}</span>
+                  </div>
+                </div>
+              `).join('')}
+            `;
+          }).join('')}
+
+          ${ungrouped.map(w => `
+            <div class="tpicker-wallet-row ${selected.has(w.publicKey) ? 'selected' : ''}"
+                 data-action="bundle-check-wallet-pick"
+                 data-pub="${w.publicKey}">
+              <div class="tpicker-check ${selected.has(w.publicKey) ? 'checked' : ''}"></div>
+              <span>${w.emoji || '💼'}</span>
+              <div class="tpicker-info">
+                <span class="tpicker-name">${w.name || 'Wallet'}</span>
+                <span class="tpicker-addr">${short(w.publicKey)}</span>
+              </div>
+            </div>
+          `).join('')}
+
+          ${allWallets.length === 0 ? `<div class="cpicker-empty">No saved wallets yet.</div>` : ''}
+
+          <div class="cpicker-divider"></div>
+          <div class="cpicker-paste-label">Or paste address</div>
+          <div style="display:flex;gap:5px;padding:0 8px 8px">
+            <input type="text" id="bundle-check-paste" placeholder="Wallet address…" style="flex:1;font-size:10.5px"/>
+            <button class="btn btn-ghost btn-sm" data-action="bundle-check-wallet-paste">Add</button>
+          </div>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
 // ══════════════════════════════════════════
 // CHECK TAB
 // ══════════════════════════════════════════
@@ -159,6 +238,8 @@ function buildBundleCheckTab() {
         </div>
       ` : ''}
 
+      ${buildBundleCheckWalletPicker()}
+
       <div style="display:flex;gap:6px;margin-bottom:6px">
         <input type="text" id="bc-paste-addr" placeholder="Paste address…" style="flex:1"/>
         <button class="btn btn-ghost btn-sm" data-action="bc-wallet-paste">Add</button>
@@ -202,7 +283,10 @@ function buildBundleCheckTab() {
 function buildBundleCreateTab() {
   const c = S.bundle.create || {};
   const allWallets = (S.savedWallets || []).filter(w => w.publicKey && w.privateKey);
-  const selSource = allWallets.find(w => w.privateKey === c.sourceWalletPrivKey) || allWallets.find(w => w.id === c.sourceWalletId);
+  const selSource =
+    allWallets.find(w => w.privateKey === c.sourceWalletPrivKey) ||
+    allWallets.find(w => w.id === c.sourceWalletId);
+
   const distrib = c.distribMode || 'equal';
   const count = parseInt(c.walletCount) || 5;
   const running = !!c.running;
@@ -210,7 +294,14 @@ function buildBundleCreateTab() {
 
   return `
     <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
-      <div class="settings-section-title">Source Wallet</div>
+      <div class="settings-section-title" style="display:flex;align-items:center;gap:6px">
+        <span>Source Wallet</span>
+        <button class="help-q" data-action="show-help"
+          data-title="Source Wallet"
+          data-body="This is the wallet that funds the SplitNow deposit. You can pick a saved wallet or paste a custom private key manually.">
+          ?
+        </button>
+      </div>
       <p style="font-size:10px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">
         Route: Source → SplitNow exchange → fresh wallets. Zero on-chain link.
       </p>
@@ -254,7 +345,13 @@ function buildBundleCreateTab() {
             <div class="cpicker-divider"></div>
             <div class="cpicker-paste-label">Or paste private key</div>
             <div style="display:flex;gap:5px;padding:0 8px 8px">
-              <input type="password" id="bundle-source-priv" value="${c.sourceWalletPrivKey || ''}" placeholder="Base58 private key…" style="flex:1;font-size:10.5px"/>
+              <input
+                type="password"
+                id="bundle-source-priv"
+                value="${c.sourceWalletPrivKey || ''}"
+                placeholder="Base58 private key…"
+                style="flex:1;font-size:10.5px"
+              />
               <button class="btn btn-ghost btn-sm" data-action="bundle-src-paste">Use</button>
             </div>
           </div>
@@ -263,38 +360,98 @@ function buildBundleCreateTab() {
     </div>
 
     <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
-      <div class="settings-section-title">Wallet Count</div>
+      <div class="settings-section-title" style="display:flex;align-items:center;gap:6px">
+        <span>Wallet Count</span>
+        <button class="help-q" data-action="show-help"
+          data-title="Wallet Count"
+          data-body="How many fresh wallets to generate for this bundle. One new private key is created for each wallet.">
+          ?
+        </button>
+      </div>
       <div class="add-row" style="align-items:center">
-        <input type="number" id="cb-wallet-count" value="${count}" min="1" max="50" style="width:72px" data-bind-bundle-create="walletCount"/>
+        <input
+          type="number"
+          id="cb-wallet-count"
+          value="${count}"
+          min="1"
+          max="50"
+          style="width:72px"
+          data-bind-bundle-create="walletCount"
+        />
         <span style="font-size:10px;color:var(--text-muted)">wallets will be generated &nbsp;(max 50)</span>
       </div>
     </div>
 
     <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
-      <div class="settings-section-title">Total SOL to Distribute</div>
+      <div class="settings-section-title" style="display:flex;align-items:center;gap:6px">
+        <span>Total SOL to Distribute</span>
+        <button class="help-q" data-action="show-help"
+          data-title="Total SOL to Distribute"
+          data-body="This is the total SOL sent through SplitNow and spread across all generated wallets.">
+          ?
+        </button>
+      </div>
       <div class="add-row" style="align-items:center">
-        <input type="number" id="cb-total-sol" value="${c.totalSol || ''}" min="0.01" step="0.01" placeholder="e.g. 5.0" style="width:100px" data-bind-bundle-create="totalSol"/>
+        <input
+          type="number"
+          id="cb-total-sol"
+          value="${c.totalSol || ''}"
+          min="0.01"
+          step="0.01"
+          placeholder="e.g. 5.0"
+          style="width:100px"
+          data-bind-bundle-create="totalSol"
+        />
         <span style="font-size:10px;color:var(--text-muted)">SOL across all wallets</span>
       </div>
     </div>
 
     <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
-      <div class="settings-section-title">Max SOL Per Wallet <span style="font-size:9px;font-weight:400;color:var(--text-muted)">(optional cap)</span></div>
+      <div class="settings-section-title" style="display:flex;align-items:center;gap:6px">
+        <span>Max SOL Per Wallet</span>
+        <button class="help-q" data-action="show-help"
+          data-title="Max SOL Per Wallet"
+          data-body="Optional cap for any single generated wallet. Leave empty for no limit.">
+          ?
+        </button>
+        <span style="font-size:9px;font-weight:400;color:var(--text-muted)">(optional cap)</span>
+      </div>
       <div class="add-row" style="align-items:center">
-        <input type="number" id="cb-max-sol" value="${c.maxSolPerWallet || ''}" min="0" step="0.01" placeholder="No limit" style="width:100px" data-bind-bundle-create="maxSolPerWallet"/>
+        <input
+          type="number"
+          id="cb-max-sol"
+          value="${c.maxSolPerWallet || ''}"
+          min="0"
+          step="0.01"
+          placeholder="No limit"
+          style="width:100px"
+          data-bind-bundle-create="maxSolPerWallet"
+        />
         <span style="font-size:10px;color:var(--text-muted)">SOL max per wallet</span>
       </div>
     </div>
 
     <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
-      <div class="settings-section-title">Distribution</div>
+      <div class="settings-section-title" style="display:flex;align-items:center;gap:6px">
+        <span>Distribution</span>
+        <button class="help-q" data-action="show-help"
+          data-title="Distribution"
+          data-body="Equal split gives every generated wallet the same amount. Random creates a more natural-looking spread.">
+          ?
+        </button>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-        <div data-action="cb-set-distrib" data-mode="equal"
+        <div
+          data-action="cb-set-distrib"
+          data-mode="equal"
           style="padding:9px 10px;border:1.5px solid ${distrib === 'equal' ? 'var(--navy)' : 'var(--border-md)'};border-radius:var(--r-sm);cursor:pointer;background:${distrib === 'equal' ? 'var(--navy-ghost)' : 'var(--surface)'}">
           <div style="font-size:10.5px;font-weight:600;color:${distrib === 'equal' ? 'var(--navy)' : 'var(--text-dim)'}">Equal split</div>
           <div style="font-size:9px;color:var(--text-muted);margin-top:2px">Each wallet gets the same amount</div>
         </div>
-        <div data-action="cb-set-distrib" data-mode="random"
+
+        <div
+          data-action="cb-set-distrib"
+          data-mode="random"
           style="padding:9px 10px;border:1.5px solid ${distrib === 'random' ? 'var(--navy)' : 'var(--border-md)'};border-radius:var(--r-sm);cursor:pointer;background:${distrib === 'random' ? 'var(--navy-ghost)' : 'var(--surface)'}">
           <div style="font-size:10.5px;font-weight:600;color:${distrib === 'random' ? 'var(--navy)' : 'var(--text-dim)'}">Random</div>
           <div style="font-size:9px;color:var(--text-muted);margin-top:2px">Random % each (natural spread)</div>
@@ -304,15 +461,34 @@ function buildBundleCreateTab() {
 
     <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div class="settings-section-title" style="margin-bottom:0">Add to Wallet Group</div>
+        <div class="settings-section-title" style="margin-bottom:0;display:flex;align-items:center;gap:6px">
+          <span>Add to Wallet Group</span>
+          <button class="help-q" data-action="show-help"
+            data-title="Add to Wallet Group"
+            data-body="If enabled, the generated wallets will be saved into a wallet group after the bundle completes.">
+            ?
+          </button>
+        </div>
         <div class="toggle ${c.addToGroup ? 'on' : ''}" data-action="cb-toggle-group"></div>
       </div>
+
       ${c.addToGroup ? `
         <div class="field" style="margin-bottom:0">
           <div class="field-label">Group Name</div>
-          <input type="text" id="cb-group-name" value="${c.groupName || ''}" placeholder="e.g. Bundle Jan 2025…" maxlength="30" data-bind-bundle-create="groupName"/>
+          <input
+            type="text"
+            id="cb-group-name"
+            value="${c.groupName || ''}"
+            placeholder="e.g. Bundle Jan 2025…"
+            maxlength="30"
+            data-bind-bundle-create="groupName"
+          />
         </div>
-      ` : `<p style="font-size:10px;color:var(--text-muted);line-height:1.5;margin:0">Keys shown once after creation. Toggle on to save wallets to a group.</p>`}
+      ` : `
+        <p style="font-size:10px;color:var(--text-muted);line-height:1.5;margin:0">
+          Keys are shown once after creation. Toggle this on to save wallets into a reusable group.
+        </p>
+      `}
     </div>
 
     ${c.error ? `<div class="error-card">${c.error}</div>` : ''}
@@ -321,6 +497,7 @@ function buildBundleCreateTab() {
     <button class="btn btn-primary btn-full" data-action="cb-run" ${running ? 'disabled' : ''}>
       ${running ? '<span class="spinner-dark"></span>&nbsp; Creating…' : '⚡ Create Bundle'}
     </button>
+
     <p style="font-size:9px;color:var(--text-muted);text-align:center;margin-top:7px;line-height:1.5">
       SOL is routed through SplitNow's exchange network. No direct on-chain link between source and destination wallets.
     </p>
@@ -615,7 +792,7 @@ async function runCreateBundle() {
   let latestOrder = data.fetchedOrder || null;
   let completed = false;
 
-  const MAX_POLLS = 90; // 90 * 5s = 7.5 minutes
+  const MAX_POLLS = 250; // 90 * 5s = 7.5 minutes
 
   for (let attempt = 0; attempt < MAX_POLLS; attempt++) {
     await bundleSleep(5000);
