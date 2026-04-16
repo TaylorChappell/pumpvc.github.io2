@@ -574,28 +574,47 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch { sub = { active: false }; }
   _webSub = sub;
 
+  // Make sure popup.js loaded correctly
+  if (typeof S === 'undefined') {
+    console.error("CRITICAL ERROR: S is not defined. popup.js failed to load.");
+    const main = document.getElementById('main');
+    if (main) main.innerHTML = `<div style="color:red;padding:40px;text-align:center">Error: popup.js did not load.<br>Try hard refresh (Ctrl+Shift+R).</div>`;
+    return;
+  }
+
   // Auth stored in localStorage via api.js
 
   S.auth = { loggedIn: true, token, email: user.email||'', userId: user.id||0, is_admin: user.is_admin||false, cryptoKey: null };
   window.tryAutoLogin = async () => true;
 
-  const _origRender = window.render;
+ const originalRender = window.render || function(){};
   window.render = function() {
-    if (!S.auth?.loggedIn) { window.location.replace('auth.html'); return; }
-    if (_webTool === 'subscription') { renderSubPage(); _syncWebNav(); return; }
-    if (_webTool === 'admin-panel')  { renderAdminPage(); _syncWebNav(); return; }
-    if (!_webSub?.active) {
-      const main = document.getElementById('main');
-      if (main) main.innerHTML = `
-        <div class="web-gate">
-          <div class="web-gate-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" stroke="#dc2626" stroke-width="1.7"/><path d="M7 11V7a5 5 0 0110 0v4" stroke="#dc2626" stroke-width="1.7" stroke-linecap="round"/></svg></div>
-          <div class="web-gate-title">Subscription Required</div>
-          <div class="web-gate-desc">${_webSub?.expires_at ? 'Your subscription has expired.' : 'You need an active subscription to use these tools.'}<br><br>Subscribe to unlock all tools.</div>
-          <button class="btn btn-primary" onclick="setWebTool('subscription')">View Subscription</button>
-        </div>`;
-      _syncWebNav(); return;
+    if (!S.auth?.loggedIn) {
+      window.location.replace('auth.html');
+      return;
     }
-    _origRender();
+    if (_webTool === 'subscription') { renderSubPage(); _syncWebNav(); return; }
+    if (_webTool === 'admin-panel') { renderAdminPage(); _syncWebNav(); return; }
+
+    if (!_webSub?.active && !_webUser?.is_admin) {
+      const main = document.getElementById('main');
+      if (main) {
+        main.innerHTML = `
+          <div class="web-gate">
+            <div class="web-gate-icon">🔒</div>
+            <div class="web-gate-title">Subscription Required</div>
+            <div class="web-gate-desc">
+              ${_webSub?.expires_at ? 'Your subscription has expired.' : 'You need an active subscription to use these tools.'}
+              <br><br>Subscribe to unlock all tools.
+            </div>
+            <button class="btn btn-primary" onclick="setWebTool('subscription')">View Subscription Plans</button>
+          </div>`;
+      }
+      _syncWebNav();
+      return;
+    }
+
+    originalRender();
     _syncWebNav();
   };
 
