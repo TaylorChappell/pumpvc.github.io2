@@ -228,13 +228,32 @@ async function refreshBalances(addresses) {
 // KEYPAIR
 // ─────────────────────────────────────────
 async function generateKeypair() {
-  const kp = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
+  if (!window.isSecureContext) {
+    throw new Error('Key generation requires HTTPS or localhost.');
+  }
+
+  if (!crypto?.subtle?.generateKey) {
+    throw new Error('Web Crypto API is not available in this browser.');
+  }
+
+  const kp = await crypto.subtle.generateKey(
+    { name: 'Ed25519' },
+    true,
+    ['sign', 'verify']
+  );
+
   const pubRaw = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey));
   const privPkcs8 = new Uint8Array(await crypto.subtle.exportKey('pkcs8', kp.privateKey));
   const seed = privPkcs8.slice(16, 48);
+
   const fullPriv = new Uint8Array(64);
-  fullPriv.set(seed); fullPriv.set(pubRaw, 32);
-  return { publicKey: bs58encode(pubRaw), privateKey: bs58encode(fullPriv) };
+  fullPriv.set(seed);
+  fullPriv.set(pubRaw, 32);
+
+  return {
+    publicKey: bs58encode(pubRaw),
+    privateKey: bs58encode(fullPriv),
+  };
 }
 
 // ─────────────────────────────────────────
@@ -253,8 +272,26 @@ function splitWithDeviation(total, n, deviation) {
   return amounts.map(a => (a / sum) * total);
 }
 
-function copyText(text) {
-  navigator.clipboard.writeText(text).then(() => showToast('Copied!'));
+async function copyText(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    showToast('Copied!');
+  } catch (err) {
+    console.error('Copy failed:', err);
+    showToast('Copy failed');
+  }
 }
 
 function showToast(msg) {
@@ -1836,30 +1873,31 @@ async function handleClick(e) {
 // ─────────────────────────────────────────
 // INIT
 // ─────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', async () => {
-  // Show loading state immediately so popup doesn't flash blank
+async function bootApp() {
   const main = document.getElementById('main');
-  if (main) main.innerHTML = `
-    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:var(--text-muted)">
-      <div class="spinner" style="width:20px;height:20px;border-color:rgba(13,31,74,0.15);border-top-color:var(--navy)"></div>
-      <div style="font-size:10px;letter-spacing:0.06em">Loading…</div>
-    </div>
-  `;
+  if (main) {
+    main.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:var(--text-muted)">
+        <div class="spinner" style="width:20px;height:20px;border-color:rgba(13,31,74,0.15);border-top-color:var(--navy)"></div>
+        <div style="font-size:10px;letter-spacing:0.06em">Loading…</div>
+      </div>
+    `;
+  }
 
-  // Load any locally cached state first (settings, last tool, etc.)
   await loadState();
 
-  // walletSelection is a Set — not JSON-serialisable, always reconstruct
+  // Set is not JSON-serialisable
   S.walletSelection = new Set();
 
-  // Try silent auto-login with stored JWT
-  // This also calls syncWalletsFromServer() which pulls down all
-  // wallets, private keys (encrypted), groups, and settings
   await tryAutoLogin();
 
-  // First render — if not logged in shows login screen,
-  // if logged in shows last active tool with all data loaded
   render();
   checkRpc();
   setInterval(checkRpc, 30000);
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootApp);
+} else {
+  bootApp();
+}
