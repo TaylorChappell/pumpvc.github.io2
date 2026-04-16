@@ -204,7 +204,9 @@ async function getSolPriceUSD() {
 }
 
 async function splitNowRequest(method, path, body) {
-  const res = await fetch(SPLITNOW_BASE + path, {
+  const url = SPLITNOW_BASE + path;
+
+  const res = await fetch(url, {
     method,
     headers: {
       'Content-Type': 'application/json',
@@ -216,18 +218,33 @@ async function splitNowRequest(method, path, body) {
   });
 
   const text = await res.text();
-  let data;
+
+  let data = null;
   try {
-    data = JSON.parse(text);
+    data = text ? JSON.parse(text) : null;
   } catch {
-    data = { error: text || `HTTP ${res.status}` };
+    data = null;
   }
 
   if (!res.ok) {
-    throw new Error(data?.error || data?.message || `SplitNow API error ${res.status}`);
+    console.error('[splitnow] HTTP fail', {
+      url,
+      status: res.status,
+      statusText: res.statusText,
+      responseText: text,
+      responseJson: data,
+    });
+
+    const msg =
+      (data && typeof data.error === 'string' && data.error) ||
+      (data && typeof data.message === 'string' && data.message) ||
+      (text && text.trim()) ||
+      `SplitNow API error ${res.status}`;
+
+    throw new Error(msg);
   }
 
-  return data;
+  return data ?? { ok: true, raw: text };
 }
 
 async function runSplitNowBundle(sourcePriv, splits) {
@@ -243,7 +260,9 @@ async function runSplitNowBundle(sourcePriv, splits) {
   let lastErr = '';
   for (let i = 0; i < paths.length; i++) {
     try {
+      console.log('[splitnow] trying', paths[i], JSON.stringify(bodies[i]));
       const result = await splitNowRequest('POST', paths[i], bodies[i]);
+      console.log('[splitnow] success', paths[i], result);
       return {
         ok: true,
         path: paths[i],
