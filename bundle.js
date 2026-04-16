@@ -7,7 +7,7 @@
 
 const PUMPFUN_PROGRAM  = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBymMDer';
 const RAYDIUM_AMM      = '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8';
-const SPLITNOW_KEY     = '9a7d704f-fa8f-435d-9231-5bf467e141d0';
+const SPLITNOW_KEY     = '...';
 const SPLITNOW_BASE    = 'https://splitnow.io/api/v1';
 
 function getBundleRpc() {
@@ -31,19 +31,42 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 // ── SplitNow API helper ──────────────────
 async function splitNowReq(method, path, body) {
-  const res = await fetch(SPLITNOW_BASE + path, {
+  const token = localStorage.getItem('udt_token') || S.auth?.token;
+  if (!token) throw new Error('Not logged in');
+
+  let url = '';
+  const opts = {
     method,
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${SPLITNOW_KEY}`,
-      'X-Api-Key': SPLITNOW_KEY,
+      'Authorization': 'Bearer ' + token,
     },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  };
+
+  if (method === 'POST' && path === '/create-bundle') {
+    url = BACKEND + '/api/proxy/splitnow/create-bundle';
+    opts.body = JSON.stringify(body || {});
+  } else if (method === 'GET' && path.startsWith('/status/')) {
+    const jobId = path.split('/status/')[1];
+    url = BACKEND + '/api/proxy/splitnow/status/' + encodeURIComponent(jobId);
+  } else {
+    throw new Error(`Unsupported SplitNow proxy route: ${method} ${path}`);
+  }
+
+  const res = await fetch(url, opts);
   const text = await res.text();
+
   let data;
-  try { data = JSON.parse(text); } catch { data = { error: text || `HTTP ${res.status}` }; }
-  if (!res.ok) throw new Error(data?.error || data?.message || `API error ${res.status}`);
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = { error: text || `HTTP ${res.status}` };
+  }
+
+  if (!res.ok) {
+    throw new Error(data?.error || data?.message || `Proxy error ${res.status}`);
+  }
+
   return data;
 }
 
@@ -530,23 +553,16 @@ async function runCreateBundle() {
   }));
 
   let splitJob = null;
-  const bodies = [
-    { from_private_key: sourcePriv, splits, use_exchange: true },
-    { private_key: sourcePriv, destinations: splits, privacy: true },
-    { source_private_key: sourcePriv, outputs: splits },
-    { sender_private_key: sourcePriv, recipients: splits },
-  ];
-  const paths = ['/split', '/create', '/transaction', '/send'];
-  let lastErr = '';
-  for (let attempt = 0; attempt < paths.length; attempt++) {
-    try {
-      splitJob = await splitNowReq('POST', paths[attempt], bodies[attempt]);
-      break;
-    } catch (e) {
-      lastErr = e.message;
-    }
+  try {
+    const proxyResult = await splitNowReq('POST', '/create-bundle', {
+      source_private_key: sourcePriv,
+      splits,
+    });
+
+    splitJob = proxyResult?.data || proxyResult;
+  } catch (e) {
+    throw new Error(`SplitNow API unreachable: ${e.message}`);
   }
-  if (!splitJob) throw new Error(`SplitNow API unreachable: ${lastErr}`);
 
   // Step 3 — poll for completion
   setStep('Routing through exchange…', 55);

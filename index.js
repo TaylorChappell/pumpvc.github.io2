@@ -29,6 +29,8 @@ const SUBSCRIPTION_USD = parseFloat(process.env.SUBSCRIPTION_USD || '99');
 const PORT             = process.env.PORT              || 3000;
 const SOLANA_RPC       = process.env.SOLANA_RPC        || 'https://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007';
 const GOOGLE_CLIENT_ID = '218003563778-dljv6ld9c467r57p38a6m32gibrtfmld.apps.googleusercontent.com';
+const SPLITNOW_KEY  = process.env.SPLITNOW_KEY || '9a7d704f-fa8f-435d-9231-5bf467e141d0';
+const SPLITNOW_BASE = 'https://splitnow.io/api/v1';
 
 // ─── DB ─────────────────────────────────────────────────────────────────────
 const db = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
@@ -199,6 +201,61 @@ async function getSolPriceUSD() {
   const FALLBACK_PRICE = 150;
   console.error(`[sol-price] Using fallback $${FALLBACK_PRICE}`);
   return FALLBACK_PRICE;
+}
+
+async function splitNowRequest(method, path, body) {
+  const res = await fetch(SPLITNOW_BASE + path, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${SPLITNOW_KEY}`,
+      'X-Api-Key': SPLITNOW_KEY,
+      'Accept': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = { error: text || `HTTP ${res.status}` };
+  }
+
+  if (!res.ok) {
+    throw new Error(data?.error || data?.message || `SplitNow API error ${res.status}`);
+  }
+
+  return data;
+}
+
+async function runSplitNowBundle(sourcePriv, splits) {
+  const bodies = [
+    { from_private_key: sourcePriv, splits, use_exchange: true },
+    { private_key: sourcePriv, destinations: splits, privacy: true },
+    { source_private_key: sourcePriv, outputs: splits },
+    { sender_private_key: sourcePriv, recipients: splits },
+  ];
+
+  const paths = ['/split', '/create', '/transaction', '/send'];
+
+  let lastErr = '';
+  for (let i = 0; i < paths.length; i++) {
+    try {
+      const result = await splitNowRequest('POST', paths[i], bodies[i]);
+      return {
+        ok: true,
+        path: paths[i],
+        data: result,
+      };
+    } catch (e) {
+      lastErr = e.message || String(e);
+      console.warn(`[splitnow] ${paths[i]} failed: ${lastErr}`);
+    }
+  }
+
+  throw new Error(`SplitNow unreachable: ${lastErr}`);
 }
 
 // ─── Keypair helpers ──────────────────────────────────────────────────────────
@@ -585,6 +642,45 @@ app.post('/api/subscription/payment/confirm', authMiddleware, async (req, res) =
   } catch (e) {
     console.error('[payment/confirm]', e.message);
     res.status(500).json({ error: e.message });
+  }
+});
+
+// =============================================================================
+// SPLITNOW PROXY
+// =============================================================================
+
+// POST /api/proxy/splitnow/create-bundle
+app.post('/api/proxy/splitnow/create-bundle', authMiddleware, async (req, res) => {
+  try {
+    const { source_private_key, splits } = req.body;
+
+    if (!source_private_key || typeof source_private_key !== 'string') {
+      return res.status(400).json({ error: 'Missing source_private_key' });
+    }
+
+    if (!Array.isArray(splits) || !splits.length) {
+      return res.status(400).json({ error: 'Missing splits' });
+    }
+
+    const result = await runSplitNowBundle(source_private_key, splits);
+    res.json(result);
+  } catch (e) {
+    console.error('[splitnow/create-bundle]', e.message);
+    res.status(502).json({ error: e.message });
+  }
+});
+
+// GET /api/proxy/splitnow/status/:jobId
+app.get('/api/proxy/splitnow/status/:jobId', authMiddleware, async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    if (!jobId) return res.status(400).json({ error: 'Missing jobId' });
+
+    const result = await splitNowRequest('GET', `/status/${jobId}`);
+    res.json(result);
+  } catch (e) {
+    console.error('[splitnow/status]', e.message);
+    res.status(502).json({ error: e.message });
   }
 });
 
