@@ -6,8 +6,6 @@
 'use strict';
 
 const RPC         = 'https://api.mainnet-beta.solana.com';
-const DEFAULT_RPC = 'https://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007';
-const DEFAULT_WS  = 'wss://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007';
 
 // ─────────────────────────────────────────
 // STATE
