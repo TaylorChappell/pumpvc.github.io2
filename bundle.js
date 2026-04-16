@@ -1,12 +1,13 @@
 /* ═══════════════════════════════════════════
    bundle.js — Bundle Engine + Create Bundle
    Essor Studios / Ultimate Dev Tools
-═══════════════════════════════════════════ */
+   Cleaned for SplitNOW quote/order backend proxy flow
+════════════════════════════════════════════ */
 
 'use strict';
 
-const PUMPFUN_PROGRAM  = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBymMDer';
-const RAYDIUM_AMM      = '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8';
+const PUMPFUN_PROGRAM = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBymMDer';
+const RAYDIUM_AMM = '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8';
 
 function getBundleRpc() {
   return (typeof S !== 'undefined' && S.settings?.rpcEndpoint)
@@ -22,10 +23,14 @@ async function bundleRpc(method, params) {
     });
     const j = await res.json();
     return j.result ?? null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
 
 async function splitNowReq(method, path, body) {
   const token = localStorage.getItem('udt_token') || S.auth?.token;
@@ -72,7 +77,7 @@ async function splitNowReq(method, path, body) {
 // ══════════════════════════════════════════
 function buildBundlePage() {
   const b = S.bundle;
-  if (b.view === 'token-result')  return buildBundleTokenResult();
+  if (b.view === 'token-result') return buildBundleTokenResult();
   if (b.view === 'wallet-result') return buildBundleWalletResult();
   if (b.view === 'create-result') return buildCreateBundleResult();
   return buildBundleLanding();
@@ -82,7 +87,7 @@ function buildBundlePage() {
 // LANDING — tabs: Check / Create / History
 // ══════════════════════════════════════════
 function buildBundleLanding() {
-  const b   = S.bundle;
+  const b = S.bundle;
   const tab = b.createTab || 'check';
 
   return `
@@ -91,14 +96,14 @@ function buildBundleLanding() {
         <span class="tool-title">Bundle</span>
       </div>
       <div style="display:flex;border-bottom:1px solid var(--border-md);margin:0 -14px;padding:0 14px">
-        <button class="tab ${tab==='check'   ?'active':''}" data-action="bundle-tab" data-tab="check">Check</button>
-        <button class="tab ${tab==='create'  ?'active':''}" data-action="bundle-tab" data-tab="create">Create</button>
-        <button class="tab ${tab==='history' ?'active':''}" data-action="bundle-tab" data-tab="history">History${(b.createHistory||[]).length ? `<span style="margin-left:4px;background:var(--navy-ghost2);color:var(--navy);font-size:8px;font-weight:700;padding:1px 5px;border-radius:20px">${(b.createHistory||[]).length}</span>` : ''}</button>
+        <button class="tab ${tab === 'check' ? 'active' : ''}" data-action="bundle-tab" data-tab="check">Check</button>
+        <button class="tab ${tab === 'create' ? 'active' : ''}" data-action="bundle-tab" data-tab="create">Create</button>
+        <button class="tab ${tab === 'history' ? 'active' : ''}" data-action="bundle-tab" data-tab="history">History${(b.createHistory || []).length ? `<span style="margin-left:4px;background:var(--navy-ghost2);color:var(--navy);font-size:8px;font-weight:700;padding:1px 5px;border-radius:20px">${(b.createHistory || []).length}</span>` : ''}</button>
       </div>
     </div>
     <div class="scroll-area" id="scroll-area">
-      ${tab === 'check'   ? buildBundleCheckTab()   : ''}
-      ${tab === 'create'  ? buildBundleCreateTab()  : ''}
+      ${tab === 'check' ? buildBundleCheckTab() : ''}
+      ${tab === 'create' ? buildBundleCreateTab() : ''}
       ${tab === 'history' ? buildBundleHistoryTab() : ''}
     </div>
   `;
@@ -108,13 +113,13 @@ function buildBundleLanding() {
 // CHECK TAB
 // ══════════════════════════════════════════
 function buildBundleCheckTab() {
-  const b           = S.bundle;
+  const b = S.bundle;
   const walletCount = (b.walletAddresses || []).length;
-  const open        = b._walletPickerOpen;
-  const allWallets  = (S.savedWallets || []).filter(w => w.publicKey);
-  const allGroups   = S.walletGroups || [];
-  const selSet      = new Set(b.walletAddresses || []);
-  const ungrouped   = allWallets.filter(w => !w.groupId);
+  const open = b._walletPickerOpen;
+  const allWallets = (S.savedWallets || []).filter(w => w.publicKey);
+  const allGroups = S.walletGroups || [];
+  const selSet = new Set(b.walletAddresses || []);
+  const ungrouped = allWallets.filter(w => !w.groupId);
 
   return `
     <div class="field">
@@ -127,7 +132,7 @@ function buildBundleCheckTab() {
       </div>
     </div>
     ${b.loading ? buildBundleLoading(b.progress) : ''}
-    ${b.error   ? `<div class="error-card">⚠ ${b.error}</div>` : ''}
+    ${b.error ? `<div class="error-card">⚠ ${b.error}</div>` : ''}
 
     <div class="bc-divider"></div>
 
@@ -139,10 +144,10 @@ function buildBundleCheckTab() {
 
       ${walletCount > 0 ? `
         <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">
-          ${(b.walletAddresses||[]).map((addr, i) => {
+          ${(b.walletAddresses || []).map((addr, i) => {
             const w = allWallets.find(x => x.publicKey === addr);
             return `<span style="display:inline-flex;align-items:center;gap:3px;background:var(--navy-ghost);color:var(--navy);border-radius:20px;padding:2px 8px;font-size:9px;font-family:var(--mono)">
-              ${w ? (w.emoji||'💼')+' '+w.name : short(addr)}
+              ${w ? (w.emoji || '💼') + ' ' + w.name : short(addr)}
               <span data-action="bc-wallet-remove" data-idx="${i}" style="cursor:pointer;opacity:0.5;margin-left:1px">✕</span>
             </span>`;
           }).join('')}
@@ -163,23 +168,22 @@ function buildBundleCheckTab() {
             const allSel = gW.every(w => selSet.has(w.publicKey));
             return `<div style="margin-bottom:4px">
               <div data-action="bc-wallet-group" data-gid="${g.id}" style="font-size:9.5px;font-weight:700;color:var(--navy);cursor:pointer;padding:2px 0">
-                ${allSel?'☑':'☐'} ${g.emoji||'📁'} ${g.name}
+                ${allSel ? '☑' : '☐'} ${g.emoji || '📁'} ${g.name}
               </div>
               ${gW.map(w => `<div data-action="bc-wallet-pick" data-pub="${w.publicKey}" style="padding:2px 8px;font-size:9px;cursor:pointer;color:var(--text-dim)">
-                ${selSet.has(w.publicKey)?'☑':'☐'} ${w.emoji||'💼'} ${w.name} <span style="font-family:var(--mono);opacity:0.5">${short(w.publicKey)}</span>
+                ${selSet.has(w.publicKey) ? '☑' : '☐'} ${w.emoji || '💼'} ${w.name} <span style="font-family:var(--mono);opacity:0.5">${short(w.publicKey)}</span>
               </div>`).join('')}
             </div>`;
           }).join('')}
           ${ungrouped.map(w => `<div data-action="bc-wallet-pick" data-pub="${w.publicKey}" style="padding:2px 0;font-size:9px;cursor:pointer;color:var(--text-dim)">
-            ${selSet.has(w.publicKey)?'☑':'☐'} ${w.emoji||'💼'} ${w.name} <span style="font-family:var(--mono);opacity:0.5">${short(w.publicKey)}</span>
+            ${selSet.has(w.publicKey) ? '☑' : '☐'} ${w.emoji || '💼'} ${w.name} <span style="font-family:var(--mono);opacity:0.5">${short(w.publicKey)}</span>
           </div>`).join('')}
           ${!allWallets.length ? `<div style="font-size:9px;color:var(--text-muted);text-align:center;padding:8px">No saved wallets</div>` : ''}
         </div>
       ` : ''}
 
-      <button class="btn btn-primary btn-sm btn-full" data-action="run-wallet-check"
-        ${b.walletLoading || walletCount < 2 ? 'disabled' : ''}>
-        ${b.walletLoading ? '<span class="spinner-dark"></span> Checking…' : `Check ${walletCount >= 2 ? walletCount+' Wallets' : 'Wallets (need 2+)'}`}
+      <button class="btn btn-primary btn-sm btn-full" data-action="run-wallet-check" ${b.walletLoading || walletCount < 2 ? 'disabled' : ''}>
+        ${b.walletLoading ? '<span class="spinner-dark"></span> Checking…' : `Check ${walletCount >= 2 ? walletCount + ' Wallets' : 'Wallets (need 2+)'}`}
       </button>
       ${b.walletLoading ? buildBundleLoading(b.walletProgress) : ''}
       ${b.walletError ? `<div class="error-card" style="margin-top:8px">⚠ ${b.walletError}</div>` : ''}
@@ -191,13 +195,13 @@ function buildBundleCheckTab() {
 // CREATE TAB
 // ══════════════════════════════════════════
 function buildBundleCreateTab() {
-  const c          = S.bundle.create || {};
+  const c = S.bundle.create || {};
   const allWallets = (S.savedWallets || []).filter(w => w.publicKey && w.privateKey);
-  const selSource  = allWallets.find(w => w.privateKey === c.sourceWalletPrivKey) || allWallets.find(w => w.id === c.sourceWalletId);
-  const distrib    = c.distribMode || 'equal';
-  const count      = parseInt(c.walletCount) || 5;
-  const running    = !!c.running;
-  const open       = !!S.bundle._createSourceOpen;
+  const selSource = allWallets.find(w => w.privateKey === c.sourceWalletPrivKey) || allWallets.find(w => w.id === c.sourceWalletId);
+  const distrib = c.distribMode || 'equal';
+  const count = parseInt(c.walletCount) || 5;
+  const running = !!c.running;
+  const open = !!S.bundle._createSourceOpen;
 
   return `
     <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
@@ -210,8 +214,8 @@ function buildBundleCreateTab() {
         <div class="cpicker-btn ${selSource || c.sourceWalletPrivKey ? 'cpicker-selected' : ''}" data-action="bundle-src-toggle">
           ${
             selSource
-              ? `<span>${selSource.emoji||'💼'}</span>
-                 <span class="cpicker-name">${selSource.name||'Wallet'}</span>
+              ? `<span>${selSource.emoji || '💼'}</span>
+                 <span class="cpicker-name">${selSource.name || 'Wallet'}</span>
                  <span class="cpicker-addr">${short(selSource.publicKey)}</span>`
               : c.sourceWalletPrivKey
                 ? `<span>🔑</span>
@@ -219,7 +223,7 @@ function buildBundleCreateTab() {
                    <span class="cpicker-addr">Saved in form</span>`
                 : `<span style="color:var(--text-muted);font-size:11px">Select wallet…</span>`
           }
-          <span class="cpicker-chevron ${open?'open':''}">›</span>
+          <span class="cpicker-chevron ${open ? 'open' : ''}">›</span>
         </div>
 
         ${open ? `
@@ -232,9 +236,9 @@ function buildBundleCreateTab() {
                        data-action="bundle-src-pick"
                        data-wallet-id="${w.id}"
                        data-priv="${encodeURIComponent(w.privateKey)}">
-                    <span>${w.emoji||'💼'}</span>
+                    <span>${w.emoji || '💼'}</span>
                     <div class="cpicker-row-info">
-                      <span class="cpicker-name">${w.name||'Wallet'}</span>
+                      <span class="cpicker-name">${w.name || 'Wallet'}</span>
                       <span class="cpicker-addr">${short(w.publicKey)}</span>
                     </div>
                     ${w.solBalance != null ? `<span class="cpicker-bal">${w.solBalance} SOL</span>` : ''}
@@ -264,7 +268,7 @@ function buildBundleCreateTab() {
     <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
       <div class="settings-section-title">Total SOL to Distribute</div>
       <div class="add-row" style="align-items:center">
-        <input type="number" id="cb-total-sol" value="${c.totalSol||''}" min="0.01" step="0.01" placeholder="e.g. 5.0" style="width:100px" data-bind-bundle-create="totalSol"/>
+        <input type="number" id="cb-total-sol" value="${c.totalSol || ''}" min="0.01" step="0.01" placeholder="e.g. 5.0" style="width:100px" data-bind-bundle-create="totalSol"/>
         <span style="font-size:10px;color:var(--text-muted)">SOL across all wallets</span>
       </div>
     </div>
@@ -272,7 +276,7 @@ function buildBundleCreateTab() {
     <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
       <div class="settings-section-title">Max SOL Per Wallet <span style="font-size:9px;font-weight:400;color:var(--text-muted)">(optional cap)</span></div>
       <div class="add-row" style="align-items:center">
-        <input type="number" id="cb-max-sol" value="${c.maxSolPerWallet||''}" min="0" step="0.01" placeholder="No limit" style="width:100px" data-bind-bundle-create="maxSolPerWallet"/>
+        <input type="number" id="cb-max-sol" value="${c.maxSolPerWallet || ''}" min="0" step="0.01" placeholder="No limit" style="width:100px" data-bind-bundle-create="maxSolPerWallet"/>
         <span style="font-size:10px;color:var(--text-muted)">SOL max per wallet</span>
       </div>
     </div>
@@ -281,13 +285,13 @@ function buildBundleCreateTab() {
       <div class="settings-section-title">Distribution</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
         <div data-action="cb-set-distrib" data-mode="equal"
-          style="padding:9px 10px;border:1.5px solid ${distrib==='equal'?'var(--navy)':'var(--border-md)'};border-radius:var(--r-sm);cursor:pointer;background:${distrib==='equal'?'var(--navy-ghost)':'var(--surface)'}">
-          <div style="font-size:10.5px;font-weight:600;color:${distrib==='equal'?'var(--navy)':'var(--text-dim)'}">Equal split</div>
+          style="padding:9px 10px;border:1.5px solid ${distrib === 'equal' ? 'var(--navy)' : 'var(--border-md)'};border-radius:var(--r-sm);cursor:pointer;background:${distrib === 'equal' ? 'var(--navy-ghost)' : 'var(--surface)'}">
+          <div style="font-size:10.5px;font-weight:600;color:${distrib === 'equal' ? 'var(--navy)' : 'var(--text-dim)'}">Equal split</div>
           <div style="font-size:9px;color:var(--text-muted);margin-top:2px">Each wallet gets the same amount</div>
         </div>
         <div data-action="cb-set-distrib" data-mode="random"
-          style="padding:9px 10px;border:1.5px solid ${distrib==='random'?'var(--navy)':'var(--border-md)'};border-radius:var(--r-sm);cursor:pointer;background:${distrib==='random'?'var(--navy-ghost)':'var(--surface)'}">
-          <div style="font-size:10.5px;font-weight:600;color:${distrib==='random'?'var(--navy)':'var(--text-dim)'}">Random</div>
+          style="padding:9px 10px;border:1.5px solid ${distrib === 'random' ? 'var(--navy)' : 'var(--border-md)'};border-radius:var(--r-sm);cursor:pointer;background:${distrib === 'random' ? 'var(--navy-ghost)' : 'var(--surface)'}">
+          <div style="font-size:10.5px;font-weight:600;color:${distrib === 'random' ? 'var(--navy)' : 'var(--text-dim)'}">Random</div>
           <div style="font-size:9px;color:var(--text-muted);margin-top:2px">Random % each (natural spread)</div>
         </div>
       </div>
@@ -296,21 +300,20 @@ function buildBundleCreateTab() {
     <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div class="settings-section-title" style="margin-bottom:0">Add to Wallet Group</div>
-        <div class="toggle ${c.addToGroup?'on':''}" data-action="cb-toggle-group"></div>
+        <div class="toggle ${c.addToGroup ? 'on' : ''}" data-action="cb-toggle-group"></div>
       </div>
       ${c.addToGroup ? `
         <div class="field" style="margin-bottom:0">
           <div class="field-label">Group Name</div>
-          <input type="text" id="cb-group-name" value="${c.groupName||''}" placeholder="e.g. Bundle Jan 2025…" maxlength="30" data-bind-bundle-create="groupName"/>
+          <input type="text" id="cb-group-name" value="${c.groupName || ''}" placeholder="e.g. Bundle Jan 2025…" maxlength="30" data-bind-bundle-create="groupName"/>
         </div>
       ` : `<p style="font-size:10px;color:var(--text-muted);line-height:1.5;margin:0">Keys shown once after creation. Toggle on to save wallets to a group.</p>`}
     </div>
 
     ${c.error ? `<div class="error-card">${c.error}</div>` : ''}
+    ${running ? buildBundleLoading({ step: c.runStep || 'Working…', pct: c.runPct || 0 }) : ''}
 
-    ${running ? buildBundleLoading({ step: c.runStep||'Working…', pct: c.runPct||0 }) : ''}
-
-    <button class="btn btn-primary btn-full" data-action="cb-run" ${running?'disabled':''}>
+    <button class="btn btn-primary btn-full" data-action="cb-run" ${running ? 'disabled' : ''}>
       ${running ? '<span class="spinner-dark"></span>&nbsp; Creating…' : '⚡ Create Bundle'}
     </button>
     <p style="font-size:9px;color:var(--text-muted);text-align:center;margin-top:7px;line-height:1.5">
@@ -318,6 +321,7 @@ function buildBundleCreateTab() {
     </p>
   `;
 }
+
 // ══════════════════════════════════════════
 // HISTORY TAB
 // ══════════════════════════════════════════
@@ -333,37 +337,34 @@ function buildBundleHistoryTab() {
   }
 
   return history.slice().reverse().map(entry => {
-    const expanded = (S.bundle.historyExpanded||{})[entry.id];
-    const date     = new Date(entry.ts).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'2-digit' })
-                   + ' ' + new Date(entry.ts).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+    const expanded = (S.bundle.historyExpanded || {})[entry.id];
+    const date = new Date(entry.ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })
+      + ' ' + new Date(entry.ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
     return `
       <div style="background:var(--surface);border:1px solid var(--border-md);border-radius:var(--r);margin-bottom:8px;overflow:hidden">
-        <div data-action="bh-toggle" data-id="${entry.id}"
-          style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;cursor:pointer">
+        <div data-action="bh-toggle" data-id="${entry.id}" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;cursor:pointer">
           <div>
-            <div style="font-size:11px;font-weight:600;color:var(--navy)">${entry.groupName||'Bundle'} <span style="font-weight:400;color:var(--text-muted)">· ${entry.wallets?.length||0} wallets · ${entry.totalSol} SOL</span></div>
-            <div style="font-size:9.5px;color:var(--text-muted);margin-top:2px">${date} · ${entry.distribMode==='random'?'Random dist.':'Equal dist.'}</div>
+            <div style="font-size:11px;font-weight:600;color:var(--navy)">${entry.groupName || 'Bundle'} <span style="font-weight:400;color:var(--text-muted)">· ${entry.wallets?.length || 0} wallets · ${entry.totalSol} SOL</span></div>
+            <div style="font-size:9.5px;color:var(--text-muted);margin-top:2px">${date} · ${entry.distribMode === 'random' ? 'Random dist.' : 'Equal dist.'}</div>
           </div>
-          <span style="font-size:13px;color:var(--text-muted);transform:rotate(${expanded?'90':'0'}deg);display:inline-block;transition:transform 0.15s">›</span>
+          <span style="font-size:13px;color:var(--text-muted);transform:rotate(${expanded ? '90' : '0'}deg);display:inline-block;transition:transform 0.15s">›</span>
         </div>
 
         ${expanded ? `
           <div style="border-top:1px solid var(--border-md);padding:10px 12px">
             <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
-              <button class="btn btn-ghost btn-sm" data-action="bh-copy-all-keys"  data-id="${entry.id}">Copy All Keys</button>
+              <button class="btn btn-ghost btn-sm" data-action="bh-copy-all-keys" data-id="${entry.id}">Copy All Keys</button>
               <button class="btn btn-ghost btn-sm" data-action="bh-copy-all-addrs" data-id="${entry.id}">Copy All Addresses</button>
               <button class="btn btn-danger btn-sm" data-action="bh-delete" data-id="${entry.id}">Delete</button>
             </div>
-            ${(entry.wallets||[]).map((w, i) => {
+            ${(entry.wallets || []).map((w, i) => {
               const visKey = `${entry.id}-${i}`;
-              const shown  = (S.bundle.historyKeyVis||{})[visKey];
+              const shown = (S.bundle.historyKeyVis || {})[visKey];
               return `
                 <div style="background:var(--surface2);border:1px solid var(--border-md);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:6px">
                   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-                    <span style="font-size:10px;font-weight:600;color:var(--navy)">Wallet ${i+1}
-                      ${w.sol ? `<span style="font-weight:400;color:var(--text-muted)"> · ${w.sol} SOL</span>` : ''}
-                    </span>
+                    <span style="font-size:10px;font-weight:600;color:var(--navy)">Wallet ${i + 1}${w.sol ? `<span style="font-weight:400;color:var(--text-muted)"> · ${w.sol} SOL</span>` : ''}</span>
                     <span style="font-size:9px;color:var(--green-dim);background:var(--green-bg);padding:1px 6px;border-radius:20px">Funded</span>
                   </div>
                   <div style="margin-bottom:5px">
@@ -377,9 +378,9 @@ function buildBundleHistoryTab() {
                     <div style="font-size:8.5px;font-weight:700;letter-spacing:0.05em;color:var(--text-muted);text-transform:uppercase;margin-bottom:2px">Private Key</div>
                     <div style="display:flex;align-items:center;gap:4px">
                       <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-                        ${shown ? w.privateKey : '•'.repeat(Math.min(w.privateKey?.length||32, 32))}
+                        ${shown ? w.privateKey : '•'.repeat(Math.min(w.privateKey?.length || 32, 32))}
                       </span>
-                      <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:8.5px;flex-shrink:0" data-action="bh-toggle-key" data-id="${entry.id}" data-idx="${i}">${shown?'Hide':'Show'}</button>
+                      <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:8.5px;flex-shrink:0" data-action="bh-toggle-key" data-id="${entry.id}" data-idx="${i}">${shown ? 'Hide' : 'Show'}</button>
                       <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:8.5px;flex-shrink:0" data-action="copy" data-copy="${w.privateKey}">Copy</button>
                     </div>
                   </div>
@@ -398,7 +399,10 @@ function buildBundleHistoryTab() {
 // ══════════════════════════════════════════
 function buildCreateBundleResult() {
   const r = S.bundle.createResult;
-  if (!r) { S.bundle.view = 'landing'; return buildBundleLanding(); }
+  if (!r) {
+    S.bundle.view = 'landing';
+    return buildBundleLanding();
+  }
 
   return `
     <div class="tool-header">
@@ -408,12 +412,11 @@ function buildCreateBundleResult() {
       </div>
     </div>
     <div class="scroll-area" id="scroll-area">
-
       <div style="background:var(--green-bg);border:1px solid rgba(34,197,94,0.25);border-radius:var(--r);padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px">
         <span style="font-size:20px">🎉</span>
         <div>
           <div style="font-size:11px;font-weight:700;color:var(--green-dim)">Bundle funded successfully!</div>
-          <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${r.wallets.length} wallets · ${r.totalSol} SOL · ${r.distribMode==='random'?'Random':'Equal'} distribution</div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${r.wallets.length} wallets · ${r.totalSol} SOL · ${r.distribMode === 'random' ? 'Random' : 'Equal'} distribution</div>
         </div>
       </div>
 
@@ -423,11 +426,11 @@ function buildCreateBundleResult() {
       </div>
 
       ${r.wallets.map((w, i) => {
-        const shown = (S.bundle.createKeyVis||{})[i];
+        const shown = (S.bundle.createKeyVis || {})[i];
         return `
           <div style="background:var(--surface);border:1px solid var(--border-md);border-radius:var(--r);padding:10px 12px;margin-bottom:7px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-              <span style="font-size:10.5px;font-weight:700;color:var(--navy)">Wallet ${i+1}</span>
+              <span style="font-size:10.5px;font-weight:700;color:var(--navy)">Wallet ${i + 1}</span>
               <span style="font-size:10px;font-family:var(--mono);font-weight:600;color:var(--navy)">${w.sol} SOL</span>
             </div>
             <div style="margin-bottom:5px">
@@ -441,9 +444,9 @@ function buildCreateBundleResult() {
               <div style="font-size:8.5px;font-weight:700;letter-spacing:0.05em;color:var(--text-muted);text-transform:uppercase;margin-bottom:2px">Private Key</div>
               <div style="display:flex;align-items:center;gap:4px">
                 <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim);flex:1;word-break:break-all">
-                  ${shown ? w.privateKey : '•'.repeat(Math.min(w.privateKey?.length||32,32))}
+                  ${shown ? w.privateKey : '•'.repeat(Math.min(w.privateKey?.length || 32, 32))}
                 </span>
-                <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:8.5px;flex-shrink:0" data-action="cr-toggle-key" data-idx="${i}">${shown?'Hide':'Show'}</button>
+                <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:8.5px;flex-shrink:0" data-action="cr-toggle-key" data-idx="${i}">${shown ? 'Hide' : 'Show'}</button>
                 <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:8.5px;flex-shrink:0" data-action="copy" data-copy="${w.privateKey}">Copy</button>
               </div>
             </div>
@@ -463,11 +466,11 @@ function buildBundleLoading(p) {
   return `
     <div class="loading-card" style="margin:10px 0">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
-        <span class="loading-step" style="font-size:10px;color:var(--text-dim)">${p?.step||'Working…'}</span>
-        <span class="loading-pct" style="font-size:10px;font-weight:600;color:var(--navy);font-family:var(--mono)">${p?.pct||0}%</span>
+        <span class="loading-step" style="font-size:10px;color:var(--text-dim)">${p?.step || 'Working…'}</span>
+        <span class="loading-pct" style="font-size:10px;font-weight:600;color:var(--navy);font-family:var(--mono)">${p?.pct || 0}%</span>
       </div>
       <div style="background:var(--border-md);border-radius:3px;height:3px;overflow:hidden">
-        <div class="loading-bar" style="background:var(--navy);height:100%;width:${p?.pct||0}%;transition:width 0.3s ease;border-radius:3px"></div>
+        <div class="loading-bar" style="background:var(--navy);height:100%;width:${p?.pct || 0}%;transition:width 0.3s ease;border-radius:3px"></div>
       </div>
     </div>
   `;
@@ -476,49 +479,54 @@ function buildBundleLoading(p) {
 // ══════════════════════════════════════════
 // CREATE BUNDLE LOGIC
 // ══════════════════════════════════════════
-
 function distributeSOL(totalSol, walletCount, distribMode, maxPerWallet) {
   const total = parseFloat(totalSol);
-  const max   = parseFloat(maxPerWallet) > 0 ? parseFloat(maxPerWallet) : Infinity;
+  const max = parseFloat(maxPerWallet) > 0 ? parseFloat(maxPerWallet) : Infinity;
   const amounts = [];
 
   if (distribMode === 'equal') {
     const each = total / walletCount;
-    for (let i = 0; i < walletCount; i++) amounts.push(parseFloat(Math.min(each, max).toFixed(6)));
+    for (let i = 0; i < walletCount; i++) {
+      amounts.push(parseFloat(Math.min(each, max).toFixed(6)));
+    }
   } else {
-    // Random weights
-    const weights  = Array.from({ length: walletCount }, () => Math.random());
-    const wSum     = weights.reduce((a, b) => a + b, 0);
-    let remaining  = total;
+    const weights = Array.from({ length: walletCount }, () => Math.random());
+    const wSum = weights.reduce((a, b) => a + b, 0);
+    let remaining = total;
+
     for (let i = 0; i < walletCount; i++) {
       if (i === walletCount - 1) {
         amounts.push(parseFloat(Math.max(0, Math.min(remaining, max)).toFixed(6)));
       } else {
-        const share  = parseFloat(Math.min((weights[i] / wSum) * total, max).toFixed(6));
+        const share = parseFloat(Math.min((weights[i] / wSum) * total, max).toFixed(6));
         amounts.push(share);
-        remaining   -= share;
+        remaining -= share;
       }
     }
   }
+
   return amounts;
 }
 
 function generateKeypair() {
   if (window.solanaWeb3?.Keypair) {
     const kp = window.solanaWeb3.Keypair.generate();
-    return { publicKey: kp.publicKey.toBase58(), privateKey: bs58encode(kp.secretKey) };
+    return {
+      publicKey: kp.publicKey.toBase58(),
+      privateKey: bs58encode(kp.secretKey),
+    };
   }
   throw new Error('Solana web3 SDK not loaded — cannot generate keypairs');
 }
 
 async function runCreateBundle() {
-  const c            = S.bundle.create || {};
-  const sourceWallet = (S.savedWallets||[]).find(w => w.id === c.sourceWalletId);
-  const sourcePriv   = (c.sourceWalletPrivKey || sourceWallet?.privateKey || '').trim();
-  const walletCount  = Math.max(1, Math.min(50, parseInt(c.walletCount)||5));
-  const totalSol     = parseFloat(c.totalSol);
-  const maxPerWallet = parseFloat(c.maxSolPerWallet)||0;
-  const distrib      = c.distribMode || 'equal';
+  const c = S.bundle.create || {};
+  const sourceWallet = (S.savedWallets || []).find(w => w.id === c.sourceWalletId);
+  const sourcePriv = (c.sourceWalletPrivKey || sourceWallet?.privateKey || '').trim();
+  const walletCount = Math.max(1, Math.min(50, parseInt(c.walletCount) || 5));
+  const totalSol = parseFloat(c.totalSol);
+  const maxPerWallet = parseFloat(c.maxSolPerWallet) || 0;
+  const distrib = c.distribMode || 'equal';
 
   if (!sourcePriv) throw new Error('Select a source wallet with a private key');
   if (!totalSol || totalSol <= 0) throw new Error('Enter a valid SOL amount');
@@ -526,29 +534,29 @@ async function runCreateBundle() {
   const setStep = (step, pct) => {
     if (!S.bundle.create) S.bundle.create = {};
     S.bundle.create.runStep = step;
-    S.bundle.create.runPct  = pct;
+    S.bundle.create.runPct = pct;
 
     const stepEl = document.querySelector('.loading-step');
-    const barEl  = document.querySelector('.loading-bar');
-    const pctEl  = document.querySelector('.loading-pct');
+    const barEl = document.querySelector('.loading-bar');
+    const pctEl = document.querySelector('.loading-pct');
     if (stepEl) stepEl.textContent = step;
-    if (barEl)  barEl.style.width  = pct + '%';
-    if (pctEl)  pctEl.textContent  = pct + '%';
+    if (barEl) barEl.style.width = pct + '%';
+    if (pctEl) pctEl.textContent = pct + '%';
   };
 
-  // 1) Generate destination wallets
   setStep('Generating wallets…', 10);
   await sleep(200);
 
-  const amounts  = distributeSOL(totalSol, walletCount, distrib, maxPerWallet);
+  const amounts = distributeSOL(totalSol, walletCount, distrib, maxPerWallet);
   const keypairs = Array.from({ length: walletCount }, () => generateKeypair());
 
   const splits = keypairs.map((kp, i) => ({
     address: kp.publicKey,
-    amount:  amounts[i],
+    amount: amounts[i],
   }));
 
-  // 2) Create quote + order + deposit through backend proxy
+  console.log('[bundle] splits payload', splits);
+
   setStep('Creating SplitNow quote…', 25);
   const createRes = await splitNowReq('POST', '/create-bundle', {
     source_private_key: sourcePriv,
@@ -562,7 +570,6 @@ async function runCreateBundle() {
 
   setStep('Deposit sent — waiting for SplitNow…', 45);
 
-  // 3) Poll order status
   let latestOrder = data.fetchedOrder || null;
   let completed = false;
 
@@ -574,17 +581,13 @@ async function runCreateBundle() {
     const orderData = orderRes?.data || orderRes;
 
     const statusShort = String(orderData?.statusShort || '').toLowerCase();
-    const statusText  = String(orderData?.statusText || '').toLowerCase();
-    const rawStatus   = String(orderData?.status || '').toLowerCase();
+    const statusText = String(orderData?.statusText || '').toLowerCase();
+    const rawStatus = String(orderData?.status || '').toLowerCase();
 
     const pct = Math.min(95, 45 + Math.floor(((attempt + 1) / 40) * 45));
     setStep(`Processing order… ${orderData?.statusShort || orderData?.statusText || orderData?.status || 'pending'}`, pct);
 
-    if (
-      statusShort === 'completed' ||
-      statusText === 'completed' ||
-      rawStatus === 'completed'
-    ) {
+    if (statusShort === 'completed' || statusText === 'completed' || rawStatus === 'completed') {
       completed = true;
       break;
     }
@@ -608,41 +611,43 @@ async function runCreateBundle() {
   await sleep(400);
 
   const wallets = keypairs.map((kp, i) => ({
-    publicKey:  kp.publicKey,
+    publicKey: kp.publicKey,
     privateKey: kp.privateKey,
-    sol:        amounts[i],
+    sol: amounts[i],
   }));
 
   const result = {
-    id:          uid(),
-    ts:          Date.now(),
+    id: uid(),
+    ts: Date.now(),
     wallets,
-    totalSol:    parseFloat(totalSol.toFixed(6)),
+    totalSol: parseFloat(totalSol.toFixed(6)),
     distribMode: distrib,
-    groupName:   c.groupName?.trim() || `Bundle ${new Date().toLocaleDateString('en-GB')}`,
-    addToGroup:  !!c.addToGroup,
-    orderId:     data.orderId || null,
-    shortId:     data.shortId || null,
-    depositTxSig:data.depositTxSig || null,
+    groupName: c.groupName?.trim() || `Bundle ${new Date().toLocaleDateString('en-GB')}`,
+    addToGroup: !!c.addToGroup,
+    orderId: data.orderId || null,
+    shortId: data.shortId || null,
+    depositTxSig: data.depositTxSig || null,
     depositAddress: data.depositAddress || null,
     depositAmount: data.depositAmount || null,
-    orderData:   latestOrder,
+    orderData: latestOrder,
   };
 
   if (!S.bundle.createHistory) S.bundle.createHistory = [];
   S.bundle.createHistory.push(result);
-  if (S.bundle.createHistory.length > 20) S.bundle.createHistory = S.bundle.createHistory.slice(-20);
+  if (S.bundle.createHistory.length > 20) {
+    S.bundle.createHistory = S.bundle.createHistory.slice(-20);
+  }
 
   if (c.addToGroup) {
     const groupName = result.groupName;
-    const groupId   = uid();
-    S.walletGroups  = S.walletGroups || [];
+    const groupId = uid();
+    S.walletGroups = S.walletGroups || [];
     S.walletGroups.push({ id: groupId, name: groupName, emoji: '📦', collapsed: false });
 
     wallets.forEach((w, i) => {
       S.savedWallets.push({
         id: uid(),
-        name: `${groupName} W${i+1}`,
+        name: `${groupName} W${i + 1}`,
         emoji: '💼',
         publicKey: w.publicKey,
         privateKey: w.privateKey,
@@ -660,54 +665,69 @@ async function runCreateBundle() {
 // ══════════════════════════════════════════
 // BUNDLE CHECK LOGIC (original, preserved)
 // ══════════════════════════════════════════
-
 function isPumpFunBuy(tx, mintAddress) {
   if (!tx?.transaction?.message) return false;
   const accounts = tx.transaction.message.accountKeys || [];
-  const addrs    = accounts.map(a => typeof a === 'string' ? a : a.pubkey);
+  const addrs = accounts.map(a => typeof a === 'string' ? a : a.pubkey);
   return addrs.includes(PUMPFUN_PROGRAM);
 }
 
 function extractBuyer(tx, mintAddress) {
   if (!tx?.meta) return null;
   const postBals = tx.meta.postTokenBalances || [];
-  const preBals  = tx.meta.preTokenBalances  || [];
+  const preBals = tx.meta.preTokenBalances || [];
   const accounts = tx.transaction?.message?.accountKeys || [];
-  const sig      = tx.transaction?.signatures?.[0] || '';
+  const sig = tx.transaction?.signatures?.[0] || '';
 
   for (const post of postBals) {
     if (post.mint !== mintAddress) continue;
     if (!post.owner) continue;
-    const pre    = preBals.find(p => p.accountIndex === post.accountIndex);
+    const pre = preBals.find(p => p.accountIndex === post.accountIndex);
     const preAmt = Number(pre?.uiTokenAmount?.uiAmount || 0);
-    const postAmt= Number(post.uiTokenAmount?.uiAmount || 0);
+    const postAmt = Number(post.uiTokenAmount?.uiAmount || 0);
     if (postAmt > preAmt) {
       return {
-        wallet: post.owner, amount: postAmt - preAmt,
-        slot: tx.slot, timestamp: tx.blockTime,
-        signature: sig, isPump: isPumpFunBuy(tx, mintAddress),
-        verdict: 'UNKNOWN', fundingSource: null, bundleGroup: null,
+        wallet: post.owner,
+        amount: postAmt - preAmt,
+        slot: tx.slot,
+        timestamp: tx.blockTime,
+        signature: sig,
+        isPump: isPumpFunBuy(tx, mintAddress),
+        verdict: 'UNKNOWN',
+        fundingSource: null,
+        bundleGroup: null,
       };
     }
   }
 
-  const solPre   = tx.meta.preBalances  || [];
-  const solPost  = tx.meta.postBalances || [];
+  const solPre = tx.meta.preBalances || [];
+  const solPost = tx.meta.postBalances || [];
   const acctKeys = accounts.map(a => typeof a === 'string' ? a : a.pubkey);
-  const prog     = acctKeys.indexOf(PUMPFUN_PROGRAM);
+  const prog = acctKeys.indexOf(PUMPFUN_PROGRAM);
   if (prog === -1) return null;
 
-  let maxSpent = 0, buyerIdx = -1;
+  let maxSpent = 0;
+  let buyerIdx = -1;
   for (let i = 0; i < acctKeys.length; i++) {
-    const spent = (solPre[i]||0) - (solPost[i]||0);
-    if (spent > maxSpent) { maxSpent = spent; buyerIdx = i; }
+    const spent = (solPre[i] || 0) - (solPost[i] || 0);
+    if (spent > maxSpent) {
+      maxSpent = spent;
+      buyerIdx = i;
+    }
   }
   if (buyerIdx === -1) return null;
+
   return {
-    wallet: acctKeys[buyerIdx], amount: 0,
-    slot: tx.slot, timestamp: tx.blockTime,
-    signature: sig, isPump: true, verdict: 'UNKNOWN',
-    fundingSource: null, bundleGroup: null, solSpent: maxSpent / 1e9,
+    wallet: acctKeys[buyerIdx],
+    amount: 0,
+    slot: tx.slot,
+    timestamp: tx.blockTime,
+    signature: sig,
+    isPump: true,
+    verdict: 'UNKNOWN',
+    fundingSource: null,
+    bundleGroup: null,
+    solSpent: maxSpent / 1e9,
   };
 }
 
@@ -730,15 +750,17 @@ async function analyzeBundles(mintAddress, onProgress) {
 
   for (let i = 0; i < Math.min(sigs.length, 80); i += batchSize) {
     const batch = sigs.slice(i, i + batchSize);
-    const txs   = await Promise.all(batch.map(s =>
+    const txs = await Promise.all(batch.map(s =>
       bundleRpc('getTransaction', [s.signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'confirmed' }])
     ));
+
     for (const tx of txs) {
       if (!tx) continue;
       const buyer = extractBuyer(tx, mintAddress);
       if (buyer) buyers.push(buyer);
     }
-    prog(`Analysing transactions… (${Math.min(i+batchSize, sigs.length)}/${Math.min(sigs.length,80)})`, 15 + Math.floor((i/80)*45));
+
+    prog(`Analysing transactions… (${Math.min(i + batchSize, sigs.length)}/${Math.min(sigs.length, 80)})`, 15 + Math.floor((i / 80) * 45));
     await sleep(150);
   }
 
@@ -746,10 +768,11 @@ async function analyzeBundles(mintAddress, onProgress) {
 
   prog('Tracing funding sources…', 62);
   const uniqueWallets = [...new Set(buyers.map(b => b.wallet))];
-  const fundingMap    = {};
+  const fundingMap = {};
+
   for (let i = 0; i < uniqueWallets.length; i++) {
     fundingMap[uniqueWallets[i]] = await traceFundingSource(uniqueWallets[i]);
-    prog(`Tracing wallets… (${i+1}/${uniqueWallets.length})`, 62 + Math.floor((i/uniqueWallets.length)*25));
+    prog(`Tracing wallets… (${i + 1}/${uniqueWallets.length})`, 62 + Math.floor((i / uniqueWallets.length) * 25));
     await sleep(100);
   }
 
@@ -760,12 +783,14 @@ async function analyzeBundles(mintAddress, onProgress) {
 }
 
 function detectBundleGroups(buyers, fundingMap, totalSupply) {
-  const bySlot   = {};
+  const bySlot = {};
   const byFunder = {};
+
   for (const b of buyers) {
     const slotKey = String(b.slot);
     if (!bySlot[slotKey]) bySlot[slotKey] = [];
     bySlot[slotKey].push(b);
+
     const fs = fundingMap[b.wallet]?.fundingSource;
     if (fs) {
       if (!byFunder[fs]) byFunder[fs] = [];
@@ -776,14 +801,21 @@ function detectBundleGroups(buyers, fundingMap, totalSupply) {
   let groupIndex = 1;
   for (const group of Object.values(bySlot)) {
     if (group.length >= 2) {
-      group.forEach(b => { b.verdict = 'BUNDLED'; b.bundleGroup = `Block ${groupIndex}`; });
+      group.forEach(b => {
+        b.verdict = 'BUNDLED';
+        b.bundleGroup = `Block ${groupIndex}`;
+      });
       groupIndex++;
     }
   }
+
   for (const [funder, group] of Object.entries(byFunder)) {
     if (group.length >= 2) {
       group.forEach(b => {
-        if (b.verdict === 'UNKNOWN') { b.verdict = 'BUNDLED'; b.bundleGroup = `Funder ${short(funder)}`; }
+        if (b.verdict === 'UNKNOWN') {
+          b.verdict = 'BUNDLED';
+          b.bundleGroup = `Funder ${short(funder)}`;
+        }
         b.fundingSource = funder;
       });
     }
@@ -792,61 +824,84 @@ function detectBundleGroups(buyers, fundingMap, totalSupply) {
   if (totalSupply) {
     for (const b of buyers) {
       if (b.verdict !== 'UNKNOWN') continue;
-      if      (b.amount / totalSupply >= 0.5)  b.verdict = 'FULLPORT';
-      else if (b.amount / totalSupply >= 0.1)  b.verdict = 'SUSPICIOUS';
-      else                                      b.verdict = 'CLEAN';
+      if (b.amount / totalSupply >= 0.5) b.verdict = 'FULLPORT';
+      else if (b.amount / totalSupply >= 0.1) b.verdict = 'SUSPICIOUS';
+      else b.verdict = 'CLEAN';
     }
   } else {
-    buyers.filter(b => b.verdict === 'UNKNOWN').forEach(b => b.verdict = 'EARLY');
+    buyers.filter(b => b.verdict === 'UNKNOWN').forEach(b => {
+      b.verdict = 'EARLY';
+    });
   }
 
-  const bundled      = buyers.filter(b => b.verdict === 'BUNDLED').length;
-  const fullport     = buyers.filter(b => b.verdict === 'FULLPORT').length;
-  const suspicious   = buyers.filter(b => b.verdict === 'SUSPICIOUS').length;
-  const clean        = buyers.filter(b => b.verdict === 'CLEAN').length;
+  const bundled = buyers.filter(b => b.verdict === 'BUNDLED').length;
+  const fullport = buyers.filter(b => b.verdict === 'FULLPORT').length;
+  const suspicious = buyers.filter(b => b.verdict === 'SUSPICIOUS').length;
+  const clean = buyers.filter(b => b.verdict === 'CLEAN').length;
   const bundleGroups = new Set(buyers.filter(b => b.bundleGroup).map(b => b.bundleGroup)).size;
-  const bundledAmt   = buyers.filter(b => b.verdict === 'BUNDLED').reduce((s, b) => s + b.amount, 0);
-  const bundledPct   = totalSupply ? Math.round((bundledAmt / totalSupply) * 100) : null;
+  const bundledAmt = buyers.filter(b => b.verdict === 'BUNDLED').reduce((s, b) => s + b.amount, 0);
+  const bundledPct = totalSupply ? Math.round((bundledAmt / totalSupply) * 100) : null;
 
-  return { buyers, totalSupply, stats: { total: buyers.length, bundled, fullport, suspicious, clean, bundleGroups, bundledPct }, fundingMap };
+  return {
+    buyers,
+    totalSupply,
+    stats: { total: buyers.length, bundled, fullport, suspicious, clean, bundleGroups, bundledPct },
+    fundingMap,
+  };
 }
 
 async function traceFundingSource(walletAddress) {
   try {
     const sigs = await bundleRpc('getSignaturesForAddress', [walletAddress, { limit: 10 }]);
     if (!sigs?.length) return { fundingSource: null, fundingAmount: 0, fundingSlot: null };
+
     const oldest = [...sigs].reverse().slice(0, 5);
     for (const sig of oldest) {
       const tx = await bundleRpc('getTransaction', [sig.signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'confirmed' }]);
       if (!tx?.meta) continue;
-      const accounts  = (tx.transaction?.message?.accountKeys||[]).map(a => typeof a === 'string' ? a : a.pubkey);
-      const pre       = tx.meta.preBalances  || [];
-      const post      = tx.meta.postBalances || [];
+
+      const accounts = (tx.transaction?.message?.accountKeys || []).map(a => typeof a === 'string' ? a : a.pubkey);
+      const pre = tx.meta.preBalances || [];
+      const post = tx.meta.postBalances || [];
       const walletIdx = accounts.indexOf(walletAddress);
       if (walletIdx === -1) continue;
-      const gained = (post[walletIdx]||0) - (pre[walletIdx]||0);
+
+      const gained = (post[walletIdx] || 0) - (pre[walletIdx] || 0);
       if (gained <= 0) continue;
-      let sender = null, maxLost = 0;
+
+      let sender = null;
+      let maxLost = 0;
       for (let i = 0; i < accounts.length; i++) {
         if (accounts[i] === walletAddress) continue;
-        const lost = (pre[i]||0) - (post[i]||0);
-        if (lost > maxLost) { maxLost = lost; sender = accounts[i]; }
+        const lost = (pre[i] || 0) - (post[i] || 0);
+        if (lost > maxLost) {
+          maxLost = lost;
+          sender = accounts[i];
+        }
       }
-      if (sender && maxLost > 5000) return { fundingSource: sender, fundingAmount: maxLost, fundingSlot: tx.slot };
+
+      if (sender && maxLost > 5000) {
+        return { fundingSource: sender, fundingAmount: maxLost, fundingSlot: tx.slot };
+      }
     }
+
     return { fundingSource: null, fundingAmount: 0, fundingSlot: null };
-  } catch { return { fundingSource: null, fundingAmount: 0, fundingSlot: null }; }
+  } catch {
+    return { fundingSource: null, fundingAmount: 0, fundingSlot: null };
+  }
 }
 
 async function analyzeWalletConnections(addresses, onProgress) {
   const prog = (step, pct) => onProgress?.({ step, pct });
   prog('Tracing wallet histories…', 5);
+
   const results = {};
   for (let i = 0; i < addresses.length; i++) {
     results[addresses[i]] = await traceFundingSource(addresses[i]);
-    prog(`Tracing ${i+1}/${addresses.length}…`, 5 + Math.floor((i/addresses.length)*80));
+    prog(`Tracing ${i + 1}/${addresses.length}…`, 5 + Math.floor((i / addresses.length) * 80));
     await sleep(120);
   }
+
   prog('Comparing sources…', 88);
   const groups = {};
   for (const [addr, info] of Object.entries(results)) {
@@ -854,6 +909,7 @@ async function analyzeWalletConnections(addresses, onProgress) {
     if (!groups[src]) groups[src] = [];
     groups[src].push(addr);
   }
+
   const linkedGroups = Object.entries(groups).filter(([src, ws]) => src !== 'unknown' && ws.length >= 2);
   prog('Done', 100);
   return { addresses, fundingMap: results, linkedGroups };
@@ -864,17 +920,22 @@ async function analyzeWalletConnections(addresses, onProgress) {
 // ══════════════════════════════════════════
 function buildBundleTokenResult() {
   const r = S.bundle.result;
-  if (!r) { S.bundle.view = 'landing'; return buildBundleLanding(); }
-  const s      = r.stats;
+  if (!r) {
+    S.bundle.view = 'landing';
+    return buildBundleLanding();
+  }
+
+  const s = r.stats;
   const buyers = r.buyers || [];
   const groups = {
-    BUNDLED:    buyers.filter(b => b.verdict === 'BUNDLED'),
-    FULLPORT:   buyers.filter(b => b.verdict === 'FULLPORT'),
+    BUNDLED: buyers.filter(b => b.verdict === 'BUNDLED'),
+    FULLPORT: buyers.filter(b => b.verdict === 'FULLPORT'),
     SUSPICIOUS: buyers.filter(b => b.verdict === 'SUSPICIOUS'),
-    EARLY:      buyers.filter(b => b.verdict === 'EARLY'),
-    CLEAN:      buyers.filter(b => b.verdict === 'CLEAN'),
+    EARLY: buyers.filter(b => b.verdict === 'EARLY'),
+    CLEAN: buyers.filter(b => b.verdict === 'CLEAN'),
   };
-  const riskScore = Math.min(100, s.bundled*10 + s.fullport*25 + s.suspicious*5);
+
+  const riskScore = Math.min(100, s.bundled * 10 + s.fullport * 25 + s.suspicious * 5);
   const riskColor = riskScore >= 60 ? 'var(--danger)' : riskScore >= 30 ? 'var(--warn)' : 'var(--green-dim)';
   const riskLabel = riskScore >= 60 ? 'HIGH RISK' : riskScore >= 30 ? 'MEDIUM RISK' : 'LOW RISK';
 
@@ -899,18 +960,22 @@ function buildBundleTokenResult() {
         </div>
         ${s.bundledPct !== null ? `<div style="font-size:10px;color:var(--text-muted);margin-top:8px;padding-top:8px;border-top:1px solid var(--border-md)">Bundled wallets hold <strong style="color:var(--danger)">${s.bundledPct}%</strong> of visible supply</div>` : ''}
       </div>
-      ${groups.BUNDLED.length    ? `<div class="bc-section-hdr" style="color:var(--danger)">🔴 Confirmed Bundles — ${s.bundleGroups} group${s.bundleGroups!==1?'s':''}</div>${groups.BUNDLED.map(w=>buildBundleWalletRow(w,r.totalSupply)).join('')}` : ''}
-      ${groups.FULLPORT.length   ? `<div class="bc-section-hdr" style="color:var(--danger);margin-top:12px">🟠 Full-Port Buys</div>${groups.FULLPORT.map(w=>buildBundleWalletRow(w,r.totalSupply)).join('')}` : ''}
-      ${groups.SUSPICIOUS.length ? `<div class="bc-section-hdr" style="color:var(--warn);margin-top:12px">🟡 Suspicious</div>${groups.SUSPICIOUS.map(w=>buildBundleWalletRow(w,r.totalSupply)).join('')}` : ''}
-      ${groups.EARLY.length      ? `<div class="bc-section-hdr" style="color:var(--text-muted);margin-top:12px">⚪ Early Buyers</div>${groups.EARLY.map(w=>buildBundleWalletRow(w,r.totalSupply)).join('')}` : ''}
-      ${groups.CLEAN.length      ? `<div class="bc-section-hdr" style="color:var(--green-dim);margin-top:12px">🟢 Clean</div>${groups.CLEAN.map(w=>buildBundleWalletRow(w,r.totalSupply)).join('')}` : ''}
+      ${groups.BUNDLED.length ? `<div class="bc-section-hdr" style="color:var(--danger)">🔴 Confirmed Bundles — ${s.bundleGroups} group${s.bundleGroups !== 1 ? 's' : ''}</div>${groups.BUNDLED.map(w => buildBundleWalletRow(w, r.totalSupply)).join('')}` : ''}
+      ${groups.FULLPORT.length ? `<div class="bc-section-hdr" style="color:var(--danger);margin-top:12px">🟠 Full-Port Buys</div>${groups.FULLPORT.map(w => buildBundleWalletRow(w, r.totalSupply)).join('')}` : ''}
+      ${groups.SUSPICIOUS.length ? `<div class="bc-section-hdr" style="color:var(--warn);margin-top:12px">🟡 Suspicious</div>${groups.SUSPICIOUS.map(w => buildBundleWalletRow(w, r.totalSupply)).join('')}` : ''}
+      ${groups.EARLY.length ? `<div class="bc-section-hdr" style="color:var(--text-muted);margin-top:12px">⚪ Early Buyers</div>${groups.EARLY.map(w => buildBundleWalletRow(w, r.totalSupply)).join('')}` : ''}
+      ${groups.CLEAN.length ? `<div class="bc-section-hdr" style="color:var(--green-dim);margin-top:12px">🟢 Clean</div>${groups.CLEAN.map(w => buildBundleWalletRow(w, r.totalSupply)).join('')}` : ''}
     </div>
   `;
 }
 
 function buildBundleWalletResult() {
   const r = S.bundle.walletResult;
-  if (!r) { S.bundle.view = 'landing'; return buildBundleLanding(); }
+  if (!r) {
+    S.bundle.view = 'landing';
+    return buildBundleLanding();
+  }
+
   const linked = r.linkedGroups || [];
 
   return `
@@ -928,14 +993,14 @@ function buildBundleWalletResult() {
           <div style="font-size:10px;color:var(--text-muted);margin-top:4px">These wallets don't appear to share a funding source.</div>
         </div>
       ` : `
-        <div class="error-card" style="margin-bottom:12px">⚠ ${linked.length} linked group${linked.length>1?'s':''} found — these wallets likely share an owner.</div>
+        <div class="error-card" style="margin-bottom:12px">⚠ ${linked.length} linked group${linked.length > 1 ? 's' : ''} found — these wallets likely share an owner.</div>
         ${linked.map(([funder, wallets]) => `
           <div style="background:var(--surface);border:1px solid var(--border-md);border-radius:var(--r);padding:10px 12px;margin-bottom:8px">
             <div style="font-size:9.5px;font-weight:700;color:var(--danger);margin-bottom:6px">Shared funder: <span style="font-family:var(--mono)">${short(funder)}</span></div>
             ${wallets.map(addr => {
-              const saved = (S.savedWallets||[]).find(w => w.publicKey === addr);
+              const saved = (S.savedWallets || []).find(w => w.publicKey === addr);
               return `<div style="font-size:9.5px;color:var(--text-dim);padding:3px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px">
-                ${saved?`<span>${saved.emoji||'💼'} ${saved.name}</span>`:''}
+                ${saved ? `<span>${saved.emoji || '💼'} ${saved.name}</span>` : ''}
                 <span style="font-family:var(--mono)">${short(addr)}</span>
                 <button class="btn btn-ghost btn-sm" style="padding:1px 5px;font-size:8px;margin-left:auto" data-action="copy" data-copy="${addr}">Copy</button>
               </div>`;
@@ -948,20 +1013,27 @@ function buildBundleWalletResult() {
 }
 
 function buildBundleWalletRow(w, totalSupply) {
-  const pct    = totalSupply && w.amount ? ((w.amount/totalSupply)*100).toFixed(2) : null;
-  const colors = { BUNDLED:'var(--danger)', FULLPORT:'var(--danger)', SUSPICIOUS:'var(--warn)', CLEAN:'var(--green-dim)', EARLY:'var(--text-muted)' };
+  const pct = totalSupply && w.amount ? ((w.amount / totalSupply) * 100).toFixed(2) : null;
+  const colors = {
+    BUNDLED: 'var(--danger)',
+    FULLPORT: 'var(--danger)',
+    SUSPICIOUS: 'var(--warn)',
+    CLEAN: 'var(--green-dim)',
+    EARLY: 'var(--text-muted)',
+  };
+
   return `
     <div style="background:var(--surface);border:1px solid var(--border-md);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:5px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
         <span style="font-family:var(--mono);font-size:9.5px;color:var(--text-dim);cursor:pointer" data-action="copy" data-copy="${w.wallet}">${short(w.wallet)}</span>
         <div style="display:flex;align-items:center;gap:5px">
           ${w.bundleGroup ? `<span style="font-size:8px;background:rgba(220,38,38,0.1);color:var(--danger);padding:1px 5px;border-radius:20px">${w.bundleGroup}</span>` : ''}
-          <span style="font-size:8.5px;font-weight:700;color:${colors[w.verdict]||'var(--text-muted)'}">${w.verdict}</span>
+          <span style="font-size:8.5px;font-weight:700;color:${colors[w.verdict] || 'var(--text-muted)'}">${w.verdict}</span>
         </div>
       </div>
       <div style="display:flex;gap:10px;font-size:9px;color:var(--text-muted);flex-wrap:wrap">
-        ${w.amount  ? `<span>${w.amount.toLocaleString(undefined,{maximumFractionDigits:0})} tokens${pct?` (${pct}%)`:''}` : ''}
-        ${w.solSpent? `<span>${w.solSpent.toFixed(4)} SOL</span>` : ''}
+        ${w.amount ? `<span>${w.amount.toLocaleString(undefined, { maximumFractionDigits: 0 })} tokens${pct ? ` (${pct}%)` : ''}</span>` : ''}
+        ${w.solSpent ? `<span>${w.solSpent.toFixed(4)} SOL</span>` : ''}
         ${w.fundingSource ? `<span>Funder: <span style="font-family:var(--mono)">${short(w.fundingSource)}</span></span>` : ''}
       </div>
     </div>
