@@ -55,6 +55,7 @@ let S = {
     walletAddresses: [],
     _walletPickerOpen: false,
     _pastedWallet: '',
+    _createSourceOpen: false,
     view: 'landing',
     result: null,
     loading: false,
@@ -67,18 +68,19 @@ let S = {
     scroll: 0,
     // Create bundle sub-state
     create: {
-      sourceWalletId: '',
-      walletCount: 5,
-      totalSol: '',
-      maxSolPerWallet: '',
-      distribMode: 'equal',
-      addToGroup: false,
-      groupName: '',
-      running: false,
-      runStep: '',
-      runPct: 0,
-      error: '',
-    },
+    sourceWalletId: '',
+    sourceWalletPrivKey: '',
+    walletCount: 5,
+    totalSol: '',
+    maxSolPerWallet: '',
+    distribMode: 'equal',
+    addToGroup: false,
+    groupName: '',
+    running: false,
+    runStep: '',
+    runPct: 0,
+    error: '',
+  },
     createResult: null,
     createHistory: [],
     historyExpanded: {},
@@ -351,6 +353,7 @@ function openWalletPicker(targetField) {
       else if (targetField === 'bundle-source-wallet') {
         if (!S.bundle.create) S.bundle.create = {};
         S.bundle.create.sourceWalletId = w.id;
+        S.bundle.create.sourceWalletPrivKey = w.privateKey || '';
       }
       modal.style.display = 'none';
       saveState();
@@ -1221,8 +1224,7 @@ function buildSettingsPage() {
         <p style="font-size:10px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">
           HTTP RPC for balance checks and transactions. Leave blank to use the default.
         </p>
-        <input type="text" id="rpc-input" value="${S.settings.rpcEndpoint === DEFAULT_RPC ? '' : S.settings.rpcEndpoint}" placeholder="Default"/>
-        <div style="display:flex;gap:6px;margin-top:6px">
+        <input type="text" id="rpc-input" value="${S.settings.rpcEndpoint === DEFAULT_RPC ? '' : S.settings.rpcEndpoint}" placeholder="Default" data-bind-settings="rpcEndpoint"/>        <div style="display:flex;gap:6px;margin-top:6px">
           <button class="btn btn-ghost btn-sm" data-action="save-rpc">Save</button>
           <button class="btn btn-secondary btn-sm" data-action="reset-rpc">Reset to Default</button>
         </div>
@@ -1234,8 +1236,7 @@ function buildSettingsPage() {
         <p style="font-size:10px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">
           For real-time buy detection. Leave blank to use the default. Falls back to polling on failure.
         </p>
-        <input type="text" id="ws-input" value="${(S.settings.wsEndpoint && S.settings.wsEndpoint !== DEFAULT_WS) ? S.settings.wsEndpoint : ''}" placeholder="Default"/>
-        <div style="display:flex;gap:6px;margin-top:6px">
+        <input type="text" id="ws-input" value="${(S.settings.wsEndpoint && S.settings.wsEndpoint !== DEFAULT_WS) ? S.settings.wsEndpoint : ''}" placeholder="Default" data-bind-settings="wsEndpoint"/>        <div style="display:flex;gap:6px;margin-top:6px">
           <button class="btn btn-ghost btn-sm" data-action="save-ws">Save</button>
           <button class="btn btn-secondary btn-sm" data-action="reset-ws">Reset to Default</button>
         </div>
@@ -1309,6 +1310,50 @@ function attachHandlers() {
     el.addEventListener('input', () => {
       S.split.auto[el.dataset.bindAuto] = el.type === 'number' ? parseFloat(el.value) || 0 : el.value;
       saveState();
+    });
+  });
+
+  main.querySelectorAll('[data-bind-bundle-create]').forEach(el => {
+    el.addEventListener('input', async () => {
+      if (!S.bundle.create) S.bundle.create = {};
+
+      let val = el.value;
+      if (el.type === 'number') {
+        val = el.value === '' ? '' : (parseFloat(el.value) || 0);
+      }
+
+      S.bundle.create[el.dataset.bindBundleCreate] = val;
+
+      // If user manually types a private key, clear saved-wallet linkage unless it still matches
+      if (el.dataset.bindBundleCreate === 'sourceWalletPrivKey') {
+        const match = (S.savedWallets || []).find(w => w.privateKey === val);
+        S.bundle.create.sourceWalletId = match ? match.id : '';
+      }
+
+      await saveState();
+    });
+  });
+
+  main.querySelectorAll('[data-bind-settings]').forEach(el => {
+    el.addEventListener('input', async () => {
+      const key = el.dataset.bindSettings;
+      const raw = el.value.trim();
+
+      if (key === 'rpcEndpoint') {
+        S.settings.rpcEndpoint = raw || DEFAULT_RPC;
+        await saveState();
+        checkRpc();
+        return;
+      }
+
+      if (key === 'wsEndpoint') {
+        S.settings.wsEndpoint = raw || DEFAULT_WS;
+        await saveState();
+        return;
+      }
+
+      S.settings[key] = raw;
+      await saveState();
     });
   });
 
@@ -1773,9 +1818,29 @@ async function handleClick(e) {
 
   } else if (a === 'cb-run') {
     if (!S.bundle.create) S.bundle.create = {};
-    // Snapshot current field values before re-render
-    const cnt  = document.getElementById('cb-wallet-count')?.value;
-    const sol  = document.getElementById('cb-total-sol')?.value;
+    S.bundle.create.error = '';
+    S.bundle.create.running = true;
+    S.bundle.create.runStep = 'Starting…';
+    S.bundle.create.runPct = 0;
+    await saveState();
+    render();
+
+    try {
+      const result = await runCreateBundle();
+      S.bundle.create.running = false;
+      S.bundle.create.runStep = '';
+      S.bundle.create.runPct = 100;
+      S.bundle.createResult = result;
+      S.bundle.view = 'create-result';
+      await saveState();
+      render();
+    } catch (err) {
+      S.bundle.create.running = false;
+      S.bundle.create.error = err.message || 'Create bundle failed';
+      await saveState();
+      render();
+      showToast(S.bundle.create.error);
+    }
     const mxs  = document.getElementById('cb-max-sol')?.value;
     const grpN = document.getElementById('cb-group-name')?.value;
     if (cnt)  S.bundle.create.walletCount      = parseInt(cnt);

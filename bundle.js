@@ -178,23 +178,70 @@ function buildBundleCreateTab() {
   const count      = parseInt(c.walletCount) || 5;
   const running    = !!c.running;
 
+  const sourceLabel = c.sourceWalletPrivKey
+    ? (selSource && selSource.privateKey === c.sourceWalletPrivKey
+        ? `${selSource.emoji||'💼'} ${selSource.name} · ${short(selSource.publicKey)}`
+        : `Custom private key · ${short(bs58encode(bs58decode(c.sourceWalletPrivKey).slice(32, 64)))}`
+      )
+    : '⚡ Select source wallet…';
+
   return `
     <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
       <div class="settings-section-title">Source Wallet</div>
       <p style="font-size:10px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">
         Route: Source → SplitNow exchange → fresh wallets. Zero on-chain link.
       </p>
-      <button class="btn btn-ghost btn-sm btn-full" data-action="open-picker" data-field="bundle-source-wallet"
-        style="justify-content:flex-start;font-family:var(--mono);font-size:10px;text-align:left">
-        ${selSource ? `${selSource.emoji||'💼'} ${selSource.name} · ${short(selSource.publicKey)}` : '⚡ Select source wallet…'}
-      </button>
-      <input type="hidden" id="bundle-source-wallet" value="${c.sourceWalletId||''}"/>
+
+      <div class="cpicker-wrap">
+        <div class="cpicker-btn ${c.sourceWalletPrivKey ? 'cpicker-selected' : ''}" data-action="bundle-src-toggle">
+          ${c.sourceWalletPrivKey
+            ? `<span style="font-size:11px;color:var(--navy)">${sourceLabel}</span>`
+            : `<span style="color:var(--text-muted);font-size:11px">Select wallet…</span>`
+          }
+          <span class="cpicker-chevron ${(S.bundle._createSourceOpen ? 'open' : '')}">›</span>
+        </div>
+
+        ${S.bundle._createSourceOpen ? `
+          <div class="cpicker-dropdown">
+            ${allWallets.length === 0
+              ? `<div class="cpicker-empty">No saved wallets with private keys.<br>Add one in the Wallets tab.</div>`
+              : allWallets.map(w => `
+                <div class="cpicker-row ${(c.sourceWalletPrivKey === w.privateKey) ? 'active' : ''}"
+                     data-action="bundle-src-pick"
+                     data-wallet-id="${w.id}"
+                     data-priv="${encodeURIComponent(w.privateKey)}">
+                  <span>${w.emoji||'💼'}</span>
+                  <div class="cpicker-row-info">
+                    <span class="cpicker-name">${w.name||'Wallet'}</span>
+                    <span class="cpicker-addr">${short(w.publicKey)}</span>
+                  </div>
+                  ${w.solBalance != null ? `<span class="cpicker-bal">${w.solBalance} SOL</span>` : ''}
+                </div>
+              `).join('')
+            }
+
+            <div class="cpicker-divider"></div>
+            <div class="cpicker-paste-label">Or paste private key</div>
+            <div style="display:flex;gap:5px;padding:0 8px 8px">
+              <input
+                type="password"
+                id="bundle-source-priv"
+                value="${c.sourceWalletPrivKey || ''}"
+                placeholder="Base58 private key…"
+                style="flex:1;font-size:10.5px"
+                data-bind-bundle-create="sourceWalletPrivKey"
+              />
+              <button class="btn btn-ghost btn-sm" data-action="bundle-src-paste">Use</button>
+            </div>
+          </div>
+        ` : ''}
+      </div>
     </div>
 
     <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
       <div class="settings-section-title">Wallet Count</div>
       <div class="add-row" style="align-items:center">
-        <input type="number" id="cb-wallet-count" value="${count}" min="1" max="50" style="width:72px"/>
+        <input type="number" id="cb-wallet-count" value="${count}" min="1" max="50" style="width:72px" data-bind-bundle-create="walletCount"/>
         <span style="font-size:10px;color:var(--text-muted)">wallets will be generated &nbsp;(max 50)</span>
       </div>
     </div>
@@ -202,7 +249,7 @@ function buildBundleCreateTab() {
     <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
       <div class="settings-section-title">Total SOL to Distribute</div>
       <div class="add-row" style="align-items:center">
-        <input type="number" id="cb-total-sol" value="${c.totalSol||''}" min="0.01" step="0.01" placeholder="e.g. 5.0" style="width:100px"/>
+        <input type="number" id="cb-total-sol" value="${c.totalSol||''}" min="0.01" step="0.01" placeholder="e.g. 5.0" style="width:100px" data-bind-bundle-create="totalSol"/>
         <span style="font-size:10px;color:var(--text-muted)">SOL across all wallets</span>
       </div>
     </div>
@@ -210,7 +257,7 @@ function buildBundleCreateTab() {
     <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
       <div class="settings-section-title">Max SOL Per Wallet <span style="font-size:9px;font-weight:400;color:var(--text-muted)">(optional cap)</span></div>
       <div class="add-row" style="align-items:center">
-        <input type="number" id="cb-max-sol" value="${c.maxSolPerWallet||''}" min="0" step="0.01" placeholder="No limit" style="width:100px"/>
+        <input type="number" id="cb-max-sol" value="${c.maxSolPerWallet||''}" min="0" step="0.01" placeholder="No limit" style="width:100px" data-bind-bundle-create="maxSolPerWallet"/>
         <span style="font-size:10px;color:var(--text-muted)">SOL max per wallet</span>
       </div>
     </div>
@@ -239,7 +286,7 @@ function buildBundleCreateTab() {
       ${c.addToGroup ? `
         <div class="field" style="margin-bottom:0">
           <div class="field-label">Group Name</div>
-          <input type="text" id="cb-group-name" value="${c.groupName||''}" placeholder="e.g. Bundle Jan 2025…" maxlength="30"/>
+          <input type="text" id="cb-group-name" value="${c.groupName||''}" placeholder="e.g. Bundle Jan 2025…" maxlength="30" data-bind-bundle-create="groupName"/>
         </div>
       ` : `<p style="font-size:10px;color:var(--text-muted);line-height:1.5;margin:0">Keys shown once after creation. Toggle on to save wallets to a group.</p>`}
     </div>
@@ -256,7 +303,6 @@ function buildBundleCreateTab() {
     </p>
   `;
 }
-
 // ══════════════════════════════════════════
 // HISTORY TAB
 // ══════════════════════════════════════════
@@ -451,14 +497,15 @@ function generateKeypair() {
 }
 
 async function runCreateBundle() {
-  const c           = S.bundle.create || {};
-  const sourceWallet= (S.savedWallets||[]).find(w => w.id === c.sourceWalletId);
-  const walletCount = Math.max(1, Math.min(50, parseInt(c.walletCount)||5));
-  const totalSol    = parseFloat(c.totalSol);
-  const maxPerWallet= parseFloat(c.maxSolPerWallet)||0;
-  const distrib     = c.distribMode || 'equal';
+  const c            = S.bundle.create || {};
+  const sourceWallet = (S.savedWallets||[]).find(w => w.id === c.sourceWalletId);
+  const sourcePriv   = (c.sourceWalletPrivKey || sourceWallet?.privateKey || '').trim();
+  const walletCount  = Math.max(1, Math.min(50, parseInt(c.walletCount)||5));
+  const totalSol     = parseFloat(c.totalSol);
+  const maxPerWallet = parseFloat(c.maxSolPerWallet)||0;
+  const distrib      = c.distribMode || 'equal';
 
-  if (!sourceWallet?.privateKey) throw new Error('Select a source wallet with a private key');
+  if (!sourcePriv) throw new Error('Select or paste a source wallet private key');
   if (!totalSol || totalSol <= 0) throw new Error('Enter a valid SOL amount');
 
   const setStep = (step, pct) => {
@@ -489,10 +536,10 @@ async function runCreateBundle() {
 
   let splitJob = null;
   const bodies = [
-    { from_private_key: sourceWallet.privateKey, splits, use_exchange: true },
-    { private_key: sourceWallet.privateKey, destinations: splits, privacy: true },
-    { source_private_key: sourceWallet.privateKey, outputs: splits },
-    { sender_private_key: sourceWallet.privateKey, recipients: splits },
+    { from_private_key: sourcePriv, splits, use_exchange: true },
+    { private_key: sourcePriv, destinations: splits, privacy: true },
+    { source_private_key: sourcePriv, outputs: splits },
+    { sender_private_key: sourcePriv, recipients: splits },
   ];
   const paths = ['/split', '/create', '/transaction', '/send'];
   let lastErr = '';
