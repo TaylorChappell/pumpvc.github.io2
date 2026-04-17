@@ -1762,6 +1762,24 @@ async function handleClick(e) {
     if (!isNaN(idx)) S.bundle.walletAddresses.splice(idx, 1);
     await saveState(); render();
 
+  } else if (a === 'cb-toggle-stagger') {
+    if (!S.bundle) S.bundle = {};
+    if (!S.bundle.create) S.bundle.create = {};
+
+    S.bundle.create.staggerFunding = !S.bundle.create.staggerFunding;
+
+    if (S.bundle.create.staggerFunding) {
+      if (!S.bundle.create.staggerMinSec || parseInt(S.bundle.create.staggerMinSec, 10) < 1) {
+        S.bundle.create.staggerMinSec = 30;
+      }
+      if (!S.bundle.create.staggerMaxSec || parseInt(S.bundle.create.staggerMaxSec, 10) < 1) {
+        S.bundle.create.staggerMaxSec = 60;
+      }
+    }
+
+    await saveState();
+    render();
+
   } else if (a === 'run-wallet-check') {
     const addrs = S.bundle.walletAddresses || [];
     if (addrs.length < 2) { showToast('Select at least 2 wallets'); return; }
