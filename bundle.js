@@ -293,55 +293,22 @@ function buildBundleCreateTab() {
   const count = parseInt(c.walletCount, 10) || 5;
   const running = !!c.running;
   const open = !!S.bundle._createSourceOpen;
+
   const staggerFunding = !!c.staggerFunding;
-  const staggerMinSec = parseInt(c.staggerMinSec) || 30;
-  const staggerMaxSec = parseInt(c.staggerMaxSec) || 60;
+  const staggerMinSec = Math.max(1, parseInt(c.staggerMinSec, 10) || 30);
+  const staggerMaxSec = Math.max(staggerMinSec, parseInt(c.staggerMaxSec, 10) || 60);
 
   return `
     <div class="settings-section" style="padding-bottom:12px;margin-bottom:12px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div class="settings-section-title" style="margin-bottom:0;display:flex;align-items:center;gap:6px">
-          <span>Stagger Wallet Funding</span>
-          <button class="help-q" data-action="show-help"
-            data-title="Stagger Wallet Funding"
-            data-body="When enabled, SplitNow will wait a random amount of time between funding each wallet. Times below are in seconds.">
-            ?
-          </button>
-        </div>
-        <button class="toggle ${staggerFunding ? 'on' : ''}" data-action="cb-toggle-stagger"></button>
+      <div class="settings-section-title" style="display:flex;align-items:center;gap:6px">
+        <span>Source Wallet</span>
+        <button class="help-q"
+          data-action="show-help"
+          data-title="Source Wallet"
+          data-body="Choose a saved wallet with a private key or paste a base58 private key manually. This wallet funds the SplitNow route.">
+          ?
+        </button>
       </div>
-
-      ${staggerFunding ? `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <div class="field" style="margin-bottom:0">
-            <div class="field-label">Min Delay (sec)</div>
-            <input
-              type="number"
-              id="cb-stagger-min"
-              value="${staggerMinSec}"
-              min="1"
-              step="1"
-              data-bind-bundle-create="staggerMinSec"
-            />
-          </div>
-          <div class="field" style="margin-bottom:0">
-            <div class="field-label">Max Delay (sec)</div>
-            <input
-              type="number"
-              id="cb-stagger-max"
-              value="${staggerMaxSec}"
-              min="1"
-              step="1"
-              data-bind-bundle-create="staggerMaxSec"
-            />
-          </div>
-        </div>
-      ` : `
-        <p style="font-size:10px;color:var(--text-muted);line-height:1.5;margin:0">
-          Off = wallets are funded as fast as SplitNow processes them.
-        </p>
-      `}
-    </div>
 
       <p style="font-size:10px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">
         Route: Source → SplitNow exchange → fresh wallets. Zero direct on-chain link from source to outputs.
@@ -550,10 +517,10 @@ function buildBundleCreateTab() {
             ?
           </button>
         </div>
-        <div class="toggle ${staggerOn ? 'on' : ''}" data-action="cb-toggle-stagger"></div>
+        <div class="toggle ${staggerFunding ? 'on' : ''}" data-action="cb-toggle-stagger"></div>
       </div>
 
-      ${staggerOn ? `
+      ${staggerFunding ? `
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <div class="field" style="margin-bottom:0">
             <div class="field-label" style="display:flex;align-items:center;gap:6px">
@@ -568,7 +535,7 @@ function buildBundleCreateTab() {
             <input
               type="number"
               id="cb-stagger-min"
-              value="${c.staggerMinSec || 30}"
+              value="${staggerMinSec}"
               min="1"
               step="1"
               placeholder="30"
@@ -589,7 +556,7 @@ function buildBundleCreateTab() {
             <input
               type="number"
               id="cb-stagger-max"
-              value="${c.staggerMaxSec || 60}"
+              value="${staggerMaxSec}"
               min="1"
               step="1"
               placeholder="60"
@@ -1028,9 +995,6 @@ async function runCreateBundle() {
   console.log('[bundle] splits payload', splits);
 
   setStep('Creating SplitNow quote/order…', 25);
-  const staggerFunding = !!c.staggerFunding;
-  const staggerMinSec = Math.max(1, parseInt(c.staggerMinSec) || 30);
-  const staggerMaxSec = Math.max(staggerMinSec, parseInt(c.staggerMaxSec) || 60);
 
   const createRes = await splitNowReq('POST', '/create-bundle', {
     source_private_key: sourcePriv,
