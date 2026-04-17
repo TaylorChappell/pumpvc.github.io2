@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════
-   popup.js — Main App
-   Essor Studios / Ultimate Dev Tools
+   popup.js Main App
+   Essor Studios / Solana Dev Tools
 ═══════════════════════════════════════════ */
 
 'use strict';

@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════
-   sniper.js — Sniper Bot Tool
-   Essor Studios / Ultimate Dev Tools
+   sniper.js Sniper Bot Tool
+   Essor Studios / Solana Dev Tools
 ═══════════════════════════════════════════ */
 
 'use strict';

@@ -1,4 +1,4 @@
-// Ultimate Dev Tools — Background Service Worker
+// Solana Dev Tools Background Service Worker
 // Essor Studios
 
 const PUMPFUN_PROG = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBymMDer';

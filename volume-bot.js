@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════
    volume-bot.js — AI Volume Bot
-   Essor Studios / Ultimate Dev Tools
+   Essor Studios / Solana Dev Tools
 
    Zero-loss volume generation via Jito atomic
    bundles on Pump.fun bonding curve, with

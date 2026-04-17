@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════
    auth.js — Authentication & Crypto
-   Essor Studios / Ultimate Dev Tools
+   Essor Studios / Solana Dev Tools
 
    Flow:
    1. First open → show login/register screen
