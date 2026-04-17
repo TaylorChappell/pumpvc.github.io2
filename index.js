@@ -46,6 +46,8 @@ const RENT_EXEMPT_MINIMUM = 890880;
 // Default SplitNow stagger values (SECONDS in your app/backend API)
 const DEFAULT_STAGGER_MIN_SEC = 30;
 const DEFAULT_STAGGER_MAX_SEC = 60;
+const DEFAULT_STAGGER_MIN_MS = DEFAULT_STAGGER_MIN_SEC * 1000;
+const DEFAULT_STAGGER_MAX_MS = DEFAULT_STAGGER_MAX_SEC * 1000;
 const MIN_ALLOWED_STAGGER_SEC = 1;
 const MAX_ALLOWED_STAGGER_SEC = 24 * 60 * 60; // 24h
 
@@ -634,10 +636,10 @@ async function createSplitNowOrder({
     toExchangerId: exchangerId,
   }));
 
-  const safeMinSec = toPositiveInt(staggerMinSec, DEFAULT_STAGGER_MIN_SEC);
-  const safeMaxSec = Math.max(
-    safeMinSec,
-    toPositiveInt(staggerMaxSec, DEFAULT_STAGGER_MAX_SEC)
+  const safeMinMs = toPositiveInt(staggerMinMs, DEFAULT_STAGGER_MIN_MS);
+  const safeMaxMs = Math.max(
+    safeMinMs,
+    toPositiveInt(staggerMaxMs, DEFAULT_STAGGER_MAX_MS)
   );
 
   const payload = {
@@ -650,14 +652,11 @@ async function createSplitNowOrder({
     },
     orderOutputs: outputs,
     staggerMode: !!staggerEnabled,
-    staggerMinMs: toPositiveInt(staggerMinMs, DEFAULT_STAGGER_MIN_MS),
-    staggerMaxMs: toPositiveInt(staggerMaxMs, DEFAULT_STAGGER_MAX_MS),
+    staggerMinMs: safeMinMs,
+    staggerMaxMs: safeMaxMs,
     customSignature: '',
   };
 
-  if (payload.staggerMaxMs < payload.staggerMinMs) {
-    payload.staggerMaxMs = payload.staggerMinMs;
-  }
   const orderRes = await splitNowRequest('POST', '/orders/', payload);
   const orderId = orderRes?.data?.orderId || orderRes?.data?.shortId || null;
 
