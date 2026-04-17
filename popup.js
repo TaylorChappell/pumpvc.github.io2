@@ -1888,6 +1888,23 @@ async function handleClick(e) {
     S.bundle.create.addToGroup = !S.bundle.create.addToGroup;
     await saveState(); render();
 
+  } else if (a === 'cb-toggle-group') {
+    if (!S.bundle.create) S.bundle.create = {};
+    S.bundle.create.addToGroup = !S.bundle.create.addToGroup;
+    await saveState(); render();
+
+  } else if (a === 'cb-toggle-stagger') {
+    if (!S.bundle.create) S.bundle.create = {};
+    S.bundle.create.staggerFunding = !S.bundle.create.staggerFunding;
+
+    if (S.bundle.create.staggerFunding) {
+      if (!S.bundle.create.staggerMinSec) S.bundle.create.staggerMinSec = 30;
+      if (!S.bundle.create.staggerMaxSec) S.bundle.create.staggerMaxSec = 60;
+    }
+
+    await saveState();
+    render();
+
   } else if (a === 'cb-run') {
     if (!S.bundle.create) S.bundle.create = {};
     S.bundle.create.error = '';
