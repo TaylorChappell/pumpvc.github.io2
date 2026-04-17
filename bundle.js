@@ -294,7 +294,6 @@ function buildBundleCreateTab() {
   const running = !!c.running;
   const open = !!S.bundle._createSourceOpen;
   const staggerOn = !!c.staggerFunding;
-  const staggerFunding = !!c.staggerFunding;
   const staggerMinSec = parseInt(c.staggerMinSec) || 30;
   const staggerMaxSec = parseInt(c.staggerMaxSec) || 60;
 
