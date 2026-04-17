@@ -65,22 +65,22 @@ function normalizeStaggerSettings(input) {
   const enabled =
     input?.stagger_enabled === true ||
     input?.stagger_enabled === 'true' ||
+    input?.stagger_funding === true ||
+    input?.stagger_funding === 'true' ||
     input?.staggerMode === true;
 
   let minSec = toPositiveInt(
     input?.stagger_min_sec ?? input?.staggerMinSec,
-    DEFAULT_STAGGER_MIN_SEC
+    30
   );
 
   let maxSec = toPositiveInt(
     input?.stagger_max_sec ?? input?.staggerMaxSec,
-    DEFAULT_STAGGER_MAX_SEC
+    60
   );
 
-  if (minSec < MIN_ALLOWED_STAGGER_SEC) minSec = MIN_ALLOWED_STAGGER_SEC;
-  if (maxSec < MIN_ALLOWED_STAGGER_SEC) maxSec = MIN_ALLOWED_STAGGER_SEC;
-  if (minSec > MAX_ALLOWED_STAGGER_SEC) minSec = MAX_ALLOWED_STAGGER_SEC;
-  if (maxSec > MAX_ALLOWED_STAGGER_SEC) maxSec = MAX_ALLOWED_STAGGER_SEC;
+  if (minSec < 1) minSec = 1;
+  if (maxSec < 1) maxSec = 1;
   if (maxSec < minSec) maxSec = minSec;
 
   return {
@@ -134,35 +134,6 @@ function toPositiveInt(value, fallback = null) {
   if (!Number.isFinite(n)) return fallback;
   if (n <= 0) return fallback;
   return Math.floor(n);
-}
-
-function normalizeStaggerSettings(input) {
-  const enabled =
-    input?.stagger_enabled === true ||
-    input?.stagger_enabled === 'true' ||
-    input?.staggerMode === true;
-
-  let minMs = toPositiveInt(
-    input?.stagger_min_ms ?? input?.staggerMinMs,
-    DEFAULT_STAGGER_MIN_MS
-  );
-
-  let maxMs = toPositiveInt(
-    input?.stagger_max_ms ?? input?.staggerMaxMs,
-    DEFAULT_STAGGER_MAX_MS
-  );
-
-  if (minMs < MIN_ALLOWED_STAGGER_MS) minMs = MIN_ALLOWED_STAGGER_MS;
-  if (maxMs < MIN_ALLOWED_STAGGER_MS) maxMs = MIN_ALLOWED_STAGGER_MS;
-  if (minMs > MAX_ALLOWED_STAGGER_MS) minMs = MAX_ALLOWED_STAGGER_MS;
-  if (maxMs > MAX_ALLOWED_STAGGER_MS) maxMs = MAX_ALLOWED_STAGGER_MS;
-  if (maxMs < minMs) maxMs = minMs;
-
-  return {
-    staggerEnabled: enabled,
-    staggerMinMs: minMs,
-    staggerMaxMs: maxMs,
-  };
 }
 
 // ─── DB init ────────────────────────────────────────────────────────────────
@@ -579,8 +550,10 @@ async function splitNowRequest(method, path, body) {
     method,
     headers: {
       'Content-Type': 'application/json',
+      'Authorization': `Bearer ${SPLITNOW_KEY}`,
+      'X-Api-Key': SPLITNOW_KEY,
       'x-api-key': SPLITNOW_KEY,
-      Accept: 'application/json',
+      'Accept': 'application/json',
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -650,8 +623,8 @@ async function createSplitNowOrder({
   splits,
   exchangerId = 'binance',
   staggerEnabled = false,
-  staggerMinSec = DEFAULT_STAGGER_MIN_SEC,
-  staggerMaxSec = DEFAULT_STAGGER_MAX_SEC,
+  staggerMinMs = DEFAULT_STAGGER_MIN_MS,
+  staggerMaxMs = DEFAULT_STAGGER_MAX_MS,
 }) {
   const outputs = calcPctBipsFromSplits(splits).map((s) => ({
     toAddress: s.address,
@@ -677,11 +650,14 @@ async function createSplitNowOrder({
     },
     orderOutputs: outputs,
     staggerMode: !!staggerEnabled,
-    staggerMinMs: safeMinSec * 1000,
-    staggerMaxMs: safeMaxSec * 1000,
+    staggerMinMs: toPositiveInt(staggerMinMs, DEFAULT_STAGGER_MIN_MS),
+    staggerMaxMs: toPositiveInt(staggerMaxMs, DEFAULT_STAGGER_MAX_MS),
     customSignature: '',
   };
 
+  if (payload.staggerMaxMs < payload.staggerMinMs) {
+    payload.staggerMaxMs = payload.staggerMinMs;
+  }
   const orderRes = await splitNowRequest('POST', '/orders/', payload);
   const orderId = orderRes?.data?.orderId || orderRes?.data?.shortId || null;
 
@@ -1074,6 +1050,7 @@ app.post('/api/proxy/splitnow/create-bundle', authMiddleware, async (req, res) =
       splits,
       exchanger_id,
       stagger_enabled,
+      stagger_funding,
       stagger_min_sec,
       stagger_max_sec,
     } = req.body;
@@ -1107,6 +1084,7 @@ app.post('/api/proxy/splitnow/create-bundle', authMiddleware, async (req, res) =
 
     const stagger = normalizeStaggerSettings({
       stagger_enabled,
+      stagger_funding,
       stagger_min_sec,
       stagger_max_sec,
     });
@@ -1131,8 +1109,8 @@ app.post('/api/proxy/splitnow/create-bundle', authMiddleware, async (req, res) =
       splits,
       exchangerId: exchanger_id || 'binance',
       staggerEnabled: stagger.staggerEnabled,
-      staggerMinSec: stagger.staggerMinSec,
-      staggerMaxSec: stagger.staggerMaxSec,
+      staggerMinMs: stagger.staggerMinMs,
+      staggerMaxMs: stagger.staggerMaxMs,
     });
 
     console.log('[splitnow/create-bundle] order ok', {
