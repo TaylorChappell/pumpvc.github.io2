@@ -293,7 +293,7 @@ function buildBundleCreateTab() {
   const count = parseInt(c.walletCount, 10) || 5;
   const running = !!c.running;
   const open = !!S.bundle._createSourceOpen;
-  const staggerOn = !!c.staggerFunding;
+  const staggerFunding = !!c.staggerFunding;
   const staggerMinSec = parseInt(c.staggerMinSec) || 30;
   const staggerMaxSec = parseInt(c.staggerMaxSec) || 60;
 
@@ -1560,4 +1560,9 @@ function buildBundleWalletRow(w, totalSupply) {
       </div>
     </div>
   `;
+}
+
+// expose to global scope (fixes "buildBundlePage is not defined")
+if (typeof window !== 'undefined') {
+  window.buildBundlePage = buildBundlePage;
 }
