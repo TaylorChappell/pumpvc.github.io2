@@ -1,5 +1,5 @@
 /**
- * Solana Dev Tools Shared API Client
+ * Ultimate Dev Tools — Shared API Client
  * Essor Studios
  *
  * Used by: website pages + Chrome extension
@@ -377,7 +377,7 @@ function showSubGate(sub) {
       <div class="gate-title">${isExpired ? 'Subscription Expired' : 'Subscription Required'}</div>
       <p class="gate-desc">
         ${isExpired
-          ? 'Your subscription has expired. Renew to continue using Solana Dev Tools.'
+          ? 'Your subscription has expired. Renew to continue using Ultimate Dev Tools.'
           : 'You need an active subscription to access these tools.'}
       </p>
       <div class="flex gap-8">

@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════
    wallets.js — Wallet Manager
-   Essor Studios / Solana Dev Tools
+   Essor Studios / Ultimate Dev Tools
    Axiom-style: clean cards, groups, drag & drop,
    inline rename, copy address, SOL balance
 ═══════════════════════════════════════════ */

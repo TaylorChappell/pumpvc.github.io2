@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════
    bundle.js — Bundle Engine + Create Bundle
-   Essor Studios / Solana Dev Tools
+   Essor Studios / Ultimate Dev Tools
    SplitNOW flow:
    1) Generate wallets
    2) Build splits from generated wallet addresses
