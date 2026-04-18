@@ -689,7 +689,7 @@ function render() {
 // ═══════════════════════════════════════════
 
 // Help tooltip system
-function showHelp(id, title, body) {
+function showHelp(idOrEl, title, body) {
   let el = document.getElementById('split-help-popup');
   if (!el) {
     el = document.createElement('div');
@@ -703,15 +703,18 @@ function showHelp(id, title, body) {
   `;
   el.style.display = 'block';
 
-  const btn = document.getElementById(id);
+  // Accept either a DOM element directly or an ID string
+  const btn = (idOrEl && typeof idOrEl === 'object') ? idOrEl : document.getElementById(idOrEl);
   if (btn) {
-    const r = btn.getBoundingClientRect();
-    el.style.left  = Math.min(r.left, 340) + 'px';
-    el.style.top   = (r.bottom + 4) + 'px';
+    const r   = btn.getBoundingClientRect();
+    const pw  = 230; // popup max-width
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - pw - 8));
+    el.style.left = left + 'px';
+    el.style.top  = (r.bottom + 6) + 'px';
   }
 
   const dismiss = (e) => {
-    if (!el.contains(e.target) && e.target.id !== id) {
+    if (!el.contains(e.target) && e.target !== btn) {
       el.style.display = 'none';
       document.removeEventListener('click', dismiss);
     }
@@ -723,14 +726,21 @@ function showHelp(id, title, body) {
 // TOKEN SPLITTING — compact unified layout
 // ═══════════════════════════════════════════
 
-function showHelp(id, title, body) {
+function showHelp(idOrEl, title, body) {
   let el = document.getElementById('split-help-popup');
   if (!el) { el = document.createElement('div'); el.id='split-help-popup'; el.className='help-popup'; document.body.appendChild(el); }
   el.innerHTML = `<div class="help-popup-title">${title}</div><div class="help-popup-body">${body}</div>`;
   el.style.display = 'block';
-  const btn = document.getElementById(id);
-  if (btn) { const r=btn.getBoundingClientRect(); el.style.left=Math.min(r.left,window.innerWidth-230)+'px'; el.style.top=(r.bottom+4)+'px'; }
-  const dismiss = e => { if(!el.contains(e.target)&&e.target.id!==id){el.style.display='none';document.removeEventListener('click',dismiss);}};
+  el.style.pointerEvents = 'auto';
+  const btn = (idOrEl && typeof idOrEl === 'object') ? idOrEl : document.getElementById(idOrEl);
+  if (btn) {
+    const r   = btn.getBoundingClientRect();
+    const pw  = 220;
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - pw - 8));
+    el.style.left = left + 'px';
+    el.style.top  = (r.bottom + 6) + 'px';
+  }
+  const dismiss = e => { if(!el.contains(e.target) && e.target !== btn){ el.style.display='none'; document.removeEventListener('click',dismiss); }};
   setTimeout(()=>document.addEventListener('click',dismiss),50);
 }
 
@@ -1629,7 +1639,7 @@ async function handleClick(e) {
     await saveState(); render();
 
   } else if (a === 'show-help') {
-    showHelp(el.id, el.dataset.title||'Info', el.dataset.body||'');
+    showHelp(el, el.dataset.title||'Info', el.dataset.body||'');
 
   } else if (a === 'run-bundle') {
     const ca = document.getElementById('bundle-ca')?.value?.trim();

@@ -1448,7 +1448,7 @@ details summary::-webkit-details-marker { display: none; }
 
 .split-help-popup {
   position: fixed;
-  z-index: 500;
+  z-index: 9999;
   background: var(--navy);
   color: rgba(255,255,255,0.9);
   border-radius: 8px;
@@ -1672,15 +1672,14 @@ details summary::-webkit-details-marker { display: none; }
 /* Help popup */
 .help-popup {
   position: fixed;
-  z-index: 500;
+  z-index: 9999;
   background: var(--navy);
   color: rgba(255,255,255,0.9);
   border-radius: 8px;
   padding: 10px 12px;
-  max-width: 210px;
+  max-width: 220px;
   box-shadow: 0 6px 20px rgba(13,31,74,0.35);
   display: none;
-  pointer-events: none;
 }
 .help-popup-title { font-size: 10.5px; font-weight: 700; color: white; margin-bottom: 4px; }
 .help-popup-body  { font-size: 9.5px; line-height: 1.5; color: rgba(255,255,255,0.75); }

@@ -505,6 +505,18 @@ function buildBundleCreateTab() {
     ${c.error ? '<div class="error-card">'+c.error+'</div>' : ''}
     ${running  ? buildBundleProgress({ step: c.runStep||'Working\u2026', pct: c.runPct||0 }) : ''}
 
+    <div id="bundle-track-link" style="display:${c.orderId?'flex':'none'};align-items:center;gap:8px;background:rgba(13,31,74,.05);border:1px solid var(--border-md);border-radius:var(--r);padding:9px 12px;margin-bottom:10px">
+      <span style="font-size:13px">🔗</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:9.5px;font-weight:700;color:var(--navy);margin-bottom:1px">SplitNow Order</div>
+        <span class="bundle-order-id" style="font-family:var(--mono);font-size:8.5px;color:var(--text-muted)">${c.orderId||''}</span>
+      </div>
+      <a href="${c.orderId?'https://splitnow.io/order/'+c.orderId:'#'}" target="_blank" rel="noopener"
+        style="font-size:9px;font-weight:600;color:var(--navy);text-decoration:none;white-space:nowrap;flex-shrink:0">
+        Track &#8250;
+      </a>
+    </div>
+
     <button class="btn btn-primary btn-full" data-action="cb-run" ${running?'disabled':''}>
       ${running ? '<span class="spinner-dark"></span>&nbsp; Creating\u2026' : '&#9889; Create Bundle'}
     </button>
@@ -633,6 +645,15 @@ function buildCreateBundleResult() {
           </div>
         </div>
       </div>
+      ${r.orderId ? `<a href="https://splitnow.io/order/${r.orderId}" target="_blank" rel="noopener"
+        style="display:flex;align-items:center;gap:8px;background:rgba(13,31,74,.05);border:1px solid var(--border-md);border-radius:var(--r);padding:9px 12px;margin-bottom:12px;text-decoration:none">
+        <span style="font-size:13px">🔗</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:9.5px;font-weight:700;color:var(--navy);margin-bottom:1px">SplitNow Order</div>
+          <span style="font-family:var(--mono);font-size:8.5px;color:var(--text-muted)">${r.orderId}</span>
+        </div>
+        <span style="font-size:9px;font-weight:600;color:var(--navy);white-space:nowrap;flex-shrink:0">View &#8250;</span>
+      </a>` : ''}
       <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" data-action="cb-copy-all-keys">Copy All Private Keys</button>
         <button class="btn btn-ghost btn-sm" data-action="cb-copy-all-addrs">Copy All Addresses</button>
@@ -857,6 +878,11 @@ async function runCreateBundle() {
   if (!totalSol||totalSol<=0) throw new Error('Enter a valid SOL amount');
   if (stagger&&stgMin>stgMax) throw new Error('Stagger min delay cannot be greater than stagger max delay');
 
+  // Clear previous order tracking on new run
+  if (S.bundle.create) S.bundle.create.orderId = null;
+  const prevTrackEl = document.getElementById('bundle-track-link');
+  if (prevTrackEl) prevTrackEl.style.display = 'none';
+
   const setStep = (step, pct) => {
     if (!S.bundle.create) S.bundle.create={};
     S.bundle.create.runStep=step; S.bundle.create.runPct=pct;
@@ -894,8 +920,24 @@ async function runCreateBundle() {
   const orderId = data.orderId||data.shortId;
   if (!orderId) throw new Error('SplitNow did not return an order ID');
 
+  // Persist orderId into state so tracking card survives re-renders
+  if (!S.bundle.create) S.bundle.create = {};
+  S.bundle.create.orderId = orderId;
+
   setStep('Deposit sent \u2014 waiting for SplitNow\u2026',45);
   bundleLog('Order '+orderId+' \u2014 polling for completion\u2026','info');
+
+  // Show live tracking card with link to SplitNow order page
+  const trackUrl = 'https://splitnow.io/order/' + orderId;
+  const trackEl = document.getElementById('bundle-track-link');
+  if (trackEl) {
+    trackEl.style.display = 'flex';
+    const anchor = trackEl.querySelector('a');
+    if (anchor) anchor.href = trackUrl;
+    const idEl = trackEl.querySelector('.bundle-order-id');
+    if (idEl) idEl.textContent = orderId;
+  }
+  bundleLog('Track live: '+trackUrl,'info');
 
   let latestOrder=data.fetchedOrder||null, completed=false;
   const POLL=5000;
