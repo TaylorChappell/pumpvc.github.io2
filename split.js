@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 /* ═══════════════════════════════════════════
    split.js — Essor Studios / Ultimate Dev Tools
    Matches exact on-chain instruction layout observed on Solscan:
@@ -792,7 +791,6 @@ async function _doSplit(mint, knownBalance) {
   }
 }
 
-=======
 /* ═══════════════════════════════════════════
    split.js — Essor Studios / Ultimate Dev Tools
    Matches exact on-chain instruction layout observed on Solscan:
@@ -1585,6 +1583,4 @@ async function _doSplit(mint, knownBalance) {
     }
   }
 }
-
->>>>>>> parent of 285dc77 (Update)
 //sss
