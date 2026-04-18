@@ -134,7 +134,11 @@ async function authGoogleSignIn() {
         return;
       }
       try {
+<<<<<<< HEAD
         const data = await apiReq('POST', '/api/auth/google', { access_token: token });
+=======
+        const data = await apiReq('POST', '/auth/google', { access_token: token });
+>>>>>>> parent of 285dc77 (Update)
         // For Google users: derive enc key from googleSub+userId (no password)
         const cryptoKey = await deriveEncKey(data.googleSub, String(data.userId));
         const encKeyB64 = await exportKeyB64(cryptoKey);
