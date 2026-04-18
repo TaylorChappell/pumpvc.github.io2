@@ -8,6 +8,17 @@
 
 'use strict';
 
+// Security: HTML escaping helper for all innerHTML interpolations
+function escapeHTML(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 // ── Config ────────────────────────────────────────────────────────────────────
 const UDT_API_BASE = 'https://ultimatedevtools-production.up.railway.app/api';
 // Replace above with your actual Railway URL. Can also be set in env / manifest.
@@ -298,9 +309,10 @@ function showToast(message, type = 'info') {
 
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
+  const safeMessage = escapeHTML(String(message));
   toast.innerHTML = `
     <span style="color:${colors[type]};font-weight:700;">${icons[type]}</span>
-    <span>${message}</span>
+    <span>${safeMessage}</span>
   `;
   container.appendChild(toast);
 
@@ -390,5 +402,5 @@ function showSubGate(sub) {
 
 // ── Export for module contexts (extension SW, etc.) ───────────────────────────
 if (typeof module !== 'undefined') {
-  module.exports = { Auth, AuthAPI, SubAPI, AdminAPI, Storage, showToast, setButtonLoading, formatDate, formatDaysLeft, initials, requireAuth, requireActiveSub };
+  module.exports = { Auth, AuthAPI, SubAPI, AdminAPI, Storage, showToast, setButtonLoading, formatDate, formatDaysLeft, initials, requireAuth, requireActiveSub, escapeHTML };
 }

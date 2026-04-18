@@ -1,6 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Security Headers -->
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="X-Frame-Options" content="DENY">
+  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+  <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=()">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Solana Dev Tools</title>
@@ -25,6 +30,17 @@
     @solana/web3.js's own browser bundle internally.
   -->
   <script>
+  // Security: Escape user-supplied strings before inserting into innerHTML
+  function escapeHTML(str) {
+    if (str == null) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
   (function installBuffer() {
     'use strict';
 
@@ -830,7 +846,7 @@ async function redeemPromo() {
     if (msg) msg.innerHTML = `<span style="color:var(--green-dim)">✓ Applied! ${d.days}-day trial activated.</span>`;
     await _refreshSubServer();
     renderSubPage();
-  } catch (e) { if (msg) msg.innerHTML = `<span style="color:var(--danger)">${e.message}</span>`; }
+  } catch (e) { if (msg) msg.innerHTML = `<span style="color:var(--danger)">${escapeHTML(e.message)}</span>`; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -873,7 +889,7 @@ async function _loadAdminTab() {
     if (_adminTab === 'codes')     await _loadCodes(el);
     if (_adminTab === 'whitelist') await _loadWhitelist(el);
     if (_adminTab === 'admins')    await _loadAdmins(el);
-  } catch (e) { el.innerHTML = `<div class="admin-empty" style="color:var(--danger)">${e.message}</div>`; }
+  } catch (e) { el.innerHTML = `<div class="admin-empty" style="color:var(--danger)">${escapeHTML(e.message)}</div>`; }
 }
 
 let _usersPage=1, _usersSearch='';
@@ -949,7 +965,7 @@ window._genCode = async () => {
     const d=await _adminFetch('/admin/promo/generate',{method:'POST',body:JSON.stringify({days,label})});
     if(res) res.innerHTML=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0"><span class="code-chip" onclick="navigator.clipboard.writeText('${d.code}');showToast('Copied!')">${d.code}</span><span style="font-size:10px;color:var(--text-muted)">${days} days</span></div>`;
     _loadCodes(document.getElementById('admin-content'));
-  } catch(e) { if(res) res.innerHTML=`<span style="font-size:10px;color:var(--danger)">${e.message}</span>`; }
+  } catch(e) { if(res) res.innerHTML = `<span style="font-size:10px;color:var(--danger)">${escapeHTML(e.message)}</span>`; }
 };
 window._disableCode = async (code) => {
   if(!confirm(`Disable ${code}?`)) return;
@@ -1395,20 +1411,20 @@ function _startPaymentPolling(paymentId, token, watchElId) {
       } else if (pd.refunding) {
         clearInterval(_payPoll); _payPoll = null;
         const s = document.getElementById('pp-status');
-        if (s) s.innerHTML = `<div style="background:var(--warn-bg);border:1px solid rgba(217,119,6,0.2);border-radius:8px;padding:14px 16px"><div style="font-size:12px;font-weight:700;color:var(--warn);margin-bottom:5px">⚠ Amount too low — refunding</div><div style="font-size:10px;color:var(--text-muted);margin-bottom:12px">${pd.message}</div><button class="btn btn-primary btn-sm" onclick="cancelPayPanel();openPayOverlay()">Try Again</button></div>`;
+        if (s) s.innerHTML = `<div style="background:var(--warn-bg);border:1px solid rgba(217,119,6,0.2);border-radius:8px;padding:14px 16px"><div style="font-size:12px;font-weight:700;color:var(--warn);margin-bottom:5px">⚠ Amount too low — refunding</div><div style="font-size:10px;color:var(--text-muted);margin-bottom:12px">${escapeHTML(pd.message)}</div><button class="btn btn-primary btn-sm" onclick="cancelPayPanel();openPayOverlay()">Try Again</button></div>`;
         const w = document.getElementById(watchElId);
         if (w) w.style.display = 'none';
 
       } else if (pd.refunded) {
         clearInterval(_payPoll); _payPoll = null;
         const s = document.getElementById('pp-status');
-        if (s) s.innerHTML = `<div style="background:var(--warn-bg);border:1px solid rgba(217,119,6,0.2);border-radius:8px;padding:14px 16px"><div style="font-size:12px;font-weight:700;color:var(--warn);margin-bottom:5px">↩ Refunded</div><div style="font-size:10px;color:var(--text-muted);margin-bottom:12px">${pd.message}</div><button class="btn btn-primary btn-sm" onclick="cancelPayPanel();openPayOverlay()">Try Again</button></div>`;
+        if (s) s.innerHTML = `<div style="background:var(--warn-bg);border:1px solid rgba(217,119,6,0.2);border-radius:8px;padding:14px 16px"><div style="font-size:12px;font-weight:700;color:var(--warn);margin-bottom:5px">↩ Refunded</div><div style="font-size:10px;color:var(--text-muted);margin-bottom:12px">${escapeHTML(pd.message)}</div><button class="btn btn-primary btn-sm" onclick="cancelPayPanel();openPayOverlay()">Try Again</button></div>`;
         const w = document.getElementById(watchElId);
         if (w) w.style.display = 'none';
 
       } else if (pd.underpaid) {
         const w = document.getElementById(watchElId);
-        if (w) w.innerHTML = `<span style="color:var(--warn);font-size:10px">⚠ ${pd.message}</span>`;
+        if (w) w.innerHTML = `<span style="color:var(--warn);font-size:10px">⚠ ${escapeHTML(pd.message)}</span>`;
 
       } else if (pd.expired) {
         clearInterval(_payPoll); _payPoll = null;

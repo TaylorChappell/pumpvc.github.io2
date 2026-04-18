@@ -1,6 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Security Headers -->
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="X-Frame-Options" content="DENY">
+  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+  <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=()">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>[Admin] Solana Dev Tools</title>
@@ -190,6 +195,17 @@
 <div id="toast-container"></div>
 <script src="api.js"></script>
 <script>
+  // Security: Escape user-supplied strings before inserting into innerHTML
+  function escapeHTML(str) {
+    if (str == null) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
   let usersPage = 1, usersSearch = '';
   const panelTitles = { overview:'Overview', promo:'Promo Codes', users:'Users', whitelist:'Whitelist', admins:'Admins' };
 
@@ -250,7 +266,7 @@
           <td>${!c.redeemed_by&&!c.disabled?`<button class="btn btn-danger btn-sm" onclick="disableCode('${c.code}')">Disable</button>`:'—'}</td>
         </tr>
       `).join('');
-    } catch (err) { tbody.innerHTML = `<tr><td colspan="7"><div class="alert alert-error">${err.message}</div></td></tr>`; }
+    } catch (err) { tbody.innerHTML = `<tr><td colspan="7"><div class="alert alert-error">${escapeHTML(err.message)}</div></td></tr>`; }
   }
 
   function openGenModal() {
@@ -306,7 +322,7 @@
       `).join('');
       const pag = document.getElementById('users-pagination');
       pag.innerHTML = `<span class="text-xs text-muted">${total} users · Page ${page}/${pages||1}</span><div class="flex gap-8">${page>1?`<button class="btn btn-ghost btn-sm" onclick="loadUsers(${page-1},'${search}')">← Prev</button>`:''} ${page<(pages||1)?`<button class="btn btn-ghost btn-sm" onclick="loadUsers(${page+1},'${search}')">Next →</button>`:''}</div>`;
-    } catch (err) { tbody.innerHTML=`<tr><td colspan="6"><div class="alert alert-error">${err.message}</div></td></tr>`; }
+    } catch (err) { tbody.innerHTML = `<tr><td colspan="6"><div class="alert alert-error">${escapeHTML(err.message)}</div></td></tr>`; }
   }
 
   let _searchT;
@@ -330,7 +346,7 @@
           <div class="flex gap-8 items-center"><span class="text-xs text-muted">${formatDate(e.added_at)}</span><button class="btn btn-danger btn-sm" onclick="removeWl('${e.email}')">Remove</button></div>
         </div>
       `).join('');
-    } catch (err) { document.getElementById('whitelist-list').innerHTML=`<div class="alert alert-error">${err.message}</div>`; }
+    } catch (err) { document.getElementById('whitelist-list').innerHTML = `<div class="alert alert-error">${escapeHTML(err.message)}</div>`; }
   }
 
   async function addWhitelist() {
@@ -357,7 +373,7 @@
           <div class="flex gap-8 items-center">${a.is_superadmin?'<span class="badge badge-admin">Superadmin</span>':`<button class="btn btn-danger btn-sm" onclick="removeAdminUser('${a.email}')">Remove</button>`}</div>
         </div>
       `).join('');
-    } catch (err) { document.getElementById('admins-list').innerHTML=`<div class="alert alert-error">${err.message}</div>`; }
+    } catch (err) { document.getElementById('admins-list').innerHTML = `<div class="alert alert-error">${escapeHTML(err.message)}</div>`; }
   }
 
   async function addAdminUser() {
