@@ -1,424 +1,50 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>]Sign In] Solana Dev Tools</title>
-  <link rel="icon" href="Icon16.png" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in — Solana Dev Tools</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --navy:      #0f1f45;
-      --navy-mid:  #172550;
-      --text-dark: #0f1f45;
-      --text-body: #4a5c7a;
-      --text-muted:#7a8fa8;
-      --bg:        #eef0f5;
-      --bg-white:  #ffffff;
-      --bg-input:  #f4f6fb;
-      --border:    rgba(15,31,69,0.1);
-      --border-mid:rgba(15,31,69,0.14);
-      --red:       #ef4444;
-      --green:     #22c55e;
-      --font-display: 'Plus Jakarta Sans', 'Inter', sans-serif;
-      --font-body:    'Inter', sans-serif;
-    }
-    html { font-size: 14px; -webkit-font-smoothing: antialiased; }
-    body { font-family: var(--font-body); background: var(--bg); color: var(--text-dark); min-height: 100vh; display: flex; }
-
-    /* Left panel */
-    .auth-left {
-      flex: 1; display: flex; align-items: center; justify-content: center;
-      padding: 48px; position: relative; overflow: hidden;
-    }
-    .auth-left-dots {
-      position: absolute; inset: 0;
-      background-image: radial-gradient(circle, rgba(15,31,69,0.1) 1px, transparent 1px);
-      background-size: 20px 20px;
-      mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%);
-    }
-    .auth-left-inner { position: relative; z-index: 1; max-width: 380px; }
-    .auth-brand { display: flex; align-items: center; gap: 9px; margin-bottom: 40px; text-decoration: none; }
-    .auth-brand img { width: 32px; height: 32px; border-radius: 8px; }
-    .auth-brand-fb { width: 32px; height: 32px; border-radius: 8px; background: var(--navy); display: flex; align-items: center; justify-content: center; }
-    .auth-brand-fb svg { width: 18px; height: 18px; color: #fff; }
-    .auth-brand-name { font-family: var(--font-display); font-size: 15px; font-weight: 700; color: var(--navy); }
-    .auth-left h2 { font-family: var(--font-display); font-size: 2rem; font-weight: 800; color: var(--navy); line-height: 1.1; letter-spacing: -0.02em; margin-bottom: 14px; }
-    .auth-left p { font-size: 14px; color: var(--text-body); line-height: 1.7; margin-bottom: 32px; }
-    .auth-features { display: flex; flex-direction: column; gap: 12px; }
-    .auth-feature { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-body); }
-    .auth-feat-icon { width: 30px; height: 30px; border-radius: 7px; background: rgba(15,31,69,0.06); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-    .auth-feat-icon svg { width: 15px; height: 15px; color: var(--navy); }
-
-    /* Right panel */
-    .auth-right {
-      width: 420px; background: var(--bg-white);
-      border-left: 1px solid var(--border);
-      display: flex; align-items: center; justify-content: center;
-      padding: 40px 36px; flex-shrink: 0;
-    }
-    .auth-form-wrap { width: 100%; max-width: 340px; }
-
-    /* Tabs */
-    .auth-tabs {
-      display: flex; gap: 0; background: var(--bg); border-radius: 10px; padding: 3px;
-      border: 1px solid var(--border-mid); margin-bottom: 24px;
-    }
-    .auth-tab {
-      flex: 1; padding: 8px; border-radius: 8px; font-size: 13px; font-weight: 500;
-      color: var(--text-muted); cursor: pointer; background: transparent; border: none;
-      transition: all 0.15s; text-align: center; font-family: inherit;
-    }
-    .auth-tab.active { background: var(--bg-white); color: var(--text-dark); font-weight: 600; box-shadow: 0 1px 4px rgba(15,31,69,0.08); }
-
-    /* Error */
-    .error-banner {
-      padding: 10px 12px; background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.18);
-      border-radius: 8px; font-size: 12.5px; color: #dc2626; margin-bottom: 14px; display: none;
-    }
-    .error-banner.show { display: block; }
-
-    /* Google button */
-    .google-btn {
-      display: flex; align-items: center; justify-content: center; gap: 10px;
-      width: 100%; padding: 10px 16px; background: var(--bg-white);
-      border: 1px solid var(--border-mid); border-radius: 100px;
-      font-family: var(--font-body); font-size: 13px; font-weight: 500;
-      color: var(--text-dark); cursor: pointer; transition: all 0.15s; margin-bottom: 18px;
-    }
-    .google-btn:hover { border-color: rgba(15,31,69,0.25); box-shadow: 0 2px 8px rgba(15,31,69,0.07); }
-    .google-icon {
-      width: 18px; height: 18px; flex-shrink: 0;
-    }
-
-    /* Form */
-    .form-section { display: none; }
-    .form-section.active { display: block; }
-    .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 13px; }
-    label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
-    input[type="text"], input[type="email"], input[type="password"], input[type="number"] {
-      background: var(--bg-input); border: 1px solid var(--border-mid); border-radius: 8px;
-      color: var(--text-dark); font-family: var(--font-body); font-size: 13px;
-      padding: 9px 12px; outline: none; width: 100%; transition: border-color 0.15s, box-shadow 0.15s;
-    }
-    input:focus { border-color: var(--navy); box-shadow: 0 0 0 3px rgba(15,31,69,0.07); }
-    input::placeholder { color: var(--text-muted); }
-
-    /* Divider */
-    .divider-row { display: flex; align-items: center; gap: 12px; margin: 14px 0; font-size: 12px; color: var(--text-muted); }
-    .divider-row::before, .divider-row::after { content:''; flex:1; height:1px; background:var(--border); }
-
-    /* Submit btn */
-    .btn-submit {
-      width: 100%; padding: 11px; border-radius: 100px;
-      background: var(--navy); color: #fff; border: none;
-      font-family: var(--font-body); font-size: 13px; font-weight: 600;
-      cursor: pointer; transition: all 0.18s; margin-top: 4px; position: relative;
-    }
-    .btn-submit:hover { background: var(--navy-mid); transform: translateY(-1px); }
-    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-    .btn-submit.loading { color: transparent; }
-    .btn-submit.loading::after {
-      content:''; position:absolute; width:14px; height:14px;
-      border:2px solid rgba(255,255,255,0.3); border-top-color:#fff;
-      border-radius:50%; animation: spin 0.6s linear infinite;
-      top:50%; left:50%; margin:-7px 0 0 -7px;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* Switch text */
-    .auth-switch { margin-top: 18px; text-align: center; font-size: 12.5px; color: var(--text-muted); }
-    .auth-switch a { color: var(--navy); cursor: pointer; font-weight: 500; text-decoration: none; }
-
-    /* Promo section */
-    .promo-section { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
-    .promo-label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 7px; }
-    .promo-row { display: flex; gap: 7px; }
-    .promo-row input { flex: 1; }
-    .btn-redeem {
-      padding: 9px 14px; border-radius: 8px; background: var(--bg-input);
-      border: 1px solid var(--border-mid); color: var(--text-dark);
-      font-family: var(--font-body); font-size: 12px; font-weight: 600;
-      cursor: pointer; white-space: nowrap; transition: all 0.15s;
-    }
-    .btn-redeem:hover { background: var(--navy); color: #fff; border-color: var(--navy); }
-
-    @media (max-width: 800px) {
-      .auth-left { display: none; }
-      .auth-right { width: 100%; border-left: none; }
-    }
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="shared.css">
+  <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-
-<div class="auth-left">
-  <div class="auth-left-dots"></div>
-  <div class="auth-left-inner">
-    <a href="/" class="auth-brand">
-      <img src="icon128.png" alt="Ultimate Dev Tools"
-           onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-      <div class="auth-brand-fb" style="display:none;">
-        <svg viewBox="0 0 16 16" fill="none"><path d="M8 2L14 5.5V10.5L8 14L2 10.5V5.5L8 2Z" fill="currentColor" opacity="0.9"/></svg>
-      </div>
-      <span class="auth-brand-name">Solana Dev Tools</span>
-    </a>
-
-    <h2>Professional<br>Solana Toolkit</h2>
-    <p>Five server-verified trading tools, encrypted wallet management, and AI-driven volume and market making. Everything in one place.</p>
-
-    <div class="auth-features">
-      <div class="auth-feature">
-        <div class="auth-feat-icon">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M3 17L7 13L10 16L15 11L21 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <div class="auth-wrap">
+    <div class="card auth-card">
+      <div class="brand" style="margin-bottom:18px;">
+        <div class="brand-mark">UDT</div>
+        <div>
+          <div class="brand-title">Sign in</div>
+          <div class="brand-sub">Access token in session storage, refresh token in httpOnly cookie.</div>
         </div>
-        AI Volume Bot + AI Market Maker
       </div>
-      <div class="auth-feature">
-        <div class="auth-feat-icon">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M8 12H16M12 8L16 12L12 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4" cy="12" r="2" stroke="currentColor" stroke-width="1.8"/><circle cx="20" cy="12" r="2" stroke="currentColor" stroke-width="1.8"/></svg>
-        </div>
-        Advanced Token Splitter
-      </div>
-      <div class="auth-feature">
-        <div class="auth-feat-icon">
-          <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M7 11V7a5 5 0 0110 0v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        </div>
-        AES-256 encrypted wallet storage
-      </div>
-      <div class="auth-feature">
-        <div class="auth-feat-icon">
-          <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M16.5 16.5L21 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        </div>
-        Bundle Checker + Wallet Analysis
+      <div id="auth-message" class="muted" style="margin-bottom:16px;"></div>
+      <div class="grid grid-2">
+        <form id="login-form" class="card panel">
+          <h1>Login</h1>
+          <label class="label">Email</label>
+          <input class="input" name="email" type="email" required>
+          <label class="label" style="margin-top:12px;">Password</label>
+          <input class="input" name="password" type="password" required>
+          <button class="btn primary" style="margin-top:16px; width:100%;">Login</button>
+        </form>
+        <form id="register-form" class="card panel">
+          <h1>Create account</h1>
+          <label class="label">Name</label>
+          <input class="input" name="name" required>
+          <label class="label" style="margin-top:12px;">Email</label>
+          <input class="input" name="email" type="email" required>
+          <label class="label" style="margin-top:12px;">Password</label>
+          <input class="input" name="password" type="password" minlength="10" required>
+          <button class="btn primary" style="margin-top:16px; width:100%;">Register</button>
+        </form>
       </div>
     </div>
   </div>
-</div>
-
-<div class="auth-right">
-  <div class="auth-form-wrap">
-
-    <div class="auth-tabs">
-      <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Sign In</button>
-      <button class="auth-tab" id="tab-register" onclick="switchTab('register')">Register</button>
-    </div>
-
-    <div id="error-banner" class="error-banner"></div>
-
-    <!-- Google Sign-In button (rendered by Google's SDK) -->
-    <div id="google-btn-container">
-      <!-- Google renders a proper button here via the SDK -->
-      <!-- Fallback manual button shown until SDK loads -->
-      <button class="google-btn" id="google-signin-btn" onclick="triggerGoogleSignIn()">
-        <svg class="google-icon" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
-        Continue with Google
-      </button>
-    </div>
-
-    <div class="divider-row">or continue with email</div>
-
-    <!-- LOGIN -->
-    <div class="form-section active" id="form-login">
-      <div class="form-group">
-        <label>Email address</label>
-        <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email">
-      </div>
-      <div class="form-group">
-        <label>Password</label>
-        <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
-      </div>
-      <button class="btn-submit" id="btn-login" onclick="doLogin()">Sign In</button>
-
-      <div class="promo-section">
-        <div class="promo-label">Promo Code</div>
-        <div class="promo-row">
-          <input type="text" id="promo-login" placeholder="Enter code" style="text-transform:uppercase;letter-spacing:0.08em;font-family:monospace;">
-          <button class="btn-redeem" onclick="redeemPromo()">Redeem</button>
-        </div>
-      </div>
-
-      <div class="auth-switch">No account? <a onclick="switchTab('register')">Create one</a></div>
-    </div>
-
-    <!-- REGISTER -->
-    <div class="form-section" id="form-register">
-      <div class="form-group">
-        <label>Full name</label>
-        <input type="text" id="reg-name" placeholder="Your name" autocomplete="name">
-      </div>
-      <div class="form-group">
-        <label>Email address</label>
-        <input type="email" id="reg-email" placeholder="you@example.com" autocomplete="email">
-      </div>
-      <div class="form-group">
-        <label>Password <span style="font-size:10px;text-transform:none;letter-spacing:0;color:var(--text-muted);font-weight:400;">(min. 8 characters)</span></label>
-        <input type="password" id="reg-password" placeholder="••••••••" autocomplete="new-password">
-      </div>
-      <div class="form-group">
-        <label>Confirm Password</label>
-        <input type="password" id="reg-password2" placeholder="••••••••" autocomplete="new-password">
-      </div>
-      <div class="form-group">
-        <label>Promo Code <span style="font-size:10px;text-transform:none;letter-spacing:0;color:var(--text-muted);font-weight:400;">(optional)</span></label>
-        <input type="text" id="reg-promo" placeholder="Enter code if you have one" style="text-transform:uppercase;letter-spacing:0.06em;font-family:monospace;">
-      </div>
-      <button class="btn-submit" id="btn-register" onclick="doRegister()">Create Account</button>
-      <div class="auth-switch">Already have an account? <a onclick="switchTab('login')">Sign in</a></div>
-    </div>
-
-  </div>
-</div>
-
-<script src="api.js"></script>
-<script>
-  const GOOGLE_CLIENT_ID = '218003563778-dljv6ld9c467r57p38a6m32gibrtfmld.apps.googleusercontent.com';
-
-  // ── Init ──────────────────────────────────────────────────────────────────
-  (async () => {
-    if (await Auth.isLoggedIn()) { window.location.href = 'dashboard.html'; return; }
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('tab') === 'register') switchTab('register');
-  })();
-
-  // ── Google Sign-In setup ─────────────────────────────────────────────────
-  // This runs after the Google Identity Services script loads
-  window.onload = () => {
-    if (typeof google === 'undefined' || !google.accounts) return;
-    google.accounts.id.initialize({
-      client_id: GOOGLE_CLIENT_ID,
-      callback: handleGoogleCredential,
-      auto_select: false,
-      cancel_on_tap_outside: true,
-    });
-
-    // Render Google's official button (replaces our fallback)
-    google.accounts.id.renderButton(
-      document.getElementById('google-btn-container'),
-      {
-        type: 'standard',
-        shape: 'pill',
-        theme: 'outline',
-        text: 'continue_with',
-        size: 'large',
-        logo_alignment: 'left',
-        width: 340,
-      }
-    );
-  };
-
-  function triggerGoogleSignIn() {
-    if (typeof google === 'undefined') {
-      showError('Google Sign-In is not available. Check your internet connection.');
-      return;
-    }
-    google.accounts.id.prompt();
-  }
-
-  async function handleGoogleCredential(response) {
-    try {
-      showError(''); // clear errors
-      const data = await AuthAPI.googleAuth(response.credential);
-      showSuccess('Signed in with Google!');
-      setTimeout(() => { window.location.href = 'dashboard.html'; }, 600);
-    } catch (err) {
-      showError(err.message || 'Google sign-in failed.');
-    }
-  }
-
-  // ── Tab switching ─────────────────────────────────────────────────────────
-  function switchTab(tab) {
-    document.getElementById('tab-login').classList.toggle('active', tab === 'login');
-    document.getElementById('tab-register').classList.toggle('active', tab === 'register');
-    document.getElementById('form-login').classList.toggle('active', tab === 'login');
-    document.getElementById('form-register').classList.toggle('active', tab === 'register');
-    showError('');
-  }
-
-  function showError(msg) {
-    const el = document.getElementById('error-banner');
-    el.textContent = msg; el.classList.toggle('show', !!msg);
-  }
-
-  function showSuccess(msg) {
-    const el = document.getElementById('error-banner');
-    el.textContent = msg;
-    el.style.background = 'rgba(34,197,94,0.06)';
-    el.style.borderColor = 'rgba(34,197,94,0.18)';
-    el.style.color = '#16a34a';
-    el.classList.add('show');
-  }
-
-  function setLoading(btnId, loading) {
-    const btn = document.getElementById(btnId);
-    btn.disabled = loading;
-    btn.classList.toggle('loading', loading);
-    if (!loading) btn.classList.remove('loading');
-  }
-
-  // ── Login ─────────────────────────────────────────────────────────────────
-  async function doLogin() {
-    const email    = document.getElementById('login-email').value.trim();
-    const password = document.getElementById('login-password').value;
-    if (!email || !password) { showError('Please enter your email and password.'); return; }
-
-    showError(''); setLoading('btn-login', true);
-    try {
-      await AuthAPI.login({ email, password });
-      window.location.href = 'dashboard.html';
-    } catch (err) {
-      showError(err.message || 'Sign-in failed. Check your credentials.');
-      setLoading('btn-login', false);
-    }
-  }
-
-  // ── Register ──────────────────────────────────────────────────────────────
-  async function doRegister() {
-    const name  = document.getElementById('reg-name').value.trim();
-    const email = document.getElementById('reg-email').value.trim();
-    const pass  = document.getElementById('reg-password').value;
-    const pass2 = document.getElementById('reg-password2').value;
-    const promo = document.getElementById('reg-promo').value.trim().toUpperCase();
-
-    if (!name)  { showError('Name is required.'); return; }
-    if (!email) { showError('Email is required.'); return; }
-    if (pass.length < 8) { showError('Password must be at least 8 characters.'); return; }
-    if (pass !== pass2)  { showError('Passwords do not match.'); return; }
-
-    showError(''); setLoading('btn-register', true);
-    try {
-      await AuthAPI.register({ email, password: pass, name });
-      if (promo) {
-        try { await SubAPI.redeemPromo(promo); } catch {}
-      }
-      window.location.href = 'dashboard.html';
-    } catch (err) {
-      showError(err.message || 'Registration failed.');
-      setLoading('btn-register', false);
-    }
-  }
-
-  // ── Promo redemption ──────────────────────────────────────────────────────
-  async function redeemPromo() {
-    if (!(await Auth.isLoggedIn())) { showError('Sign in first, then redeem your code.'); return; }
-    const code = document.getElementById('promo-login').value.trim().toUpperCase();
-    if (!code) { showError('Enter a promo code.'); return; }
-    try {
-      await SubAPI.redeemPromo(code);
-      showSuccess('Promo code applied! Redirecting...');
-      setTimeout(() => { window.location.href = 'dashboard.html'; }, 1000);
-    } catch (err) { showError(err.message || 'Invalid or already-used code.'); }
-  }
-
-  // Enter key
-  document.addEventListener('keydown', e => {
-    if (e.key !== 'Enter') return;
-    if (document.getElementById('form-login').classList.contains('active')) doLogin();
-    else doRegister();
-  });
-</script>
+  <script src="api.js"></script>
+  <script src="auth.js"></script>
+  <script>AuthPage.boot();</script>
 </body>
 </html>
