@@ -1,159 +1,391 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Admin — Solana Dev Tools</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>[Admin] Solana Dev Tools</title>
+  <link rel="icon" href="Icon16.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="shared.css">
-  <link rel="stylesheet" href="popup.css">
+  <style>
+    .admin-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; margin-bottom: 22px; }
+    .admin-stat { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; }
+    .empty-state { text-align: center; padding: 36px 20px; color: var(--text-muted); font-size: 13px; }
+  </style>
 </head>
 <body>
-  <main class="container" style="padding: 32px 0 50px;">
+<div class="app-layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <a href="/" class="sidebar-brand">
+        <img src="icon128.png" alt=""
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div class="sidebar-brand-fallback" style="display:none;">
+          <svg viewBox="0 0 16 16" fill="none" style="width:14px;height:14px;"><path d="M8 2L14 5.5V10.5L8 14L2 10.5V5.5L8 2Z" fill="white" opacity="0.85"/></svg>
+        </div>
+        <div class="sidebar-brand-text">
+          <div class="sidebar-brand-name">Admin Panel</div>
+          <div class="sidebar-brand-sub">Essor Studios</div>
+        </div>
+      </a>
+    </div>
+
+    <nav class="sidebar-nav">
+      <button class="nav-item active" onclick="switchPanel('overview', this)">
+        <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="1" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="1" y="9" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="9" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
+        Overview
+      </button>
+      <button class="nav-item" onclick="switchPanel('promo', this)">
+        <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="4" width="14" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 4V3a3 3 0 016 0v1" stroke="currentColor" stroke-width="1.3"/></svg>
+        Promo Codes
+      </button>
+      <button class="nav-item" onclick="switchPanel('users', this)">
+        <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="3" stroke="currentColor" stroke-width="1.3"/><path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        Users
+      </button>
+      <button class="nav-item" onclick="switchPanel('whitelist', this)">
+        <svg viewBox="0 0 16 16" fill="none"><path d="M8 2L14 5V11L8 14L2 11V5L8 2Z" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 8l2 2 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Whitelist
+      </button>
+      <button class="nav-item" onclick="switchPanel('admins', this)">
+        <svg viewBox="0 0 16 16" fill="none"><path d="M8 2L14 5V11L8 14L2 11V5L8 2Z" stroke="currentColor" stroke-width="1.3"/></svg>
+        Admins
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <div class="user-avatar" id="admin-avatar">A</div>
+        <div>
+          <div class="user-name">Admin</div>
+          <div class="user-email" id="admin-email">—</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main-content">
     <div class="topbar">
-      <div>
-        <h1 class="title">Admin</h1>
-        <p class="subtitle">Server-side user and promo management.</p>
+      <div class="flex items-center gap-12">
+        <span class="topbar-title" id="admin-page-title">Overview</span>
+        <span class="badge badge-expired">Admin</span>
       </div>
-      <a class="btn ghost" href="dashboard.html">Back</a>
+      <div class="topbar-right">
+        <a href="dashboard.html" class="btn btn-ghost btn-sm">← Dashboard</a>
+        <button class="btn btn-ghost btn-sm" onclick="doLogout()">Sign out</button>
+      </div>
     </div>
 
-    <div class="grid grid-2">
-      <section class="card panel">
-        <h2>Create promo code</h2>
-        <form id="promo-form" class="form-grid">
-          <div><label class="label">Code</label><input class="input" name="code" placeholder="SUMMER30" required></div>
-          <div><label class="label">Days</label><input class="input" type="number" name="days" value="30" required></div>
-          <div><label class="label">Label</label><input class="input" name="label" placeholder="Campaign name"></div>
-          <div style="display:flex;align-items:end;"><button class="btn primary" type="submit">Create promo</button></div>
-        </form>
-        <div id="promo-result" style="margin-top:14px;"></div>
-      </section>
+    <div class="page-content">
 
-      <section class="card panel">
-        <h2>Whitelist user</h2>
-        <form id="whitelist-form" class="form-grid">
-          <div><label class="label">Email</label><input class="input" type="email" name="email" required></div>
-          <div style="display:flex;align-items:end;"><button class="btn primary" type="submit">Whitelist</button></div>
-        </form>
-        <div id="whitelist-result" style="margin-top:14px;"></div>
-      </section>
-    </div>
-
-    <section class="card panel" style="margin-top:16px;">
-      <h2>Users</h2>
-      <div class="row" style="margin-bottom:12px;">
-        <input id="user-search" class="input" placeholder="Search email or name">
-        <button id="user-search-btn" class="btn ghost">Search</button>
+      <!-- OVERVIEW -->
+      <div class="tool-panel active" id="panel-overview">
+        <div class="admin-stats" id="overview-stats">
+          <div class="admin-stat"><div class="stat-label">Total Users</div><div class="stat-value skeleton" style="height:28px;width:60px;border-radius:4px;margin-top:4px;"></div></div>
+          <div class="admin-stat"><div class="stat-label">Active Subs</div><div class="stat-value skeleton" style="height:28px;width:40px;border-radius:4px;margin-top:4px;"></div></div>
+          <div class="admin-stat"><div class="stat-label">Promo Codes</div><div class="stat-value skeleton" style="height:28px;width:40px;border-radius:4px;margin-top:4px;"></div></div>
+          <div class="admin-stat"><div class="stat-label">Codes Used</div><div class="stat-value skeleton" style="height:28px;width:40px;border-radius:4px;margin-top:4px;"></div></div>
+        </div>
+        <div class="card"><div class="card-header"><div class="card-title">Recent Activity</div></div><div class="empty-state text-muted">Activity log coming soon.</div></div>
       </div>
-      <div id="users-table" class="muted">Loading…</div>
-    </section>
 
-    <section class="card panel" style="margin-top:16px;">
-      <h2>Promo codes</h2>
-      <div id="promo-table" class="muted">Loading…</div>
-    </section>
-  </main>
+      <!-- PROMO CODES -->
+      <div class="tool-panel" id="panel-promo">
+        <div class="flex justify-between items-center mb-16">
+          <h3 style="font-size:15px;">Promo Codes</h3>
+          <button class="btn btn-primary btn-sm" onclick="openGenModal()">
+            <svg viewBox="0 0 12 12" fill="none" style="width:11px;height:11px;"><path d="M6 2v8M2 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            Generate Code
+          </button>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">All Codes</div><button class="btn btn-ghost btn-sm" onclick="loadCodes()">↻ Refresh</button></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Code</th><th>Days</th><th>Label</th><th>Status</th><th>Redeemed By</th><th>Date</th><th>Actions</th></tr></thead>
+              <tbody id="codes-tbody"><tr><td colspan="7"><div class="empty-state">Loading...</div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
 
-  <script src="api.js"></script>
-  <script>
-    async function bootAdmin() {
-      const user = await UDT.AuthAPI.restore();
-      if (!user) { location.replace('auth.html'); return; }
+      <!-- USERS -->
+      <div class="tool-panel" id="panel-users">
+        <div class="flex justify-between items-center mb-16">
+          <h3 style="font-size:15px;">Users</h3>
+          <input type="text" id="user-search" placeholder="Search by email..." style="width:210px;" oninput="debouncedUserSearch(this.value)">
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Email</th><th>Name</th><th>Joined</th><th>Status</th><th>Expires</th><th>Actions</th></tr></thead>
+              <tbody id="users-tbody"><tr><td colspan="6"><div class="empty-state">Loading...</div></td></tr></tbody>
+            </table>
+          </div>
+          <div class="flex justify-between items-center mt-12" id="users-pagination"></div>
+        </div>
+      </div>
 
-      async function loadUsers(search = '') {
-        try {
-          const data = await UDT.AdminAPI.users(1, search);
-          const rows = data.users.map((user) => `
-            <tr>
-              <td>${user.email}</td>
-              <td>${user.name}</td>
-              <td>${user.sub_active ? 'Active' : 'Inactive'}</td>
-              <td>${user.expires_at ? new Date(user.expires_at).toLocaleString() : '—'}</td>
-              <td>
-                <button class="btn ghost" data-extend="${user.id}">+30d</button>
-                <button class="btn danger" data-revoke="${user.id}">Revoke</button>
-              </td>
-            </tr>
-          `).join('');
-          document.getElementById('users-table').innerHTML = `<table class="table"><thead><tr><th>Email</th><th>Name</th><th>Subscription</th><th>Expires</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="5">No users found.</td></tr>'}</tbody></table>`;
+      <!-- WHITELIST -->
+      <div class="tool-panel" id="panel-whitelist">
+        <div class="flex justify-between items-center mb-16"><h3 style="font-size:15px;">Email Whitelist</h3></div>
+        <div class="card mb-16">
+          <div class="card-header"><div class="card-title">Add to Whitelist</div></div>
+          <p class="text-sm text-muted mb-12">Whitelisted emails bypass subscription checks — use sparingly.</p>
+          <div class="flex gap-8"><input type="email" id="whitelist-input" placeholder="email@example.com"><button class="btn btn-primary" onclick="addWhitelist()">Add Email</button></div>
+        </div>
+        <div class="card"><div class="card-header"><div class="card-title">Whitelisted Emails</div></div><div id="whitelist-list"><div class="empty-state">Loading...</div></div></div>
+      </div>
 
-          document.querySelectorAll('[data-extend]').forEach((button) => {
-            button.addEventListener('click', async () => {
-              await UDT.AdminAPI.extendSubscription(Number(button.dataset.extend), 30, false);
-              await loadUsers(search);
-            });
-          });
+      <!-- ADMINS -->
+      <div class="tool-panel" id="panel-admins">
+        <div class="flex justify-between items-center mb-16"><h3 style="font-size:15px;">Administrators</h3></div>
+        <div class="card mb-16">
+          <div class="card-header"><div class="card-title">Add Admin</div></div>
+          <div class="alert alert-warning mb-12">
+            <svg viewBox="0 0 16 16" fill="none" style="width:14px;height:14px;flex-shrink:0;"><path d="M8 2L14 13H2L8 2Z" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v3M8 11.5v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            <div>Admins have full access to this panel. Only grant to trusted accounts.</div>
+          </div>
+          <div class="flex gap-8"><input type="email" id="admin-add-input" placeholder="email@example.com"><button class="btn btn-danger btn-sm" onclick="addAdminUser()">Grant Admin</button></div>
+        </div>
+        <div class="card"><div class="card-header"><div class="card-title">Current Admins</div></div><div id="admins-list"><div class="empty-state">Loading...</div></div></div>
+      </div>
 
-          document.querySelectorAll('[data-revoke]').forEach((button) => {
-            button.addEventListener('click', async () => {
-              await UDT.AdminAPI.revokeSubscription(Number(button.dataset.revoke));
-              await loadUsers(search);
-            });
-          });
-        } catch (error) {
-          document.getElementById('users-table').textContent = error.message;
-        }
-      }
+    </div>
+  </div>
+</div>
 
-      async function loadPromo() {
-        try {
-          const data = await UDT.AdminAPI.promo();
-          const rows = data.promoCodes.map((promo) => `
-            <tr>
-              <td>${promo.code}</td>
-              <td>${promo.days}</td>
-              <td>${promo.label || '—'}</td>
-              <td>${promo.redeemed_at ? new Date(promo.redeemed_at).toLocaleString() : 'Unused'}</td>
-            </tr>
-          `).join('');
-          document.getElementById('promo-table').innerHTML = `<table class="table"><thead><tr><th>Code</th><th>Days</th><th>Label</th><th>Redeemed</th></tr></thead><tbody>${rows || '<tr><td colspan="4">No promo codes yet.</td></tr>'}</tbody></table>`;
-        } catch (error) {
-          document.getElementById('promo-table').textContent = error.message;
-        }
-      }
+<!-- Generate Code Modal -->
+<div class="modal-overlay hidden" id="gen-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Generate Promo Code</div>
+      <button class="modal-close" onclick="document.getElementById('gen-modal').classList.add('hidden')">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Trial Duration (days)</label>
+      <input type="number" id="gen-days" value="5" min="1" max="90">
+    </div>
+    <div class="form-group">
+      <label>Label (optional)</label>
+      <input type="text" id="gen-label" placeholder="e.g. Twitter giveaway Jan 2025">
+    </div>
+    <div id="gen-result" style="display:none;" class="mb-16">
+      <label class="mb-8" style="display:block;">Generated Code</label>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="code-chip" id="gen-code-display" onclick="copyGenCode()" style="font-size:16px;padding:8px 14px;letter-spacing:0.14em;"></div>
+        <button class="btn btn-ghost btn-sm" onclick="copyGenCode()">Copy</button>
+      </div>
+      <p class="text-xs text-muted mt-8">Single-use. Valid for <span id="gen-days-display"></span> days.</p>
+    </div>
+    <button class="btn btn-primary btn-full" id="btn-gen" onclick="generateCode()">Generate</button>
+  </div>
+</div>
 
-      document.getElementById('promo-form').addEventListener('submit', async (event) => {
-        event.preventDefault();
-        const data = new FormData(event.currentTarget);
-        try {
-          await UDT.AdminAPI.createPromo(
-            String(data.get('code') || '').toUpperCase(),
-            Number(data.get('days') || 0),
-            String(data.get('label') || '')
-          );
-          document.getElementById('promo-result').innerHTML = '<div class="badge ok">Promo created</div>';
-          event.currentTarget.reset();
-          await loadPromo();
-        } catch (error) {
-          document.getElementById('promo-result').innerHTML = `<div class="badge danger">${error.message}</div>`;
-        }
-      });
+<div id="toast-container"></div>
+<script src="api.js"></script>
+<script>
+  let usersPage = 1, usersSearch = '';
+  const panelTitles = { overview:'Overview', promo:'Promo Codes', users:'Users', whitelist:'Whitelist', admins:'Admins' };
 
-      document.getElementById('whitelist-form').addEventListener('submit', async (event) => {
-        event.preventDefault();
-        const data = new FormData(event.currentTarget);
-        try {
-          await UDT.AdminAPI.whitelist(String(data.get('email') || ''));
-          document.getElementById('whitelist-result').innerHTML = '<div class="badge ok">User whitelisted</div>';
-          event.currentTarget.reset();
-          await loadUsers();
-        } catch (error) {
-          document.getElementById('whitelist-result').innerHTML = `<div class="badge danger">${error.message}</div>`;
-        }
-      });
+  // ── Init ──────────────────────────────────────────────────────────────────
+  (async () => {
+    if (!(await Auth.isLoggedIn())) { window.location.href = 'auth.html'; return; }
+    const user = await Auth.getUser() || await AuthAPI.me().catch(() => null);
+    if (!user?.is_admin) { window.location.href = 'dashboard.html'; return; }
+    document.getElementById('admin-email').textContent   = user.email;
+    document.getElementById('admin-avatar').textContent  = initials(user.name, user.email);
+    loadOverview();
+  })();
 
-      document.getElementById('user-search-btn').addEventListener('click', () => {
-        loadUsers(document.getElementById('user-search').value || '');
-      });
+  // ── Panel switch ──────────────────────────────────────────────────────────
+  function switchPanel(id, btn) {
+    document.querySelectorAll('.tool-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.sidebar-nav .nav-item').forEach(b => b.classList.remove('active'));
+    document.getElementById(`panel-${id}`)?.classList.add('active');
+    btn?.classList.add('active');
+    document.getElementById('admin-page-title').textContent = panelTitles[id];
+    if (id === 'promo') loadCodes();
+    if (id === 'users') loadUsers();
+    if (id === 'whitelist') loadWhitelist();
+    if (id === 'admins') loadAdmins();
+  }
 
-      await loadUsers();
-      await loadPromo();
-    }
+  // ── Overview ──────────────────────────────────────────────────────────────
+  async function loadOverview() {
+    try {
+      const [codes, users] = await Promise.allSettled([AdminAPI.listPromoCodes(), AdminAPI.listUsers(1,'')]);
+      const c = codes.value?.codes || [];
+      const u = users.value;
+      const active = (u?.users||[]).filter(x=>x.sub_active).length;
+      document.getElementById('overview-stats').innerHTML = `
+        <div class="admin-stat"><div class="stat-label">Total Users</div><div class="stat-value">${u?.total||0}</div></div>
+        <div class="admin-stat"><div class="stat-label">Active Subs</div><div class="stat-value text-green">${active}</div></div>
+        <div class="admin-stat"><div class="stat-label">Promo Codes</div><div class="stat-value">${c.length}</div></div>
+        <div class="admin-stat"><div class="stat-label">Codes Used</div><div class="stat-value">${c.filter(x=>x.redeemed_by).length}</div></div>
+      `;
+    } catch {}
+  }
 
-    bootAdmin();
-  </script>
+  // ── Codes ─────────────────────────────────────────────────────────────────
+  async function loadCodes() {
+    const tbody = document.getElementById('codes-tbody');
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Loading...</div></td></tr>';
+    try {
+      const { codes } = await AdminAPI.listPromoCodes();
+      if (!codes?.length) { tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">No codes yet.</div></td></tr>'; return; }
+      tbody.innerHTML = codes.map(c => `
+        <tr>
+          <td><span class="code-chip" onclick="navigator.clipboard.writeText('${c.code}');showToast('Copied!','success')">${c.code}</span></td>
+          <td class="strong">${c.days}</td>
+          <td class="text-muted">${c.label||'—'}</td>
+          <td>${c.disabled?'<span class="badge badge-muted">Disabled</span>':c.redeemed_by?'<span class="badge badge-pending">Used</span>':'<span class="badge badge-active">Available</span>'}</td>
+          <td class="mono text-muted">${c.redeemed_by||'—'}</td>
+          <td class="text-muted">${c.redeemed_at?formatDate(c.redeemed_at):formatDate(c.created_at)}</td>
+          <td>${!c.redeemed_by&&!c.disabled?`<button class="btn btn-danger btn-sm" onclick="disableCode('${c.code}')">Disable</button>`:'—'}</td>
+        </tr>
+      `).join('');
+    } catch (err) { tbody.innerHTML = `<tr><td colspan="7"><div class="alert alert-error">${err.message}</div></td></tr>`; }
+  }
+
+  function openGenModal() {
+    document.getElementById('gen-modal').classList.remove('hidden');
+    document.getElementById('gen-result').style.display = 'none';
+    document.getElementById('btn-gen').textContent = 'Generate';
+    document.getElementById('btn-gen').disabled = false;
+  }
+
+  async function generateCode() {
+    const days = parseInt(document.getElementById('gen-days').value)||5;
+    const label = document.getElementById('gen-label').value.trim();
+    const btn = document.getElementById('btn-gen');
+    btn.disabled = true; btn.classList.add('loading');
+    try {
+      const { code } = await AdminAPI.generatePromoCode({ days, label });
+      document.getElementById('gen-code-display').textContent = code;
+      document.getElementById('gen-days-display').textContent = days;
+      document.getElementById('gen-result').style.display = 'block';
+      btn.textContent = '+ Generate Another'; btn.disabled = false; btn.classList.remove('loading');
+      showToast('Code generated!', 'success'); loadCodes();
+    } catch (err) { showToast(err.message, 'error'); btn.disabled = false; btn.classList.remove('loading'); btn.textContent='Generate'; }
+  }
+
+  function copyGenCode() {
+    navigator.clipboard.writeText(document.getElementById('gen-code-display').textContent);
+    showToast('Code copied!', 'success');
+  }
+
+  async function disableCode(code) {
+    if (!confirm(`Disable ${code}?`)) return;
+    try { await AdminAPI.disablePromoCode(code); showToast('Disabled.','success'); loadCodes(); }
+    catch (err) { showToast(err.message,'error'); }
+  }
+
+  // ── Users ─────────────────────────────────────────────────────────────────
+  async function loadUsers(page=1, search='') {
+    usersPage=page; usersSearch=search;
+    const tbody = document.getElementById('users-tbody');
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">Loading...</div></td></tr>';
+    try {
+      const { users, total, pages } = await AdminAPI.listUsers(page, search);
+      if (!users?.length) { tbody.innerHTML='<tr><td colspan="6"><div class="empty-state">No users found.</div></td></tr>'; return; }
+      tbody.innerHTML = users.map(u=>`
+        <tr>
+          <td class="mono strong">${u.email}</td>
+          <td>${u.name||'—'}</td>
+          <td class="text-muted">${formatDate(u.created_at)}</td>
+          <td>${u.sub_active?`<span class="badge ${u.sub_trial?'badge-trial':'badge-active'}">${u.sub_trial?'Trial':'Active'}</span>`:'<span class="badge badge-muted">None</span>'}</td>
+          <td class="text-muted">${u.sub_expires_at?formatDate(u.sub_expires_at):'—'}</td>
+          <td>${u.sub_active?`<button class="btn btn-danger btn-sm" onclick="revokeUser('${u.id}','${u.email}')">Revoke</button>`:'—'}</td>
+        </tr>
+      `).join('');
+      const pag = document.getElementById('users-pagination');
+      pag.innerHTML = `<span class="text-xs text-muted">${total} users · Page ${page}/${pages||1}</span><div class="flex gap-8">${page>1?`<button class="btn btn-ghost btn-sm" onclick="loadUsers(${page-1},'${search}')">← Prev</button>`:''} ${page<(pages||1)?`<button class="btn btn-ghost btn-sm" onclick="loadUsers(${page+1},'${search}')">Next →</button>`:''}</div>`;
+    } catch (err) { tbody.innerHTML=`<tr><td colspan="6"><div class="alert alert-error">${err.message}</div></td></tr>`; }
+  }
+
+  let _searchT;
+  function debouncedUserSearch(v) { clearTimeout(_searchT); _searchT=setTimeout(()=>loadUsers(1,v),350); }
+
+  async function revokeUser(id, email) {
+    if (!confirm(`Revoke subscription for ${email}?`)) return;
+    try { await AdminAPI.revokeUserSub(id); showToast('Revoked.','success'); loadUsers(usersPage,usersSearch); }
+    catch (err) { showToast(err.message,'error'); }
+  }
+
+  // ── Whitelist ─────────────────────────────────────────────────────────────
+  async function loadWhitelist() {
+    try {
+      const { emails } = await AdminAPI.listWhitelist();
+      const el = document.getElementById('whitelist-list');
+      if (!emails?.length) { el.innerHTML='<div class="empty-state">No emails whitelisted.</div>'; return; }
+      el.innerHTML = emails.map(e=>`
+        <div class="flex justify-between items-center" style="padding:9px 0;border-bottom:1px solid var(--border);">
+          <span class="mono" style="font-size:13px;">${e.email}</span>
+          <div class="flex gap-8 items-center"><span class="text-xs text-muted">${formatDate(e.added_at)}</span><button class="btn btn-danger btn-sm" onclick="removeWl('${e.email}')">Remove</button></div>
+        </div>
+      `).join('');
+    } catch (err) { document.getElementById('whitelist-list').innerHTML=`<div class="alert alert-error">${err.message}</div>`; }
+  }
+
+  async function addWhitelist() {
+    const email = document.getElementById('whitelist-input').value.trim();
+    if (!email) return;
+    try { await AdminAPI.whitelistEmail(email); document.getElementById('whitelist-input').value=''; showToast(`${email} whitelisted.`,'success'); loadWhitelist(); }
+    catch (err) { showToast(err.message,'error'); }
+  }
+
+  async function removeWl(email) {
+    if (!confirm(`Remove ${email}?`)) return;
+    try { await AdminAPI.removeWhitelist(email); showToast('Removed.','success'); loadWhitelist(); }
+    catch (err) { showToast(err.message,'error'); }
+  }
+
+  // ── Admins ────────────────────────────────────────────────────────────────
+  async function loadAdmins() {
+    try {
+      const { admins } = await AdminAPI.listAdmins();
+      const el = document.getElementById('admins-list');
+      el.innerHTML = admins.map(a=>`
+        <div class="flex justify-between items-center" style="padding:9px 0;border-bottom:1px solid var(--border);">
+          <div class="flex items-center gap-8"><div class="user-avatar" style="background:rgba(239,68,68,0.1);color:#dc2626;">${initials('',a.email)}</div><span class="mono" style="font-size:13px;">${a.email}</span></div>
+          <div class="flex gap-8 items-center">${a.is_superadmin?'<span class="badge badge-admin">Superadmin</span>':`<button class="btn btn-danger btn-sm" onclick="removeAdminUser('${a.email}')">Remove</button>`}</div>
+        </div>
+      `).join('');
+    } catch (err) { document.getElementById('admins-list').innerHTML=`<div class="alert alert-error">${err.message}</div>`; }
+  }
+
+  async function addAdminUser() {
+    const email = document.getElementById('admin-add-input').value.trim();
+    if (!email||!confirm(`Grant admin to ${email}?`)) return;
+    try { await AdminAPI.addAdmin(email); document.getElementById('admin-add-input').value=''; showToast(`${email} is now admin.`,'success'); loadAdmins(); }
+    catch (err) { showToast(err.message,'error'); }
+  }
+
+  async function removeAdminUser(email) {
+    if (!confirm(`Remove admin from ${email}?`)) return;
+    try { await AdminAPI.removeAdmin(email); showToast('Removed.','success'); loadAdmins(); }
+    catch (err) { showToast(err.message,'error'); }
+  }
+
+  // ── Misc ──────────────────────────────────────────────────────────────────
+  async function doLogout() { await AuthAPI.logout(); window.location.href='auth.html'; }
+
+  function showToast(msg, type='info') {
+    const colors={success:'#16a34a',error:'#dc2626',warning:'#b45309',info:'var(--navy)'};
+    const icons={success:'✓',error:'✕',warning:'⚠',info:'i'};
+    let c=document.getElementById('toast-container');
+    if (!c) { c=document.createElement('div'); c.id='toast-container'; document.body.appendChild(c); }
+    const t=document.createElement('div'); t.className=`toast toast-${type}`;
+    t.innerHTML=`<span style="color:${colors[type]};font-weight:700;font-size:12px;">${icons[type]}</span><span style="font-size:12.5px;">${msg}</span>`;
+    c.appendChild(t);
+    setTimeout(()=>{ t.style.animation='fadeOut 0.3s ease forwards'; setTimeout(()=>t.remove(),300); },3000);
+  }
+</script>
 </body>
 </html>

@@ -1,54 +1,41 @@
-'use strict';
+// Minimal Base58 encoder/decoder for Solana addresses and keys
+const BS58_ALPHA = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
-(function () {
-  const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-  const map = Object.fromEntries([...alphabet].map((char, index) => [char, index]));
-
-  function encode(bytes) {
-    if (!(bytes instanceof Uint8Array)) bytes = new Uint8Array(bytes);
-    let digits = [0];
-    for (const byte of bytes) {
-      let carry = byte;
-      for (let i = 0; i < digits.length; i += 1) {
-        carry += digits[i] << 8;
-        digits[i] = carry % 58;
-        carry = (carry / 58) | 0;
-      }
-      while (carry) {
-        digits.push(carry % 58);
-        carry = (carry / 58) | 0;
-      }
+function bs58encode(bytes) {
+  let zeros = 0;
+  for (let i = 0; i < bytes.length && bytes[i] === 0; i++) zeros++;
+  // same fix as decode: don't initialise digits for all-zero input
+  const digits = zeros < bytes.length ? [0] : [];
+  for (let i = zeros; i < bytes.length; i++) {
+    let carry = bytes[i];
+    for (let j = digits.length - 1; j >= 0; j--) {
+      carry += digits[j] << 8;
+      digits[j] = carry % 58;
+      carry = (carry / 58) | 0;
     }
-    for (const byte of bytes) {
-      if (byte !== 0) break;
-      digits.push(0);
-    }
-    return digits.reverse().map((digit) => alphabet[digit]).join('');
+    while (carry > 0) { digits.unshift(carry % 58); carry = (carry / 58) | 0; }
   }
+  return '1'.repeat(zeros) + digits.map(d => BS58_ALPHA[d]).join('');
+}
 
-  function decode(text) {
-    if (!text) return new Uint8Array();
-    const bytes = [0];
-    for (const char of text) {
-      const value = map[char];
-      if (value == null) throw new Error('Invalid base58 character');
-      let carry = value;
-      for (let i = 0; i < bytes.length; i += 1) {
-        carry += bytes[i] * 58;
-        bytes[i] = carry & 0xff;
-        carry >>= 8;
-      }
-      while (carry) {
-        bytes.push(carry & 0xff);
-        carry >>= 8;
-      }
+function bs58decode(str) {
+  let zeros = 0;
+  for (let i = 0; i < str.length && str[i] === '1'; i++) zeros++;
+
+  // Only initialise bytes if there are non-'1' characters to decode.
+  // If ALL characters are '1' (e.g. System Program 111...1) the loop
+  // never runs, so bytes must start empty to avoid an off-by-one zero.
+  const bytes = zeros < str.length ? [0] : [];
+
+  for (let i = zeros; i < str.length; i++) {
+    let carry = BS58_ALPHA.indexOf(str[i]);
+    if (carry < 0) throw new Error('Invalid base58 character: ' + str[i]);
+    for (let j = bytes.length - 1; j >= 0; j--) {
+      carry += bytes[j] * 58;
+      bytes[j] = carry & 0xff;
+      carry >>= 8;
     }
-    for (const char of text) {
-      if (char !== '1') break;
-      bytes.push(0);
-    }
-    return new Uint8Array(bytes.reverse());
+    while (carry > 0) { bytes.unshift(carry & 0xff); carry >>= 8; }
   }
-
-  window.bs58 = { encode, decode };
-})();
+  return new Uint8Array([...new Array(zeros).fill(0), ...bytes]);
+}

@@ -1,59 +1,1422 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Dashboard — Solana Dev Tools</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solana Dev Tools</title>
+  <link rel="icon" href="Icon16.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="shared.css">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="popup.css">
+
+  <!--
+    BUFFER POLYFILL STRATEGY
+    ────────────────────────
+    @solana/web3.js internally uses Buffer.from(str, 'hex'), Buffer.alloc,
+    Buffer.concat, and Buffer.isBuffer — all need to exist on window.Buffer
+    BEFORE web3.js is parsed/executed.
+
+    CDN buffer packages are unreliable in browser IIFE context (version
+    mismatches, missing .from on the constructor, etc.).
+
+    Solution: inline a minimal but fully correct Buffer implementation built
+    on top of Uint8Array + TextEncoder. This is the same approach used by
+    @solana/web3.js's own browser bundle internally.
+  -->
+  <script>
+  (function installBuffer() {
+    'use strict';
+
+    // If a working Buffer already exists (e.g. from another script), keep it.
+    if (typeof window.Buffer === 'function' &&
+        typeof window.Buffer.from === 'function' &&
+        typeof window.Buffer.alloc === 'function') {
+      console.log('[buffer] Already present, keeping existing Buffer');
+      return;
+    }
+
+    // ── Hex helpers ────────────────────────────────────────────────────
+    const HEX = '0123456789abcdef';
+    function hexToBytes(s) {
+      const len = Math.floor(s.length / 2);
+      const out = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        const hi = parseInt(s[i * 2],     16);
+        const lo = parseInt(s[i * 2 + 1], 16);
+        out[i] = (hi << 4) | lo;
+      }
+      return out;
+    }
+    function bytesToHex(u8) {
+      let s = '';
+      for (let i = 0; i < u8.length; i++) {
+        s += HEX[u8[i] >> 4];
+        s += HEX[u8[i] & 0xf];
+      }
+      return s;
+    }
+    function base64ToBytes(s) {
+      const bin = atob(s);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    }
+    function bytesToBase64(u8) {
+      let bin = '';
+      for (let i = 0; i < u8.length; i++) bin += String.fromCharCode(u8[i]);
+      return btoa(bin);
+    }
+    const enc = new TextEncoder();
+    const dec = new TextDecoder();
+
+    // ── Buffer class (extends Uint8Array) ──────────────────────────────
+    class Buffer extends Uint8Array {
+      // Static factory — mirrors Node's Buffer.from()
+      static from(value, encoding, length) {
+        if (typeof value === 'string') {
+          const e = (encoding || 'utf8').toLowerCase();
+          if (e === 'hex')    return new Buffer(hexToBytes(value));
+          if (e === 'base64') return new Buffer(base64ToBytes(value));
+          // utf8 / ascii / latin1
+          return new Buffer(enc.encode(value));
+        }
+        if (value instanceof Buffer)      return new Buffer(value);
+        if (value instanceof Uint8Array)  return new Buffer(value);
+        if (value instanceof ArrayBuffer) return new Buffer(new Uint8Array(value));
+        if (ArrayBuffer.isView(value))    return new Buffer(new Uint8Array(value.buffer, value.byteOffset, value.byteLength));
+        if (Array.isArray(value))         return new Buffer(new Uint8Array(value));
+        // Fallback
+        return new Buffer(new Uint8Array(value));
+      }
+
+      static alloc(size, fill, encoding) {
+        const b = new Buffer(size);
+        if (fill !== undefined) {
+          if (typeof fill === 'string') {
+            const fillBytes = Buffer.from(fill, encoding || 'utf8');
+            for (let i = 0; i < size; i++) b[i] = fillBytes[i % fillBytes.length] || 0;
+          } else {
+            b.fill(fill);
+          }
+        }
+        return b;
+      }
+
+      static allocUnsafe(size)     { return new Buffer(size); }
+      static allocUnsafeSlow(size) { return new Buffer(size); }
+
+      static isBuffer(obj) {
+        return obj instanceof Uint8Array;
+      }
+
+      static isEncoding(enc) {
+        return ['hex','utf8','utf-8','ascii','latin1','binary','base64',
+                'ucs2','ucs-2','utf16le','utf-16le'].includes(String(enc).toLowerCase());
+      }
+
+      static byteLength(str, encoding) {
+        const e = (encoding || 'utf8').toLowerCase();
+        if (e === 'hex')    return Math.floor(str.length / 2);
+        if (e === 'base64') return Math.floor(str.length * 3 / 4);
+        return enc.encode(str).length;
+      }
+
+      static concat(list, totalLength) {
+        const total = totalLength !== undefined
+          ? totalLength
+          : list.reduce((s, b) => s + b.length, 0);
+        const out = new Buffer(total);
+        let offset = 0;
+        for (const b of list) {
+          out.set(b, offset);
+          offset += b.length;
+          if (offset >= total) break;
+        }
+        return out;
+      }
+
+      static compare(a, b) {
+        for (let i = 0; i < Math.min(a.length, b.length); i++) {
+          if (a[i] < b[i]) return -1;
+          if (a[i] > b[i]) return 1;
+        }
+        return a.length - b.length;
+      }
+
+      // Instance methods
+      toString(encoding, start, end) {
+        const slice = (start !== undefined || end !== undefined)
+          ? this.slice(start, end)
+          : this;
+        const e = (encoding || 'utf8').toLowerCase();
+        if (e === 'hex')    return bytesToHex(slice);
+        if (e === 'base64') return bytesToBase64(slice);
+        return dec.decode(slice);
+      }
+
+      write(string, offset, length, encoding) {
+        const off = typeof offset === 'number' ? offset : 0;
+        const bytes = Buffer.from(string, encoding || 'utf8');
+        const len   = length !== undefined ? Math.min(length, bytes.length) : bytes.length;
+        this.set(bytes.subarray(0, len), off);
+        return len;
+      }
+
+      copy(target, targetStart, sourceStart, sourceEnd) {
+        const ts  = targetStart  || 0;
+        const ss  = sourceStart  || 0;
+        const se  = sourceEnd    !== undefined ? sourceEnd : this.length;
+        const src = this.subarray(ss, se);
+        target.set(src, ts);
+        return src.length;
+      }
+
+      slice(start, end) { return Buffer.from(super.slice(start, end)); }
+      subarray(start, end) { return Buffer.from(super.subarray(start, end)); }
+
+      readUInt32LE(offset) { return (this[offset] | this[offset+1]<<8 | this[offset+2]<<16 | this[offset+3]<<24) >>> 0; }
+      readUInt32BE(offset) { return (this[offset]<<24 | this[offset+1]<<16 | this[offset+2]<<8 | this[offset+3]) >>> 0; }
+      writeUInt32LE(v, o)  { this[o]=v; this[o+1]=v>>8; this[o+2]=v>>16; this[o+3]=v>>24; return o+4; }
+      writeUInt32BE(v, o)  { this[o]=v>>24; this[o+1]=v>>16; this[o+2]=v>>8; this[o+3]=v; return o+4; }
+      readUInt8(o)         { return this[o]; }
+      writeUInt8(v, o)     { this[o] = v; return o+1; }
+      readInt32LE(o)       { return this.readUInt32LE(o) | 0; }
+      readInt32BE(o)       { return this.readUInt32BE(o) | 0; }
+
+      get _isBuffer() { return true; }
+    }
+
+    window.Buffer = Buffer;
+    // Some modules check `global.Buffer` (browserify shim pattern)
+    try { if (typeof global !== 'undefined') global.Buffer = Buffer; } catch {}
+
+    console.log('[buffer] ✅ Inline Buffer installed');
+    console.log('[buffer] ✅ Buffer.from:', typeof Buffer.from);
+    console.log('[buffer] ✅ Buffer.alloc:', typeof Buffer.alloc);
+    console.log('[buffer] ✅ Buffer.isBuffer:', typeof Buffer.isBuffer);
+  })();
+  </script>
+
+  <!-- Solana web3.js — loads AFTER Buffer is patched -->
+  <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.98.0/lib/index.iife.min.js"></script>
+
+  <!-- bs58 -->
+  <script src="bs58.js"></script>
+
+  <script>
+  console.log('[init] solanaWeb3:', typeof window.solanaWeb3);
+  if (window.solanaWeb3) {
+    // Quick sanity check — make sure SystemProgram loaded
+    console.log('[init] SystemProgram:', typeof window.solanaWeb3.SystemProgram);
+    console.log('[init] Transaction:', typeof window.solanaWeb3.Transaction);
+  }
+  </script>
+
+  <style>
+    html { width:100% !important; height:100vh !important; }
+    body { width:100% !important; height:100vh !important; }
+    #root { height:calc(100vh - 40px) !important; }
+    .shell { height:calc(100vh - 40px) !important; }
+    .sidebar { width:172px !important; min-width:172px !important; }
+
+    .web-nav-item {
+      display:flex; align-items:center; gap:8px; padding:5px 10px; border-radius:6px;
+      cursor:pointer; font-size:11px; font-weight:500; color:var(--text-dim);
+      transition:all 0.12s; user-select:none; margin:1px 0; list-style:none;
+    }
+    .web-nav-item:hover { background:var(--navy-ghost); color:var(--navy); }
+    .web-nav-item.active { background:var(--navy-ghost2); color:var(--navy); font-weight:600; }
+    .web-nav-item .nav-svg { opacity:0.6; flex-shrink:0; }
+    .web-nav-item:hover .nav-svg, .web-nav-item.active .nav-svg { opacity:1; }
+    .web-nav-item .nav-label { flex:1; }
+
+    #web-bar {
+      height:40px; background:var(--bg2); border-bottom:1px solid var(--border-md);
+      display:flex; align-items:center; justify-content:space-between; padding:0 12px;
+      position:relative; z-index:10; flex-shrink:0;
+    }
+    #web-bar::after { content:''; position:absolute; inset:0; background:linear-gradient(180deg,rgba(255,255,255,0.12) 0%,transparent 100%); pointer-events:none; }
+    .wb-left  { display:flex; align-items:center; gap:8px; position:relative; z-index:1; }
+    .wb-right { display:flex; align-items:center; gap:7px; position:relative; z-index:1; }
+    .wb-logo  { display:flex; align-items:center; gap:7px; text-decoration:none; }
+    .wb-logo img { width:20px; height:20px; border-radius:5px; display:block; }
+    .wb-name  { font-size:11px; font-weight:700; color:var(--navy); font-family:var(--sans); letter-spacing:-0.01em; }
+    .wb-sep   { width:1px; height:14px; background:var(--border-md); }
+    .wb-user  { font-size:10px; color:var(--text-dim); font-family:var(--sans); max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .wb-sub   { display:flex; align-items:center; gap:4px; padding:2px 8px; border-radius:20px; font-size:9.5px; font-weight:600; border:1px solid; }
+    .wb-sub.active   { background:var(--green-bg); color:var(--green-dim); border-color:rgba(34,197,94,0.25); }
+    .wb-sub.inactive { background:var(--danger-bg); color:var(--danger); border-color:rgba(220,38,38,0.2); }
+    .wb-sub.loading  { background:var(--navy-ghost); color:var(--text-muted); border-color:var(--border-md); }
+    .wb-btn {
+      padding:4px 10px; border-radius:5px; font-family:var(--sans); font-size:10px; font-weight:600;
+      cursor:pointer; border:1px solid var(--border-md); background:var(--surface); color:var(--text-dim); transition:all 0.12s;
+    }
+    .wb-btn:hover { background:var(--navy); color:#fff; border-color:var(--navy); }
+    .wb-btn.primary { background:var(--navy); color:#fff; border-color:var(--navy); }
+    .wb-btn.primary:hover { background:var(--navy-mid); }
+
+    #boot-screen {
+      position:fixed; inset:0; background:var(--bg); z-index:9999;
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+    }
+    #boot-screen.hidden { display:none; }
+    .boot-logo { width:40px; height:40px; border-radius:10px; overflow:hidden; }
+    .boot-logo img { width:100%; height:100%; object-fit:cover; border-radius:10px; }
+    .boot-logo-fb { width:40px; height:40px; border-radius:10px; background:var(--navy); display:flex; align-items:center; justify-content:center; }
+    .boot-logo-fb svg { width:22px; height:22px; }
+
+    .web-gate {
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      height:100%; gap:14px; padding:30px 20px; text-align:center;
+    }
+    .web-gate-icon { width:52px; height:52px; border-radius:12px; background:var(--danger-bg); border:1px solid rgba(220,38,38,0.18); display:flex; align-items:center; justify-content:center; }
+    .web-gate-title { font-size:14px; font-weight:700; color:var(--navy); }
+    .web-gate-desc  { font-size:11px; color:var(--text-muted); line-height:1.6; max-width:260px; }
+
+    /* Payment overlay */
+    #pay-overlay {
+      display:none; position:fixed; inset:0; background:rgba(13,31,74,0.45);
+      backdrop-filter:blur(5px); z-index:500; align-items:center; justify-content:center;
+    }
+    .pay-box { background:var(--surface); border:1px solid var(--border-md); border-radius:10px; padding:20px; width:340px; box-shadow:0 20px 50px rgba(13,31,74,0.22); }
+    .pay-opt { padding:10px 6px; background:var(--surface2); border:1px solid var(--border-md); border-radius:7px; cursor:pointer; text-align:center; transition:all 0.12s; }
+    .pay-opt:hover,.pay-opt.sel { border-color:var(--navy); background:var(--navy-ghost); }
+    .pay-watch { display:flex; align-items:center; gap:5px; font-size:9px; color:var(--text-muted); margin-top:8px; }
+    .pay-spin  { width:9px; height:9px; border:1.5px solid var(--border-md); border-top-color:var(--navy); border-radius:50%; animation:_spin 0.6s linear infinite; flex-shrink:0; }
+    @keyframes _spin { to { transform:rotate(360deg); } }
+
+    /* Subscription page */
+    .sub-section { margin-bottom:16px; }
+    .sub-section-label { font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-dim); margin-bottom:8px; }
+    .sub-card { background:var(--surface); border:1px solid var(--border-md); border-radius:var(--r); padding:12px 14px; }
+    .sub-card.active  { border-color:rgba(34,197,94,0.3); background:rgba(34,197,94,0.04); }
+    .sub-card.inactive { border-color:rgba(220,38,38,0.2); background:rgba(220,38,38,0.04); }
+    .sub-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:5px; }
+    .sub-badge { display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; }
+    .sub-meta  { display:flex; align-items:center; justify-content:space-between; font-size:10px; color:var(--text-muted); margin-bottom:2px; }
+    .sub-meta-val { color:var(--text-dim); font-weight:500; }
+    .promo-row { display:flex; gap:7px; margin-top:8px; }
+    .promo-row input { flex:1; font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.06em; }
+
+    /* Admin panel */
+    .admin-tabs { display:flex; border-bottom:1px solid var(--border-md); margin-bottom:14px; }
+    .admin-tab { padding:7px 12px; font-family:var(--sans); font-size:11px; font-weight:500; color:var(--text-muted); background:none; border:none; border-bottom:2px solid transparent; cursor:pointer; transition:all 0.12s; white-space:nowrap; }
+    .admin-tab:hover { color:var(--text-mid); }
+    .admin-tab.active { color:var(--navy); border-bottom-color:var(--navy); font-weight:600; }
+    .admin-tbl { width:100%; border-collapse:collapse; font-size:10.5px; }
+    .admin-tbl th { text-align:left; padding:6px 8px; font-size:9px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); border-bottom:1px solid var(--border-md); }
+    .admin-tbl td { padding:7px 8px; border-bottom:1px solid var(--border); vertical-align:middle; color:var(--text-dim); }
+    .admin-tbl tr:last-child td { border-bottom:none; }
+    .admin-tbl tr:hover td { background:var(--surface2); }
+    .abadge { display:inline-flex; align-items:center; gap:3px; padding:1px 7px; border-radius:20px; font-size:9px; font-weight:600; }
+    .abadge.g { background:var(--green-bg); color:var(--green-dim); }
+    .abadge.r { background:var(--danger-bg); color:var(--danger); }
+    .abadge.b { background:var(--blue-bg); color:var(--blue); }
+    .abadge.n { background:var(--navy-ghost); color:var(--text-muted); }
+    .admin-input-row { display:flex; gap:7px; margin-bottom:10px; }
+    .admin-input-row input { flex:1; }
+    .code-chip { font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:0.1em; padding:3px 9px; background:var(--navy-ghost); border-radius:4px; color:var(--navy); cursor:pointer; display:inline-block; }
+    .code-chip:hover { background:var(--navy-ghost2); }
+    .admin-empty { font-size:10px; color:var(--text-muted); padding:18px 0; text-align:center; }
+    .admin-sec-lbl { font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-dim); margin-bottom:8px; margin-top:14px; }
+    .admin-sec-lbl:first-child { margin-top:0; }
+  </style>
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-mark">UDT</div>
-        <div>
-          <div class="brand-title">Secure dashboard</div>
-          <div class="brand-sub">GitHub Pages frontend</div>
-        </div>
-      </div>
-      <nav class="nav">
-        <button data-route="overview" class="active">Overview</button>
-        <button data-route="wallets">Wallets</button>
-        <button data-route="tracker">Tracker</button>
-        <button data-route="bundle">Bundle</button>
-        <button data-route="split">Split</button>
-        <button data-route="sniper">Sniper</button>
-        <button data-route="volume">Volume</button>
-        <button data-route="jobs">Jobs</button>
-        <button data-route="settings">Settings</button>
-      </nav>
-    </aside>
-    <main class="content">
-      <div class="topbar">
-        <div>
-          <h1 class="title" id="view-title">Overview</h1>
-          <p class="subtitle" id="view-subtitle">Thin client dashboard with protected backend flows.</p>
-        </div>
-        <div class="row" style="justify-content:flex-end; gap:10px;">
-          <a class="btn ghost" href="admin.html">Admin</a>
-          <button class="btn danger" id="logout-btn">Logout</button>
-        </div>
-      </div>
-      <div id="app-main"></div>
-    </main>
+
+<!-- BOOT SCREEN -->
+<div id="boot-screen">
+  <div class="boot-logo">
+    <img src="icon128.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+    <div class="boot-logo-fb" style="display:none">
+      <svg viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="5" fill="#0d1f4a"/><path d="M6 8h12M6 12h8M6 16h10" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </div>
   </div>
-  <script src="api.js"></script>
-  <script src="wallets.js"></script>
-  <script src="wallet-tracker.js"></script>
-  <script src="bundle.js"></script>
-  <script src="split.js"></script>
-  <script src="sniper.js"></script>
-  <script src="volume-bot.js"></script>
-  <script src="popup.js"></script>
-  <script>UDT_APP.bootDashboard();</script>
+  <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+    <div class="spinner" style="width:18px;height:18px;border-color:rgba(13,31,74,0.15);border-top-color:var(--navy)"></div>
+    <div style="font-size:10px;color:var(--text-muted);letter-spacing:0.04em" id="boot-msg">Verifying session…</div>
+  </div>
+</div>
+
+<!-- CHROME SHIM -->
+<script>
+(function() {
+  'use strict';
+  const MEM = {};
+  const STORE_KEY = 'udt_web_store';
+  try { const r = localStorage.getItem(STORE_KEY); if (r) Object.assign(MEM, JSON.parse(r)); } catch {}
+  const flush = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(MEM)); } catch {} };
+  window.chrome = window.chrome || {};
+  chrome.storage = { local: {
+    get(keys, cb) {
+      const out = {};
+      if (typeof keys === 'string')  out[keys] = MEM[keys];
+      else if (Array.isArray(keys))  keys.forEach(k => out[k] = MEM[k]);
+      else                           Object.assign(out, MEM);
+      if (cb) cb(out); return Promise.resolve(out);
+    },
+    set(obj, cb)   { Object.assign(MEM, obj); flush(); if (cb) cb(); return Promise.resolve(); },
+    remove(k, cb)  { (Array.isArray(k)?k:[k]).forEach(k=>delete MEM[k]); flush(); if (cb) cb(); return Promise.resolve(); },
+    clear(cb)      { Object.keys(MEM).forEach(k=>delete MEM[k]); flush(); if (cb) cb(); return Promise.resolve(); }
+  }};
+  chrome.alarms = { create(){}, clear(){}, clearAll(){}, get(n,cb){if(cb)cb(null);return Promise.resolve(null);}, getAll(cb){if(cb)cb([]);return Promise.resolve([]);}, onAlarm:{addListener(){}} };
+  chrome.runtime = chrome.runtime || {};
+  chrome.runtime.lastError = null;
+  chrome.runtime.sendMessage = (msg, cb) => { if (cb) cb({ok:false}); return Promise.resolve(); };
+  chrome.runtime.onMessage = { addListener(){} };
+  chrome.notifications = { create(id, opts) { if (typeof Notification !== 'undefined' && Notification.permission === 'granted') new Notification(opts.title,{body:opts.message}); } };
+  chrome.identity = { getAuthToken(opts,cb){if(cb)cb(null);}, removeCachedAuthToken(opts,cb){if(cb)cb();} };
+})();
+</script>
+
+<!-- WEB TOPBAR -->
+<div id="web-bar" style="display:none">
+  <div class="wb-left">
+    <a class="wb-logo" href="/">
+      <img src="icon128.png" alt="" onerror="this.style.display='none'">
+      <span class="wb-name">Solana Dev Tools</span>
+    </a>
+    <div class="wb-sep"></div>
+    <span class="wb-user" id="wb-user"></span>
+  </div>
+  <div class="wb-right">
+    <div class="wb-sub loading" id="wb-sub"><span class="status-dot" id="wb-dot"></span><span id="wb-sub-txt">…</span></div>
+    <button class="wb-btn primary" id="wb-subscribe-btn" style="display:none" onclick="openPayOverlay()">Subscribe</button>
+    <a href="/" class="wb-btn" style="text-decoration:none">← Home</a>
+    <button class="wb-btn" onclick="webSignOut()">Sign out</button>
+  </div>
+</div>
+
+<!-- EXTENSION SHELL -->
+<div id="root" style="display:none">
+  <div class="shell">
+    <nav class="sidebar" id="sidebar">
+      <div class="brand-bar">
+        <div class="brand-logo-slot" style="background:none;box-shadow:none;border-radius:0;overflow:visible">
+          <img src="icon128.png" width="28" height="28" style="display:block;border-radius:6px">
+        </div>
+        <span class="brand-studio-name">Essor Studios</span>
+      </div>
+      <div class="brand-product">
+        <div class="brand-product-name">Solana<br>Dev Tools</div>
+        <div class="brand-product-tag">Professional Toolkit</div>
+      </div>
+
+      <div class="nav-section-label">TOOLS</div>
+      <ul class="nav-list" id="nav-list"></ul>
+
+      <div class="nav-section-label" style="margin-top:4px">ACCOUNT</div>
+      <ul class="nav-list">
+        <li class="web-nav-item" id="nav-subscription-item" onclick="setWebTool('subscription')">
+          <svg class="nav-svg" width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <rect x="1" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.2"/>
+            <path d="M1 6.5h11" stroke="currentColor" stroke-width="1.1"/>
+            <path d="M4 5h2M4 8.5h4" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+          </svg>
+          <span class="nav-label">Subscription</span>
+          <span id="sub-days-badge" class="nav-badge" style="display:none;background:var(--warn-bg);color:var(--warn);border-radius:20px;padding:1px 5px;font-size:8px;"></span>
+        </li>
+        <li class="web-nav-item" id="nav-admin-item" onclick="setWebTool('admin-panel')" style="display:none">
+          <svg class="nav-svg" width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <path d="M6.5 1.5L11.5 4v4L6.5 11.5 1.5 8V4L6.5 1.5Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+            <path d="M4.5 6.5l1.5 1.5 2.5-2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="nav-label">Admin Panel</span>
+        </li>
+      </ul>
+
+      <div class="sidebar-footer">
+        <button class="settings-btn" data-tool="settings" id="settings-nav-btn">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M5.3 1.5h2.4l.4 1.3a4 4 0 0 1 .9.5l1.3-.4 1.2 2-1 .9a4 4 0 0 1 0 1.1l1 .9-1.2 2-1.3-.4a4 4 0 0 1-.9.5l-.4 1.2H5.3l-.4-1.2a4 4 0 0 1-.9-.5l-1.3.4-1.2-2 1-.9a4 4 0 0 1 0-1.1l-1-.9 1.2-2 1.3.4a4 4 0 0 1 .9-.5l.4-1.3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><circle cx="6.5" cy="6.5" r="1.6" stroke="currentColor" stroke-width="1.2"/></svg>
+          Settings
+        </button>
+        <div class="rpc-status">
+          <span class="status-dot" id="rpc-dot"></span>
+          <span class="status-label" id="rpc-label">Checking…</span>
+        </div>
+      </div>
+    </nav>
+
+    <main class="main" id="main"></main>
+  </div>
+
+  <div class="modal-overlay" id="wallet-picker-modal" style="display:none"><div class="modal-box" id="wallet-picker-box"></div></div>
+  <div class="modal-overlay" id="emoji-modal" style="display:none"><div class="modal-box emoji-modal-box" id="emoji-modal-box"></div></div>
+</div>
+
+<!-- PAYMENT OVERLAY — method selection -->
+<div id="pay-overlay">
+  <div class="pay-box">
+    <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:3px">Subscribe — $<span id="pay-usd-price">99</span> / month</div>
+    <div style="font-size:10px;color:var(--text-muted);margin-bottom:14px">Manual renewal. Price locked in SOL when you click Pay.</div>
+
+    <div id="pay-price-loading" style="text-align:center;padding:16px 0;font-size:11px;color:var(--text-muted)">
+      <div class="pay-spin" style="margin:0 auto 8px"></div>
+      Fetching current SOL price…
+    </div>
+
+    <div id="pay-price-display" style="display:none;background:var(--surface2);border:1px solid var(--border-md);border-radius:var(--r);padding:10px 12px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:10px;color:var(--text-muted)">You pay</span>
+        <span style="font-size:15px;font-weight:700;color:var(--navy);font-family:var(--mono)" id="pay-sol-amount">—</span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:10px;color:var(--text-muted)">Rate</span>
+        <span style="font-size:10px;color:var(--text-muted)" id="pay-sol-rate">—</span>
+      </div>
+      <div style="font-size:9px;color:var(--text-muted);margin-top:3px;opacity:0.7">Locked the moment you click Pay</div>
+    </div>
+
+    <div id="pay-method-select" style="display:none">
+      <div style="font-size:10px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">How to pay</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="pay-opt" id="pay-opt-phantom" onclick="paySelect('phantom',this)">
+          <svg viewBox="0 0 24 24" fill="none" style="width:20px;height:20px;color:var(--navy);display:block;margin:0 auto 5px"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" stroke="currentColor" stroke-width="1.5"/><path d="M8 12h8M12 8v8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <div style="font-size:10px;font-weight:600;color:var(--text)">Phantom</div>
+          <div style="font-size:8px;color:var(--text-muted);margin-top:1px">1-click confirm</div>
+        </div>
+        <div class="pay-opt" id="pay-opt-manual" onclick="paySelect('manual',this)">
+          <svg viewBox="0 0 24 24" fill="none" style="width:20px;height:20px;color:var(--navy);display:block;margin:0 auto 5px"><rect x="3" y="6" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M3 10h18" stroke="currentColor" stroke-width="1.5"/></svg>
+          <div style="font-size:10px;font-weight:600;color:var(--text)">Manual SOL</div>
+          <div style="font-size:8px;color:var(--text-muted);margin-top:1px">Any wallet</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:7px;margin-top:12px">
+      <button class="btn btn-primary" id="pay-gen-btn" onclick="payGenerate()" style="display:none;flex:1">Pay Now</button>
+      <button class="btn btn-ghost" onclick="closePayOverlay()" style="flex:1">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- FULL-SCREEN PAYMENT PANEL -->
+<div id="pay-panel" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:400;overflow-y:auto">
+  <div style="max-width:460px;margin:0 auto;padding:28px 20px 40px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px">
+      <div>
+        <div style="font-size:16px;font-weight:800;color:var(--navy)" id="pp-title">Complete Payment</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:3px" id="pp-subtitle"></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="cancelPayPanel()" style="flex-shrink:0">✕ Cancel</button>
+    </div>
+
+    <div style="background:var(--surface);border:1px solid var(--border-md);border-radius:10px;padding:14px 16px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span style="font-size:10px;color:var(--text-muted)">Subscription</span>
+        <span style="font-size:10px;color:var(--text-muted)">Solana Dev Tools — 30 days</span>
+      </div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between">
+        <span style="font-size:10px;color:var(--text-muted)">Amount due</span>
+        <div style="text-align:right">
+          <div style="font-size:22px;font-weight:800;color:var(--navy);font-family:var(--mono);line-height:1.1" id="pp-sol-amount">—</div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:1px" id="pp-usd-amount"></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:var(--surface2);border:1px solid var(--border-md);border-radius:8px;padding:9px 14px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:10px;color:var(--text-muted)">⏱ Time remaining</span>
+      <span style="font-size:13px;font-weight:800;font-family:var(--mono);color:var(--navy);letter-spacing:0.04em" id="pp-timer">30:00</span>
+    </div>
+
+    <div id="pp-content"></div>
+    <div id="pp-status" style="margin-top:14px"></div>
+  </div>
+</div>
+
+<script src="split.js" onerror="console.error('FATAL: split.js missing')"></script>
+<script src="auth.js"></script>
+<script src="bundle.js"></script>
+<script src="wallets.js"></script>
+<script src="popup.js"></script>
+<script src="volume-bot.js"></script>
+<script src="wallet-tracker.js"></script>
+<script src="sniper.js"></script>
+<script src="api.js"></script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   WEB INIT
+═══════════════════════════════════════════════════════════════════════ */
+const BACKEND = 'https://ultimatedevtools-production.up.railway.app';
+
+let _webUser  = null;
+let _webSub   = null;
+let _webTool  = null;
+let _adminTab = 'users';
+
+document.addEventListener('DOMContentLoaded', async () => {
+  const token = localStorage.getItem('udt_token');
+  if (!token) { window.location.replace('auth.html'); return; }
+
+  setBootMsg('Verifying session…');
+  let user;
+  try {
+    const r = await fetch(BACKEND + '/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } });
+    if (!r.ok) throw new Error('Unauthorized');
+    user = await r.json();
+  } catch {
+    localStorage.removeItem('udt_token');
+    localStorage.removeItem('udt_user');
+    window.location.replace('auth.html');
+    return;
+  }
+  _webUser = user;
+
+  setBootMsg('Checking subscription…');
+  let sub;
+  try {
+    const r = await fetch(BACKEND + '/api/subscription/verify', { headers: { 'Authorization': 'Bearer ' + token } });
+    if (!r.ok) throw new Error();
+    sub = await r.json();
+  } catch { sub = { active: false }; }
+  _webSub = sub;
+
+  // Auth stored in localStorage via api.js
+
+  S.auth = { loggedIn: true, token, email: user.email||'', userId: user.id||0, is_admin: user.is_admin||false, cryptoKey: null };
+  window.tryAutoLogin = async () => true;
+
+  const _origRender = window.render;
+  window.render = function() {
+    if (!S.auth?.loggedIn) { window.location.replace('auth.html'); return; }
+    if (_webTool === 'subscription') { renderSubPage(); _syncWebNav(); return; }
+    if (_webTool === 'admin-panel')  { renderAdminPage(); _syncWebNav(); return; }
+    if (!_webSub?.active) {
+      const main = document.getElementById('main');
+      if (main) main.innerHTML = `
+        <div class="web-gate">
+          <div class="web-gate-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" stroke="#dc2626" stroke-width="1.7"/><path d="M7 11V7a5 5 0 0110 0v4" stroke="#dc2626" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+          <div class="web-gate-title">Subscription Required</div>
+          <div class="web-gate-desc">${_webSub?.expires_at ? 'Your subscription has expired.' : 'You need an active subscription to use these tools.'}<br><br>Subscribe to unlock all tools.</div>
+          <button class="btn btn-primary" onclick="setWebTool('subscription')">View Subscription</button>
+        </div>`;
+      _syncWebNav(); return;
+    }
+    _origRender();
+    _syncWebNav();
+  };
+
+  if (user.is_admin) document.getElementById('nav-admin-item').style.display = '';
+  const wbUser = document.getElementById('wb-user');
+  if (wbUser) wbUser.textContent = user.email || '';
+  _updateSubChip();
+
+  document.getElementById('boot-screen').classList.add('hidden');
+  document.getElementById('web-bar').style.display = '';
+  document.getElementById('root').style.display = '';
+
+  const _origSaveState = window.saveState;
+  let _stateSyncTimer = null;
+  window.saveState = async function() {
+    await _origSaveState();
+    clearTimeout(_stateSyncTimer);
+    _stateSyncTimer = setTimeout(() => _pushStateToServer(), 1500);
+  };
+
+  setBootMsg('Loading your data…');
+  await _pullStateFromServer(token);
+
+  if (typeof window.VB_JUP_QUOTE !== 'undefined') {
+    window.VB_JUP_QUOTE = BACKEND + '/api/proxy/jupiter/quote';
+    window.VB_JUP_SWAP  = BACKEND + '/api/proxy/jupiter/swap';
+  }
+  const _origVbJupFetch = window.vbJupFetch;
+  if (typeof _origVbJupFetch === 'function') {
+    window.vbJupFetch = async function(url, opts) {
+      url = url
+        .replace('https://api.jup.ag/swap/v1/quote', BACKEND + '/api/proxy/jupiter/quote')
+        .replace('https://api.jup.ag/swap/v1/swap',  BACKEND + '/api/proxy/jupiter/swap')
+        .replace('https://quote-api.jup.ag/v6/quote', BACKEND + '/api/proxy/jupiter/quote')
+        .replace('https://quote-api.jup.ag/v6/swap',  BACKEND + '/api/proxy/jupiter/swap');
+      return _origVbJupFetch(url, opts);
+    };
+  }
+
+  if (typeof render === 'function') render();
+  if (typeof checkRpc === 'function') checkRpc();
+  if (typeof buildNavList === 'function') buildNavList();
+
+  setInterval(_refreshSubServer, 3 * 60 * 1000);
+});
+
+function setBootMsg(msg) {
+  const el = document.getElementById('boot-msg');
+  if (el) el.textContent = msg;
+}
+
+async function _pushStateToServer() {
+  const token = localStorage.getItem('udt_token');
+  if (!token || typeof S === 'undefined') return;
+  try {
+    const safeState = { ...S };
+    if (safeState.auth) safeState.auth = { ...safeState.auth, cryptoKey: undefined };
+    await fetch(BACKEND + '/api/state', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ state: safeState })
+    });
+  } catch {}
+}
+
+async function _pullStateFromServer(token) {
+  if (!token) return;
+  try {
+    const r = await fetch(BACKEND + '/api/state', { headers: { 'Authorization': 'Bearer ' + token } });
+    if (!r.ok) return;
+    const { state } = await r.json();
+    if (!state || typeof state !== 'object') return;
+    const localPrivKeys = {};
+    (S.savedWallets || []).forEach(w => {
+      if (w.privateKey) {
+        if (w.publicKey)  localPrivKeys[w.publicKey] = w.privateKey;
+        if (w.id)         localPrivKeys['id:' + w.id] = w.privateKey;
+      }
+    });
+    const safeMerge = (target, source) => {
+      if (!source || typeof source !== 'object') return;
+      for (const key of Object.keys(source)) {
+        if (key === 'auth' || key === 'cryptoKey') continue;
+        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+          if (!target[key] || typeof target[key] !== 'object') target[key] = {};
+          safeMerge(target[key], source[key]);
+        } else { target[key] = source[key]; }
+      }
+    };
+    safeMerge(S, state);
+    if (state.savedWallets?.length) {
+      S.savedWallets = state.savedWallets.map(w => ({
+        ...w,
+        privateKey: w.privateKey || localPrivKeys[w.publicKey] || localPrivKeys['id:' + w.id] || ''
+      }));
+    }
+    localStorage.setItem('udt_v3', JSON.stringify(S));
+    console.log(`[state pull] restored ${S.savedWallets?.length || 0} wallets`);
+  } catch (e) { console.warn('[state pull]', e.message); }
+}
+
+async function _refreshSubServer() {
+  const token = localStorage.getItem('udt_token') || S.auth?.token;
+  if (!token) return;
+  try {
+    const r = await fetch(BACKEND + '/api/subscription/verify', { headers: { 'Authorization': 'Bearer ' + token } });
+    if (r.ok) { _webSub = await r.json(); _updateSubChip(); }
+  } catch {}
+}
+
+function _updateSubChip() {
+  const chip = document.getElementById('wb-sub');
+  const dot  = document.getElementById('wb-dot');
+  const txt  = document.getElementById('wb-sub-txt');
+  const btn  = document.getElementById('wb-subscribe-btn');
+  if (!chip) return;
+  const sub  = _webSub;
+  const days = sub?.expires_at ? Math.max(0, Math.ceil((new Date(sub.expires_at) - Date.now()) / 86400000)) : null;
+  if (sub?.active) {
+    chip.className = 'wb-sub active';
+    dot.className  = 'status-dot online';
+    if (sub.admin)            txt.textContent = 'Admin';
+    else if (sub.whitelisted) txt.textContent = 'Whitelisted';
+    else txt.textContent = days !== null ? `${days}d left` : (sub.trial ? 'Trial' : 'Active');
+    if (btn) btn.style.display = 'none';
+    const badge = document.getElementById('sub-days-badge');
+    if (badge && days !== null && days <= 3 && !sub.admin && !sub.whitelisted) { badge.textContent = `${days}d`; badge.style.display = ''; }
+  } else {
+    chip.className = 'wb-sub inactive';
+    dot.className  = 'status-dot offline';
+    txt.textContent = 'No subscription';
+    if (btn) btn.style.display = '';
+  }
+}
+
+function setWebTool(tool) {
+  _webTool = tool;
+  if (tool === 'subscription') renderSubPage();
+  if (tool === 'admin-panel')  renderAdminPage();
+  _syncWebNav();
+}
+
+document.addEventListener('click', (e) => {
+  const item = e.target.closest('#nav-list .nav-item');
+  if (item && item.dataset.tool) _webTool = null;
+});
+
+function _syncWebNav() {
+  document.querySelectorAll('#nav-list .nav-item[data-tool]').forEach(el => {
+    el.classList.toggle('active', !_webTool && el.dataset.tool === S?.activeTool);
+  });
+  document.getElementById('settings-nav-btn')?.classList.toggle('active', !_webTool && S?.activeTool === 'settings');
+  document.getElementById('nav-subscription-item')?.classList.toggle('active', _webTool === 'subscription');
+  document.getElementById('nav-admin-item')?.classList.toggle('active', _webTool === 'admin-panel');
+}
+
+async function webSignOut() {
+  try {
+    const token = localStorage.getItem('udt_token');
+    if (token) await fetch(BACKEND + '/api/auth/logout', { method:'POST', headers:{'Authorization':'Bearer '+token} });
+  } catch {}
+  localStorage.removeItem('udt_token');
+  localStorage.removeItem('udt_user');
+  localStorage.removeItem('udt_sub_cache');
+  try { localStorage.removeItem('udt_v3'); } catch {}
+  window.location.replace('auth.html');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SUBSCRIPTION PAGE
+═══════════════════════════════════════════════════════════════════════ */
+function renderSubPage() {
+  const main = document.getElementById('main');
+  if (!main) return;
+  const sub   = _webSub;
+  const fmtD  = iso => iso ? new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
+  const days  = sub?.expires_at ? Math.max(0, Math.ceil((new Date(sub.expires_at) - Date.now()) / 86400000)) : null;
+  const isFree = sub?.admin || sub?.whitelisted;
+
+  main.innerHTML = `
+    <div class="tool-header"><div class="tool-title-row"><span class="tool-title">Subscription</span></div></div>
+    <div class="scroll-area" id="scroll-area">
+      <div class="sub-section">
+        <div class="sub-section-label">Current Status</div>
+        <div class="sub-card ${sub?.active ? 'active' : 'inactive'}">
+          <div class="sub-row">
+            <div class="sub-badge">
+              <span class="status-dot ${sub?.active ? 'online' : 'offline'}"></span>
+              ${sub?.active ? (isFree ? (sub.admin ? 'Admin — Full Access' : 'Whitelisted — Full Access') : (sub.trial ? 'Trial Active' : 'Pro Active')) : 'No Active Subscription'}
+            </div>
+            ${sub?.active ? `<span style="font-size:9.5px;color:var(--text-muted)">${isFree ? 'Free' : sub.trial ? 'Trial' : 'Pro'}</span>` : ''}
+          </div>
+          ${!isFree && sub?.active ? `
+            <div class="sub-meta"><span>Expires</span><span class="sub-meta-val">${fmtD(sub.expires_at)}</span></div>
+            <div class="sub-meta"><span>Days remaining</span><span class="sub-meta-val" style="${days !== null && days <= 3 ? 'color:var(--danger)' : ''}">${days !== null ? `${days} days` : '—'}</span></div>
+          ` : !isFree ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;line-height:1.5">Subscribe to unlock all tools.</div>` : ''}
+          ${isFree ? `<div style="font-size:10px;color:var(--green-dim);margin-top:4px">No subscription required — you have full access.</div>` : ''}
+        </div>
+      </div>
+      ${!isFree ? `
+        <div class="sub-section">
+          <div class="sub-section-label">${sub?.active ? 'Renew' : 'Subscribe'} — $99 / month</div>
+          <p style="font-size:10px;color:var(--text-muted);margin-bottom:10px;line-height:1.6">Manual renewal. Pay with Phantom or direct SOL transfer. Price locked at current rate when you pay.</p>
+          <button class="btn btn-primary btn-full" onclick="openPayOverlay()">${sub?.active ? 'Renew Subscription' : 'Subscribe Now'}</button>
+        </div>
+        <div class="sub-section">
+          <div class="sub-section-label">Promo Code</div>
+          <p style="font-size:10px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">Apply a promo code to activate a free trial. Single-use, one per account.</p>
+          <div class="promo-row">
+            <input type="text" id="promo-input" placeholder="ENTER CODE" maxlength="20" style="letter-spacing:0.1em"/>
+            <button class="btn btn-ghost btn-sm" onclick="redeemPromo()">Redeem</button>
+          </div>
+          <div id="promo-msg" style="font-size:10px;margin-top:6px"></div>
+        </div>
+      ` : ''}
+    </div>`;
+}
+
+async function redeemPromo() {
+  const code = document.getElementById('promo-input')?.value?.trim().toUpperCase();
+  const msg  = document.getElementById('promo-msg');
+  if (!code) { if (msg) msg.innerHTML = '<span style="color:var(--warn)">Enter a code.</span>'; return; }
+  if (msg) msg.innerHTML = '<span style="color:var(--text-muted)">Redeeming…</span>';
+  try {
+    const token = localStorage.getItem('udt_token');
+    const r = await fetch(BACKEND + '/api/subscription/redeem-promo', {
+      method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+      body: JSON.stringify({ code })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Failed');
+    if (msg) msg.innerHTML = `<span style="color:var(--green-dim)">✓ Applied! ${d.days}-day trial activated.</span>`;
+    await _refreshSubServer();
+    renderSubPage();
+  } catch (e) { if (msg) msg.innerHTML = `<span style="color:var(--danger)">${e.message}</span>`; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ADMIN PANEL
+═══════════════════════════════════════════════════════════════════════ */
+function renderAdminPage() {
+  const main = document.getElementById('main');
+  if (!main) return;
+  main.innerHTML = `
+    <div class="tool-header"><div class="tool-title-row"><span class="tool-title">Admin Panel</span></div></div>
+    <div class="scroll-area" id="scroll-area">
+      <div class="admin-tabs">
+        <button class="admin-tab ${_adminTab==='users'?'active':''}" onclick="switchAdminTab('users')">Users</button>
+        <button class="admin-tab ${_adminTab==='codes'?'active':''}" onclick="switchAdminTab('codes')">Promo Codes</button>
+        <button class="admin-tab ${_adminTab==='whitelist'?'active':''}" onclick="switchAdminTab('whitelist')">Whitelist</button>
+        <button class="admin-tab ${_adminTab==='admins'?'active':''}" onclick="switchAdminTab('admins')">Admins</button>
+      </div>
+      <div id="admin-content"><div class="admin-empty">Loading…</div></div>
+    </div>`;
+  _loadAdminTab();
+}
+
+function switchAdminTab(tab) { _adminTab = tab; renderAdminPage(); }
+
+async function _adminFetch(path, opts={}) {
+  const token = localStorage.getItem('udt_token');
+  const r = await fetch(BACKEND + '/api' + path, {
+    ...opts, headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+token, ...(opts.headers||{}) }
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+  return d;
+}
+
+async function _loadAdminTab() {
+  const el = document.getElementById('admin-content');
+  if (!el) return;
+  try {
+    if (_adminTab === 'users')     await _loadUsers(el);
+    if (_adminTab === 'codes')     await _loadCodes(el);
+    if (_adminTab === 'whitelist') await _loadWhitelist(el);
+    if (_adminTab === 'admins')    await _loadAdmins(el);
+  } catch (e) { el.innerHTML = `<div class="admin-empty" style="color:var(--danger)">${e.message}</div>`; }
+}
+
+let _usersPage=1, _usersSearch='';
+async function _loadUsers(el) {
+  const d = await _adminFetch(`/admin/users?page=${_usersPage}&search=${encodeURIComponent(_usersSearch)}`);
+  const fmtD = iso => iso ? new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'}) : '—';
+  el.innerHTML = `
+    <div class="admin-input-row">
+      <input type="text" placeholder="Search by email…" value="${_usersSearch}" id="u-search" oninput="_usersDebounce(this.value)" style="font-size:11px"/>
+    </div>
+    <div style="font-size:9.5px;color:var(--text-muted);margin-bottom:8px">${d.total||0} users</div>
+    <table class="admin-tbl">
+      <thead><tr><th>Email</th><th>Status</th><th>Expires</th><th>Joined</th><th></th></tr></thead>
+      <tbody>
+        ${(d.users||[]).length===0?`<tr><td colspan="5"><div class="admin-empty">No users found.</div></td></tr>`:(d.users||[]).map(u=>`
+          <tr>
+            <td style="font-family:var(--mono);font-size:10px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${u.email}</td>
+            <td>${u.sub_active?`<span class="abadge ${u.sub_trial?'b':'g'}">${u.sub_trial?'Trial':'Active'}</span>`:'<span class="abadge n">None</span>'}</td>
+            <td style="font-size:10px;color:var(--text-muted)">${fmtD(u.sub_expires_at)}</td>
+            <td style="font-size:10px;color:var(--text-muted)">${fmtD(u.created_at)}</td>
+            <td>${u.sub_active?`<button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:9px" onclick="adminRevokeSub(${u.id},'${u.email}')">Revoke</button>`:''}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;font-size:10px;color:var(--text-muted)">
+      <span>Page ${_usersPage}/${d.pages||1}</span>
+      <div style="display:flex;gap:6px">
+        ${_usersPage>1?`<button class="btn btn-ghost btn-sm" onclick="_usersPage(${_usersPage-1})">← Prev</button>`:''}
+        ${_usersPage<(d.pages||1)?`<button class="btn btn-ghost btn-sm" onclick="_usersPage(${_usersPage+1})">Next →</button>`:''}
+      </div>
+    </div>`;
+}
+let _uSearchT;
+window._usersDebounce = v => { clearTimeout(_uSearchT); _uSearchT=setTimeout(()=>{_usersSearch=v;_usersPage=1;_loadUsers(document.getElementById('admin-content'));},320); };
+window._usersPage = p => { _usersPage=p; _loadUsers(document.getElementById('admin-content')); };
+window.adminRevokeSub = async (id,email) => {
+  if (!confirm(`Revoke subscription for ${email}?`)) return;
+  await _adminFetch('/admin/users/revoke-sub',{method:'POST',body:JSON.stringify({user_id:id})});
+  showToast('Revoked'); _loadUsers(document.getElementById('admin-content'));
+};
+
+async function _loadCodes(el) {
+  const d = await _adminFetch('/admin/promo/list');
+  const fmtD = iso => iso ? new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'}) : '—';
+  el.innerHTML = `
+    <div class="admin-sec-lbl">Generate Code</div>
+    <div class="admin-input-row">
+      <input type="number" id="c-days" value="5" min="1" max="90" style="width:60px" placeholder="Days"/>
+      <input type="text" id="c-label" placeholder="Label (optional)" style="flex:1"/>
+      <button class="btn btn-primary btn-sm" onclick="_genCode()">Generate</button>
+    </div>
+    <div id="code-result" style="margin-bottom:10px"></div>
+    <div class="admin-sec-lbl">All Codes</div>
+    <table class="admin-tbl">
+      <thead><tr><th>Code</th><th>Days</th><th>Status</th><th>Redeemed By</th><th>Date</th><th></th></tr></thead>
+      <tbody>
+        ${(d.codes||[]).length===0?`<tr><td colspan="6"><div class="admin-empty">No codes yet.</div></td></tr>`:(d.codes||[]).map(c=>`
+          <tr>
+            <td><span class="code-chip" onclick="navigator.clipboard.writeText('${c.code}');showToast('Copied!')">${c.code}</span></td>
+            <td>${c.days}</td>
+            <td>${c.disabled?'<span class="abadge n">Disabled</span>':c.redeemed_by?'<span class="abadge b">Used</span>':'<span class="abadge g">Available</span>'}</td>
+            <td style="font-family:var(--mono);font-size:9.5px;color:var(--text-muted)">${c.redeemed_by||'—'}</td>
+            <td style="font-size:9.5px;color:var(--text-muted)">${fmtD(c.redeemed_at||c.created_at)}</td>
+            <td>${!c.redeemed_by&&!c.disabled?`<button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:9px" onclick="_disableCode('${c.code}')">Disable</button>`:''}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+window._genCode = async () => {
+  const days=parseInt(document.getElementById('c-days')?.value)||5, label=document.getElementById('c-label')?.value?.trim()||'';
+  const res=document.getElementById('code-result');
+  try {
+    const d=await _adminFetch('/admin/promo/generate',{method:'POST',body:JSON.stringify({days,label})});
+    if(res) res.innerHTML=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0"><span class="code-chip" onclick="navigator.clipboard.writeText('${d.code}');showToast('Copied!')">${d.code}</span><span style="font-size:10px;color:var(--text-muted)">${days} days</span></div>`;
+    _loadCodes(document.getElementById('admin-content'));
+  } catch(e) { if(res) res.innerHTML=`<span style="font-size:10px;color:var(--danger)">${e.message}</span>`; }
+};
+window._disableCode = async (code) => {
+  if(!confirm(`Disable ${code}?`)) return;
+  await _adminFetch('/admin/promo/disable',{method:'POST',body:JSON.stringify({code})});
+  showToast('Disabled'); _loadCodes(document.getElementById('admin-content'));
+};
+
+async function _loadWhitelist(el) {
+  const d = await _adminFetch('/admin/whitelist/list');
+  const fmtD = iso => iso ? new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'}) : '—';
+  el.innerHTML = `
+    <div class="admin-sec-lbl">Add Email</div>
+    <div class="admin-input-row">
+      <input type="email" id="wl-input" placeholder="user@example.com" style="flex:1"/>
+      <button class="btn btn-primary btn-sm" onclick="_addWl()">Add</button>
+    </div>
+    <div class="admin-sec-lbl">Whitelisted</div>
+    ${(d.emails||[]).length===0?'<div class="admin-empty">No emails whitelisted.</div>':(d.emails||[]).map(w=>`
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
+        <span style="font-family:var(--mono);font-size:10.5px">${w.email}</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:9.5px;color:var(--text-muted)">${fmtD(w.added_at)}</span>
+          <button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:9px" onclick="_removeWl('${w.email}')">Remove</button>
+        </div>
+      </div>`).join('')}`;
+}
+window._addWl = async () => {
+  const e=document.getElementById('wl-input')?.value?.trim(); if(!e) return;
+  await _adminFetch('/admin/whitelist',{method:'POST',body:JSON.stringify({email:e})});
+  showToast(`✓ ${e} whitelisted`); _loadWhitelist(document.getElementById('admin-content'));
+};
+window._removeWl = async (email) => {
+  if(!confirm(`Remove ${email}?`)) return;
+  await _adminFetch('/admin/whitelist/remove',{method:'POST',body:JSON.stringify({email})});
+  showToast('Removed'); _loadWhitelist(document.getElementById('admin-content'));
+};
+
+async function _loadAdmins(el) {
+  const d = await _adminFetch('/admin/admins/list');
+  el.innerHTML = `
+    <div class="admin-sec-lbl">Grant Admin</div>
+    <div class="admin-input-row">
+      <input type="email" id="adm-input" placeholder="user@example.com" style="flex:1"/>
+      <button class="btn btn-primary btn-sm" onclick="_grantAdmin()">Grant</button>
+    </div>
+    <div class="admin-sec-lbl">Current Admins</div>
+    ${(d.admins||[]).length===0?'<div class="admin-empty">No admins.</div>':(d.admins||[]).map(a=>`
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:22px;height:22px;border-radius:50%;background:var(--navy-ghost2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--navy)">${(a.email[0]||'?').toUpperCase()}</div>
+          <span style="font-family:var(--mono);font-size:10.5px">${a.email}</span>
+          ${a.is_superadmin?'<span class="abadge b">Superadmin</span>':''}
+        </div>
+        ${!a.is_superadmin?`<button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:9px" onclick="_removeAdmin('${a.email}')">Remove</button>`:''}
+      </div>`).join('')}`;
+}
+window._grantAdmin = async () => {
+  const e=document.getElementById('adm-input')?.value?.trim(); if(!e||!confirm(`Grant admin to ${e}?`)) return;
+  await _adminFetch('/admin/admins/add',{method:'POST',body:JSON.stringify({email:e})});
+  showToast(`✓ ${e} is now admin`); _loadAdmins(document.getElementById('admin-content'));
+};
+window._removeAdmin = async (email) => {
+  if(!confirm(`Remove admin from ${email}?`)) return;
+  await _adminFetch('/admin/admins/remove',{method:'POST',body:JSON.stringify({email})});
+  showToast('Removed'); _loadAdmins(document.getElementById('admin-content'));
+};
+
+/* ═══════════════════════════════════════════════════════════════════════
+   PAYMENT SYSTEM
+   ─────────────────────────────────────────────────────────────────────
+   Phantom flow:
+     1. Connect Phantom (get sender pubkey)
+     2. Build Transaction using SystemProgram.transfer() — SDK only, no raw bytes
+     3. Set feePayer + recentBlockhash BEFORE passing to signAndSendTransaction
+     4. Call phantom.signAndSendTransaction(tx) — Phantom signs + broadcasts
+     5. Fire /confirm with the sig (fast path, retries up to 30s on-chain)
+     6. Always run /check poller every 5s as safety net
+     7. On confirmed → activate sub + backend sweeps to PAYMENT_ADDR
+
+   Manual flow:
+     1. Show unique deposit address
+     2. Poll /check every 5s
+     3. On SOL received → confirmAndActivate + sweep to PAYMENT_ADDR
+═══════════════════════════════════════════════════════════════════════ */
+let _payMethod = null;
+let _payData   = null;
+let _payPoll   = null;
+let _payTimer  = null;
+let _payExpiry = null;
+
+function openPayOverlay() {
+  _payMethod = null;
+  _payData   = null;
+  if (_payPoll)  { clearInterval(_payPoll);  _payPoll  = null; }
+  if (_payTimer) { clearInterval(_payTimer); _payTimer = null; }
+  document.querySelectorAll('.pay-opt').forEach(o => o.classList.remove('sel'));
+  document.getElementById('pay-price-loading').style.display = '';
+  document.getElementById('pay-price-display').style.display = 'none';
+  document.getElementById('pay-method-select').style.display = 'none';
+  const btn = document.getElementById('pay-gen-btn');
+  if (btn) { btn.style.display = 'none'; btn.disabled = false; btn.textContent = 'Pay Now'; }
+  document.getElementById('pay-overlay').style.display = 'flex';
+  _loadPayPrice();
+}
+
+function closePayOverlay() { document.getElementById('pay-overlay').style.display = 'none'; }
+
+function cancelPayPanel() {
+  if (_payPoll)  { clearInterval(_payPoll);  _payPoll  = null; }
+  if (_payTimer) { clearInterval(_payTimer); _payTimer = null; }
+  document.getElementById('pay-panel').style.display = 'none';
+}
+
+async function _loadPayPrice() {
+  const token = localStorage.getItem('udt_token');
+  try {
+    const r = await fetch(BACKEND + '/api/subscription/sol-price', { headers: { 'Authorization': 'Bearer ' + token } });
+    if (!r.ok) throw new Error();
+    const d = await r.json();
+    document.getElementById('pay-sol-amount').textContent = `${d.sol} SOL`;
+    document.getElementById('pay-sol-rate').textContent   = `1 SOL = $${d.price_usd.toFixed(2)}`;
+    document.getElementById('pay-price-loading').style.display = 'none';
+    document.getElementById('pay-price-display').style.display = '';
+    document.getElementById('pay-method-select').style.display = '';
+    const btn = document.getElementById('pay-gen-btn');
+    if (btn) btn.style.display = '';
+  } catch {
+    document.getElementById('pay-price-loading').innerHTML = '<span style="color:var(--danger);font-size:10px">Could not fetch SOL price. Try again.</span>';
+  }
+}
+
+function paySelect(method, el) {
+  _payMethod = method;
+  document.querySelectorAll('.pay-opt').forEach(o => o.classList.remove('sel'));
+  el.classList.add('sel');
+}
+
+async function payGenerate() {
+  if (!_payMethod) { showToast('Select Phantom or Manual SOL first'); return; }
+  const btn   = document.getElementById('pay-gen-btn');
+  const token = localStorage.getItem('udt_token');
+  btn.disabled = true; btn.textContent = 'Creating…';
+  try {
+    if (_payMethod === 'phantom') {
+      const phantom = window.phantom?.solana || window.solana;
+      if (!phantom?.isPhantom) {
+        showToast('Phantom not found — install from phantom.app or use Manual SOL');
+        btn.disabled = false; btn.textContent = 'Pay Now'; return;
+      }
+    }
+    const r = await fetch(BACKEND + '/api/subscription/payment/init', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ method: _payMethod })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || `Server error ${r.status}`);
+    _payData = d;
+    document.getElementById('pay-overlay').style.display = 'none';
+    _openPayPanel(d, token);
+  } catch (e) {
+    showToast(e.message || 'Payment setup failed');
+    btn.disabled = false; btn.textContent = 'Pay Now';
+  }
+}
+
+function _openPayPanel(payData, token) {
+  document.getElementById('pp-sol-amount').textContent = `${payData.amount_sol} SOL`;
+  document.getElementById('pp-usd-amount').textContent = `≈ $${payData.amount_usd} USD`;
+  document.getElementById('pp-status').innerHTML = '';
+  document.getElementById('pp-content').innerHTML = '';
+  _payExpiry = Date.now() + 30 * 60 * 1000;
+  _startCountdown();
+  document.getElementById('pay-panel').style.display = 'block';
+  document.getElementById('pay-panel').scrollTop = 0;
+  if (_payMethod === 'phantom') {
+    document.getElementById('pp-title').textContent    = 'Confirm in Phantom';
+    document.getElementById('pp-subtitle').textContent = 'Approve the transaction in your Phantom wallet';
+    _buildPhantomPanel(payData, token);
+  } else {
+    document.getElementById('pp-title').textContent    = 'Send SOL to deposit address';
+    document.getElementById('pp-subtitle').textContent = 'Send from any Solana wallet — confirmed automatically';
+    _buildManualPanel(payData, token);
+  }
+}
+
+function _startCountdown() {
+  if (_payTimer) clearInterval(_payTimer);
+  const tick = () => {
+    const left = Math.max(0, _payExpiry - Date.now());
+    const m = Math.floor(left / 60000);
+    const s = Math.floor((left % 60000) / 1000);
+    const el = document.getElementById('pp-timer');
+    if (el) { el.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`; el.style.color = left < 5*60000 ? 'var(--danger)' : 'var(--navy)'; }
+    if (left === 0) {
+      clearInterval(_payTimer); _payTimer = null;
+      if (_payPoll) { clearInterval(_payPoll); _payPoll = null; }
+      const s = document.getElementById('pp-status');
+      if (s) s.innerHTML = `<div style="background:var(--danger-bg);border:1px solid rgba(220,38,38,0.2);border-radius:8px;padding:14px 16px;text-align:center"><div style="font-size:13px;font-weight:700;color:var(--danger);margin-bottom:4px">Payment window expired</div><div style="font-size:10px;color:var(--text-muted);margin-bottom:12px">The 30-minute window has closed.</div><button class="btn btn-primary btn-sm" onclick="cancelPayPanel();openPayOverlay()">Start New Payment</button></div>`;
+    }
+  };
+  tick();
+  _payTimer = setInterval(tick, 1000);
+}
+
+/* ─── PHANTOM PANEL ───────────────────────────────────────────────── */
+function _buildPhantomPanel(payData, token) {
+  window._ppPayData = payData;
+  window._ppToken   = token;
+  document.getElementById('pp-content').innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border-md);border-radius:10px;padding:16px;margin-bottom:12px">
+      <div style="font-size:10px;font-weight:700;color:var(--navy);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.06em">Transaction details</div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:6px">
+        <span>To (deposit address)</span>
+        <span style="font-family:var(--mono);font-size:9.5px">${(payData.payment_addr||payData.address).slice(0,8)}…${(payData.payment_addr||payData.address).slice(-8)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;padding-top:8px;border-top:1px solid var(--border)">
+        <span style="color:var(--text-muted)">Amount</span>
+        <span style="font-weight:700;color:var(--navy);font-family:var(--mono)">${payData.amount_sol} SOL</span>
+      </div>
+    </div>
+    <button class="btn btn-primary btn-full" id="pp-phantom-btn" onclick="_triggerPhantomTx()" style="padding:12px;font-size:12px;font-weight:700">
+      Open Phantom &amp; Pay →
+    </button>
+    <div style="font-size:9px;color:var(--text-muted);margin-top:8px;text-align:center;line-height:1.5">
+      Phantom will prompt you to approve the transaction. No need to sign anything manually.
+    </div>`;
+}
+
+window._triggerPhantomTx = async function() {
+  const payData  = window._ppPayData;
+  const token    = window._ppToken;
+  const phantom  = window.phantom?.solana || window.solana;
+  const btn      = document.getElementById('pp-phantom-btn');
+  const statusEl = document.getElementById('pp-status');
+
+  if (!phantom?.isPhantom) {
+    if (statusEl) statusEl.innerHTML = `<div style="color:var(--warn);font-size:11px">⚠ Phantom wallet not detected. Install it from <a href="https://phantom.app" target="_blank">phantom.app</a>.</div>`;
+    return;
+  }
+
+  // Guard: prevent double-clicks
+  if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
+
+  try {
+    // ── STEP 1: Get sender public key from Phantom ───────────────────
+    // If already connected use the existing session directly — do NOT
+    // disconnect/reconnect. Disconnecting then reconnecting causes Phantom
+    // to show a "Connect" popup instead of a transaction approval popup.
+    let senderPubkey = phantom.publicKey;
+
+    if (!senderPubkey) {
+      // Not yet connected — request connection once
+      if (btn) btn.textContent = 'Connecting to Phantom…';
+      const connectResp = await phantom.connect({ onlyIfTrusted: false });
+      senderPubkey = connectResp?.publicKey || phantom.publicKey;
+    }
+
+    if (!senderPubkey) throw new Error('Could not get wallet public key from Phantom.');
+
+    const senderAddress = senderPubkey.toString();
+    console.log('[phantom] using wallet:', senderAddress);
+
+    if (btn) btn.textContent = 'Building transaction…';
+
+    // ── STEP 2: Verify solanaWeb3 is loaded ──────────────────────────
+    // The IIFE bundle at window.solanaWeb3 exposes Connection, Transaction, etc.
+    const web3 = window.solanaWeb3;
+    if (!web3?.Transaction || !web3?.SystemProgram || !web3?.Connection || !web3?.PublicKey) {
+      throw new Error('Solana web3.js not loaded correctly. Please refresh the page.');
+    }
+
+    // ── STEP 3: Get a fresh blockhash ────────────────────────────────
+    const connection = new web3.Connection(
+      'https://mainnet.helius-rpc.com/?api-key=9f6bffea-73da-4936-adab-429746a1b007',
+      'confirmed'
+    );
+
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+
+    // ── STEP 4: Build transaction with SystemProgram.transfer ────────
+    // CRITICAL: Use SystemProgram.transfer() — never manually encode instruction bytes.
+    // The error "Instruction #N Failed - invalid instruction data" is caused by
+    // manually building raw instruction data instead of using the SDK method.
+    const fromPubkey = new web3.PublicKey(senderAddress);
+    // Send directly to PAYMENT_ADDR — no intermediate deposit wallet needed for Phantom.
+    // payment_addr is returned by the server as PAYMENT_ADDR env var.
+    // Falls back to payData.address (deposit wallet) if PAYMENT_ADDR isn't configured.
+    const destinationAddr = payData.payment_addr || payData.address;
+    const toPubkey        = new web3.PublicKey(destinationAddr);
+    const lamports   = Math.round(parseFloat(payData.amount_sol) * 1_000_000_000);
+
+    if (lamports <= 0) throw new Error('Invalid payment amount.');
+
+    const transaction = new web3.Transaction();
+    transaction.add(
+      web3.SystemProgram.transfer({
+        fromPubkey,
+        toPubkey,
+        lamports,
+      })
+    );
+
+    // feePayer and recentBlockhash MUST be set before passing to Phantom
+    transaction.feePayer       = fromPubkey;
+    transaction.recentBlockhash = blockhash;
+
+    console.log('[phantom] tx built — from:', senderAddress, 'to:', destinationAddr, 'lamports:', lamports);
+
+    if (btn) btn.textContent = 'Waiting for Phantom approval…';
+
+    // ── STEP 5: signAndSendTransaction — Phantom signs + broadcasts ──
+    // Per official docs: https://docs.phantom.com/solana/sending-a-transaction
+    // This is the recommended method. DO NOT pre-sign the transaction yourself.
+    const { signature } = await phantom.signAndSendTransaction(transaction);
+
+    console.log('[phantom] ✅ tx sent, sig:', signature);
+
+    // Show immediate feedback
+    if (statusEl) {
+      statusEl.innerHTML = `
+        <div style="background:var(--surface2);border:1px solid var(--border-md);border-radius:8px;padding:12px 14px">
+          <div style="font-size:11px;font-weight:600;color:var(--green-dim);margin-bottom:5px">✓ Transaction sent! Waiting for on-chain confirmation…</div>
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text-muted);word-break:break-all;margin-bottom:8px">${signature}</div>
+          <div id="pp-phantom-watch" class="pay-watch" style="font-size:10px">
+            <div class="pay-spin"></div>
+            <span>Confirming on-chain (usually 5–15 seconds)…</span>
+          </div>
+        </div>`;
+    }
+
+    // Hide the pay button now tx is sent
+    if (btn) { btn.style.display = 'none'; }
+
+    // ── STEP 6: Fast-path confirm (fire-and-forget, backend retries) ─
+    // Backend polls RPC up to 30s for the tx to appear.
+    // If it returns confirmed:true immediately, we stop polling.
+    // If it returns pending, the polling fallback below handles it.
+    fetch(BACKEND + '/api/subscription/payment/confirm', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body:    JSON.stringify({ payment_id: payData.payment_id, signature })
+    })
+    .then(r => r.json())
+    .then(d => {
+      if (d.confirmed) {
+        if (_payPoll) { clearInterval(_payPoll); _payPoll = null; }
+        _showPaySuccess();
+      }
+      // If pending/underpaid, the poller below catches it
+    })
+    .catch(() => {}); // non-critical — poller is the safety net
+
+    // ── STEP 7: Always run polling fallback ──────────────────────────
+    _startPaymentPolling(payData.payment_id, token, 'pp-phantom-watch');
+
+  } catch (err) {
+    console.error('[phantom] tx error:', err);
+    let msg = err.message || 'Transaction failed.';
+    if (msg.includes('User rejected') || msg.includes('rejected the request')) {
+      msg = 'Transaction cancelled — you rejected it in Phantom.';
+    } else if (msg.includes('not found') || msg.includes('not loaded')) {
+      msg = msg; // pass through
+    }
+    if (btn) { btn.disabled = false; btn.textContent = 'Open Phantom & Pay →'; }
+    if (statusEl) statusEl.innerHTML = `<div style="color:var(--danger);font-size:11px;padding:10px 0">✗ ${msg}</div>`;
+  }
+};
+
+/* ─── MANUAL PANEL ────────────────────────────────────────────────── */
+function _buildManualPanel(payData, token) {
+  document.getElementById('pp-content').innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border-md);border-radius:10px;padding:16px;margin-bottom:12px">
+      <div style="font-size:10px;font-weight:700;color:var(--navy);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em">Your unique deposit address</div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:10px;line-height:1.6">
+        Send exactly <strong style="color:var(--navy)">${payData.amount_sol} SOL</strong> to this address. It was generated just for you.
+      </div>
+      <div onclick="navigator.clipboard.writeText('${payData.address}');showToast('Address copied!')"
+        style="background:var(--surface2);border:1.5px dashed var(--navy);border-radius:6px;padding:12px;font-family:var(--mono);font-size:9.5px;word-break:break-all;cursor:pointer;color:var(--navy);line-height:1.7;text-align:center">
+        ${payData.address}
+      </div>
+      <div style="font-size:9px;color:var(--text-muted);margin-top:5px;text-align:center">↑ Click to copy</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
+        <button class="btn btn-primary" onclick="navigator.clipboard.writeText('${payData.address}');showToast('Copied!')">Copy Address</button>
+        <button class="btn btn-secondary" onclick="navigator.clipboard.writeText('${payData.amount_sol}');showToast('Amount copied!')">Copy ${payData.amount_sol} SOL</button>
+      </div>
+    </div>
+    <div style="background:var(--surface2);border:1px solid var(--border-md);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:10px;line-height:1.9;color:var(--text-muted)">
+      <strong style="color:var(--text-dim);display:block;margin-bottom:4px">Steps:</strong>
+      <span style="display:block">1. Copy the address above</span>
+      <span style="display:block">2. Open any Solana wallet (Phantom, Solflare, Backpack, exchange…)</span>
+      <span style="display:block">3. Send exactly <strong style="color:var(--navy)">${payData.amount_sol} SOL</strong></span>
+      <span style="display:block">4. Keep this page open — subscription activates automatically</span>
+      <span style="display:block;font-size:9px;margin-top:4px;opacity:0.7">Underpaid? Your SOL is automatically refunded minus network fee (~0.000015 SOL).</span>
+    </div>
+    <div id="pp-manual-watch" class="pay-watch" style="font-size:10px">
+      <div class="pay-spin"></div>
+      <span>Watching for your deposit on-chain (checking every 5 seconds)…</span>
+    </div>`;
+
+  _startPaymentPolling(payData.payment_id, token, 'pp-manual-watch');
+}
+
+/* ─── SUCCESS SCREEN ──────────────────────────────────────────────── */
+function _showPaySuccess() {
+  const panel = document.getElementById('pay-panel');
+  if (!panel || panel.style.display === 'none') return;
+  if (_payPoll)  { clearInterval(_payPoll);  _payPoll  = null; }
+  if (_payTimer) { clearInterval(_payTimer); _payTimer = null; }
+  panel.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:18px;padding:40px 24px;text-align:center">
+      <div style="width:70px;height:70px;border-radius:50%;background:var(--green-bg);border:2px solid var(--green-dim);display:flex;align-items:center;justify-content:center;font-size:32px">🎉</div>
+      <div style="font-size:22px;font-weight:800;color:var(--navy)">Payment Confirmed!</div>
+      <div style="font-size:12px;color:var(--text-muted);max-width:300px;line-height:1.7">
+        Your 30-day subscription is now active.<br>You have full access to all tools.
+      </div>
+      <button class="btn btn-primary" style="padding:12px 28px;font-size:12px;font-weight:700"
+        onclick="document.getElementById('pay-panel').style.display='none';_refreshSubServer().then(()=>{if(typeof render==='function')render();if(_webTool==='subscription')renderSubPage();})">
+        Start Using Tools →
+      </button>
+    </div>`;
+  _refreshSubServer();
+  showToast('Subscription activated! 🎉');
+}
+
+/* ─── POLLING ─────────────────────────────────────────────────────── */
+function _startPaymentPolling(paymentId, token, watchElId) {
+  if (_payPoll) clearInterval(_payPoll);
+  _payPoll = setInterval(async () => {
+    if (document.getElementById('pay-panel')?.style.display === 'none') {
+      clearInterval(_payPoll); _payPoll = null; return;
+    }
+    try {
+      const pr = await fetch(BACKEND + `/api/subscription/payment/check/${paymentId}`, {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      const pd = await pr.json();
+
+      if (pd.confirmed) {
+        clearInterval(_payPoll); _payPoll = null;
+        _showPaySuccess();
+
+      } else if (pd.refunding) {
+        clearInterval(_payPoll); _payPoll = null;
+        const s = document.getElementById('pp-status');
+        if (s) s.innerHTML = `<div style="background:var(--warn-bg);border:1px solid rgba(217,119,6,0.2);border-radius:8px;padding:14px 16px"><div style="font-size:12px;font-weight:700;color:var(--warn);margin-bottom:5px">⚠ Amount too low — refunding</div><div style="font-size:10px;color:var(--text-muted);margin-bottom:12px">${pd.message}</div><button class="btn btn-primary btn-sm" onclick="cancelPayPanel();openPayOverlay()">Try Again</button></div>`;
+        const w = document.getElementById(watchElId);
+        if (w) w.style.display = 'none';
+
+      } else if (pd.refunded) {
+        clearInterval(_payPoll); _payPoll = null;
+        const s = document.getElementById('pp-status');
+        if (s) s.innerHTML = `<div style="background:var(--warn-bg);border:1px solid rgba(217,119,6,0.2);border-radius:8px;padding:14px 16px"><div style="font-size:12px;font-weight:700;color:var(--warn);margin-bottom:5px">↩ Refunded</div><div style="font-size:10px;color:var(--text-muted);margin-bottom:12px">${pd.message}</div><button class="btn btn-primary btn-sm" onclick="cancelPayPanel();openPayOverlay()">Try Again</button></div>`;
+        const w = document.getElementById(watchElId);
+        if (w) w.style.display = 'none';
+
+      } else if (pd.underpaid) {
+        const w = document.getElementById(watchElId);
+        if (w) w.innerHTML = `<span style="color:var(--warn);font-size:10px">⚠ ${pd.message}</span>`;
+
+      } else if (pd.expired) {
+        clearInterval(_payPoll); _payPoll = null;
+        // countdown UI handles expiry
+      }
+    } catch {} // network blip — keep polling
+  }, 5000);
+}
+</script>
 </body>
 </html>
