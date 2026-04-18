@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════
    wallet-tracker.js — Wallet Tracker Tool
-   Essor Studios / Ultimate Dev Tools
+   Essor Studios / Solana Dev Tools
 ═══════════════════════════════════════════ */
 
 'use strict';

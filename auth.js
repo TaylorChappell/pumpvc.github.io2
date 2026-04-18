@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════
    auth.js — Authentication & Crypto
-   Essor Studios / Ultimate Dev Tools
+   Essor Studios / Solana Dev Tools
 
    Flow:
    1. First open → show login/register screen
@@ -134,7 +134,6 @@ async function authGoogleSignIn() {
         return;
       }
       try {
-        const data = await apiReq('POST', '/api/auth/google', { access_token: token });
         const data = await apiReq('POST', '/auth/google', { access_token: token });
         // For Google users: derive enc key from googleSub+userId (no password)
         const cryptoKey = await deriveEncKey(data.googleSub, String(data.userId));

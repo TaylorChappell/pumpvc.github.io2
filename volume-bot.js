@@ -2039,7 +2039,9 @@ async function handleVolumeBotAction(a, el) {
 const _vbLogOrig = vbLog;
 // eslint-disable-next-line no-func-assign
 vbLog = function(msg, type) {
+  // Store today's date string on every entry so console can show it for old logs
   const entry_date = new Date().toDateString();
   _vbLogOrig(msg, type);
+  // Patch the most recent entry with fullDate
   if (S.volumeBot.log.length) S.volumeBot.log[0].fullDate = entry_date;
 };
