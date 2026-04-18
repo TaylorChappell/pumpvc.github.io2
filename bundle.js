@@ -400,7 +400,7 @@ function buildBundleCreateTab() {
           <button class="help-q" data-action="show-help"
             data-title="Minimum SOL per Wallet"
             data-body="Every generated wallet will receive at least this much SOL. Leave blank for no minimum. Useful when you want a floor so no wallet ends up nearly empty.">?</button>
-          <span style="font-size:8.5px;color:var(--text-muted)">(opt)</span>
+          <span style="font-size:8.5px;color:var(--text-muted)">(optional)</span>
         </div>
         <input type="number" id="cb-min-sol" value="${c.minSolPerWallet||''}" min="0" step="0.01" placeholder="No min" data-bind-bundle-create="minSolPerWallet"/>
       </div>
@@ -410,7 +410,7 @@ function buildBundleCreateTab() {
           <button class="help-q" data-action="show-help"
             data-title="Maximum SOL per Wallet"
             data-body="Optional cap so no single wallet receives too much. Keeps amounts believably varied. Leave blank for no cap.">?</button>
-          <span style="font-size:8.5px;color:var(--text-muted)">(opt)</span>
+          <span style="font-size:8.5px;color:var(--text-muted)">(optional)</span>
         </div>
         <input type="number" id="cb-max-sol" value="${c.maxSolPerWallet||''}" min="0" step="0.01" placeholder="No cap" data-bind-bundle-create="maxSolPerWallet"/>
       </div>
