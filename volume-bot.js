@@ -1443,8 +1443,8 @@ function buildVbConfig() {
               data-body="Seconds between buy/sell cycles. AI mode: 15–90s based on liquidity. Aggressive mode: 8–35s. Manual minimum is 5s.">?</button>
           </span>
           <div class="vb-ai-row">
-            <div class="toggle ${aiInt ? 'on' : ''}" data-action="vb-toggle-ai-int"></div>
             <span class="vb-ai-label">AI</span>
+            <div class="toggle ${aiInt ? 'on' : ''}" data-action="vb-toggle-ai-int"></div>
           </div>
         </div>
         ${aiInt
@@ -1476,8 +1476,8 @@ function buildVbConfig() {
               data-body="Random amount between min and max each cycle. Set both to 0 for AI mode — AI can size up to 10 SOL when liquidity supports it.">?</button>
           </span>
           <div class="vb-ai-row">
-            <div class="toggle ${aiSz ? 'on' : ''}" data-action="vb-toggle-ai-size"></div>
             <span class="vb-ai-label">AI</span>
+            <div class="toggle ${aiSz ? 'on' : ''}" data-action="vb-toggle-ai-size"></div>
           </div>
         </div>
         ${aiSz

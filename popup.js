@@ -13,7 +13,7 @@ const RPC         = 'https://api.mainnet-beta.solana.com';
 let S = {
   activeTool: 'token-splitting',
   // Tool order & colors (persisted, synced to account)
-  toolOrder:  ['token-splitting', 'bundle-checker', 'volume-bot', 'wallets'],
+  toolOrder:  ['token-splitting', 'bundle-checker', 'rotate-wallets', 'volume-bot', 'wallets'],
   toolColors: {}, // { toolId: '#hex' }  — empty = use default navy
   navEditMode: false,
 
@@ -430,6 +430,15 @@ const TOOL_DEFS = {
       <path d="M4.8 9h3.4" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
     </svg>`,
   },
+  'rotate-wallets': {
+    label: 'Rotate Wallets',
+    svg: `<svg class="nav-svg" width="13" height="13" viewBox="0 0 13 13" fill="none">
+      <path d="M10.5 4.5A4 4 0 0 0 3 4.5V6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+      <path d="M2.5 8.5A4 4 0 0 0 10 8.5V7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+      <path d="M1.5 5l1.5-1 1 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M11.5 8l-1.5 1-1-1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`,
+  },
   'wallets': {
     label: 'Wallets',
     svg: `<svg class="nav-svg" width="13" height="13" viewBox="0 0 13 13" fill="none">
@@ -637,7 +646,6 @@ function render() {
   // ── Auth gate — nothing works without being logged in ──
   const sidebar = document.getElementById('sidebar');
   if (!S.auth?.loggedIn) {
-    main.innerHTML = buildAuthScreen();
     // Dim and disable entire sidebar — no tool is accessible
     if (sidebar) {
       sidebar.style.pointerEvents = 'none';
@@ -661,6 +669,7 @@ function render() {
   if (S.activeTool === 'token-splitting')  main.innerHTML = buildSplitPage();
   else if (S.activeTool === 'bundle-checker') main.innerHTML = buildBundlePage();
   else if (S.activeTool === 'volume-bot')    main.innerHTML = buildVolumeBotPage();
+  else if (S.activeTool === 'rotate-wallets') main.innerHTML = (typeof buildRotatePage==='function'?buildRotatePage():'');
   else if (S.activeTool === 'wallets') main.innerHTML = buildWalletsPage();
   else if (S.activeTool === 'settings') main.innerHTML = buildSettingsPage();
 
@@ -942,15 +951,10 @@ function buildSplitTab() {
         </div>
       </div>
 
-      <div class="sf-row sf-toggle-row">
-        <div class="sf-toggle-left">
-          <span class="sf-label" style="margin-bottom:0">Keep in Source Wallet</span>
-          <span class="sf-toggle-hint">${sp.keepSource ? 'Source keeps its share' : 'Source sends everything'}</span>
-        </div>
-        <div class="sf-toggle-right">
-          <div class="toggle ${sp.keepSource?'on':''}" data-action="split-toggle-keep"></div>
-          <button class="help-q" id="h-keep" data-action="show-help" data-title="Keep in Source Wallet" data-body="When ON, the source wallet keeps its share of the tokens — only the remainder is split between targets. When OFF, 100% of the balance is distributed and the source wallet ends up with zero of this token.">?</button>
-        </div>
+      <div class="sf-row" style="flex-direction:row;align-items:center;gap:8px">
+        <div class="toggle ${sp.keepSource?'on':''}" data-action="split-toggle-keep" style="flex-shrink:0"></div>
+        <span class="sf-label" style="margin-bottom:0">Keep in Source Wallet</span>
+        <button class="help-q" id="h-keep" data-action="show-help" data-title="Keep in Source Wallet" data-body="When ON, the source wallet keeps its share of the tokens — only the remainder is split between targets. When OFF, 100% of the balance is distributed and the source wallet ends up with zero of this token." style="margin-left:4px">?</button>
       </div>
 
       ${sp.progress ? `
@@ -1101,26 +1105,16 @@ function buildAutoTab() {
         </div>
       </div>
 
-      <div class="sf-row sf-toggle-row">
-        <div class="sf-toggle-left">
-          <span class="sf-label" style="margin-bottom:0">Keep in Source Wallet</span>
-          <span class="sf-toggle-hint">${a.keepSource ? 'Source keeps its share' : 'Source sends everything'}</span>
-        </div>
-        <div class="sf-toggle-right">
-          <div class="toggle ${a.keepSource?'on':''}" data-action="auto-toggle-keep"></div>
-          <button class="help-q" id="h-auto-keep" data-action="show-help" data-title="Keep in Source Wallet" data-body="When ON, the source wallet keeps its share of the tokens — only the remainder is split between targets. When OFF, 100% of the balance is distributed and the source wallet ends up with zero of this token.">?</button>
-        </div>
+      <div class="sf-row" style="flex-direction:row;align-items:center;gap:8px">
+        <div class="toggle ${a.keepSource?'on':''}" data-action="auto-toggle-keep" style="flex-shrink:0"></div>
+        <span class="sf-label" style="margin-bottom:0">Keep in Source Wallet</span>
+        <button class="help-q" id="h-auto-keep" data-action="show-help" data-title="Keep in Source Wallet" data-body="When ON, the source wallet keeps its share of the tokens — only the remainder is split between targets. When OFF, 100% of the balance is distributed and the source wallet ends up with zero of this token." style="margin-left:4px">?</button>
       </div>
 
-      <div class="sf-row sf-toggle-row">
-        <div class="sf-toggle-left">
-          <span class="sf-label" style="margin-bottom:0">One-Time Mode</span>
-          <span class="sf-toggle-hint">${a.oneTime ? 'Stops after first split' : 'Runs until manually stopped'}</span>
-        </div>
-        <div class="sf-toggle-right">
-          <div class="toggle ${a.oneTime?'on':''}" data-action="auto-toggle-onetime"></div>
-          <button class="help-q" id="h-auto-onetime" data-action="show-help" data-title="One-Time Mode" data-body="When ON, auto-split will fire once after detecting a buy, then automatically stop. Useful when you only want to split a single buy without leaving the watcher running indefinitely.">?</button>
-        </div>
+      <div class="sf-row" style="flex-direction:row;align-items:center;gap:8px">
+        <div class="toggle ${a.oneTime?'on':''}" data-action="auto-toggle-onetime" style="flex-shrink:0"></div>
+        <span class="sf-label" style="margin-bottom:0">One-Time Mode</span>
+        <button class="help-q" id="h-auto-onetime" data-action="show-help" data-title="One-Time Mode" data-body="When ON, auto-split will fire once after detecting a buy, then automatically stop. Useful when you only want to split a single buy without leaving the watcher running indefinitely." style="margin-left:4px">?</button>
       </div>
 
     </div>`;
@@ -1305,6 +1299,7 @@ function attachHandlers() {
   if (sa) sa.addEventListener('scroll', () => {
     if (S.activeTool === 'token-splitting') S.split.scroll = sa.scrollTop;
     else if (S.activeTool === 'bundle-checker') S.bundle.scroll = sa.scrollTop;
+    else if (S.activeTool === 'rotate-wallets') { if (S.rotate) S.rotate.scroll = sa.scrollTop; }
     else if (S.activeTool === 'wallets') { S.wallets = S.wallets || {}; S.wallets.scroll = sa.scrollTop; }
     else S.settings.scroll = sa.scrollTop;
   });
@@ -1403,6 +1398,28 @@ function attachHandlers() {
     saveState();
   });
 
+  // Rotate Wallets: wire up input events (text/number/range → state)
+  main.querySelectorAll('[data-action="rot-field"]').forEach(el => {
+    el.addEventListener('input', () => {
+      if (typeof handleRotateAction === 'function') handleRotateAction('rot-field', el);
+    });
+  });
+  main.querySelectorAll('[data-action="rot-match-slider"]').forEach(el => {
+    el.addEventListener('input', () => {
+      if (typeof handleRotateAction === 'function') handleRotateAction('rot-match-slider', el);
+    });
+  });
+  main.querySelectorAll('[data-action="rot-spread-slider"]').forEach(el => {
+    el.addEventListener('input', () => {
+      if (typeof handleRotateAction === 'function') handleRotateAction('rot-spread-slider', el);
+    });
+  });
+  main.querySelectorAll('[data-action="dip-spread-slider"]').forEach(el => {
+    el.addEventListener('input', () => {
+      if (typeof handleRotateAction === 'function') handleRotateAction('dip-spread-slider', el);
+    });
+  });
+
   main.addEventListener('click', handleClick);
 
   // Close all cpicker dropdowns when clicking outside them
@@ -1411,6 +1428,10 @@ function attachHandlers() {
     if (!inside) {
       let changed = false;
       if (S.bundle._walletPickerOpen) { S.bundle._walletPickerOpen = false; changed = true; }
+      if (S.bundle && S.bundle._abTgtOpen) { S.bundle._abTgtOpen = false; changed = true; }
+      if (S.bundle && S.bundle._abSrcOpen && Object.values(S.bundle._abSrcOpen || {}).some(Boolean)) {
+        S.bundle._abSrcOpen = {}; changed = true;
+      }
       if (S.split._srcOpen && Object.keys(S.split._srcOpen).some(k=>S.split._srcOpen[k])) {
         S.split._srcOpen = {}; changed = true;
       }
@@ -2008,6 +2029,12 @@ async function handleClick(e) {
     S.bundle.createHistory = (S.bundle.createHistory||[]).filter(e => e.id !== el.dataset.id);
     await saveState(); render(); showToast('Bundle deleted');
 
+  } else if (a.startsWith('ab-')) {
+    if (typeof handleAutoBundleAction === 'function') await handleAutoBundleAction(a, el);
+
+  } else if (a.startsWith('rot-')) {
+    if (typeof handleRotateAction === 'function') await handleRotateAction(a, el);
+
   } else if (a.startsWith('vb-')) {
     await handleVolumeBotAction(a, el);
 
@@ -2079,6 +2106,10 @@ async function bootApp() {
   }
 
   await loadState();
+
+  // Re-init auto-bundle state after loadState (loadState may have replaced S.bundle with
+  // an old saved object that lacks the .auto sub-key)
+  if (typeof initAutoBundleState === 'function') initAutoBundleState();
 
   // Set is not JSON-serialisable
   S.walletSelection = new Set();

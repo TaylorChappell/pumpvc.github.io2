@@ -9,7 +9,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Solana Dev Tools by Essor Studios</title>
-  <meta name="description" content="Professional Chrome extension for Solana developers. AI Volume Bot, Market Maker, Token Splitter, Bundle Checker and Wallet Analysis.">
+  <meta name="description" content="Professional Chrome extension for Solana traders. Volume Bot, Auto Bundle with Jito sniping, Bundle Creator, Token Splitter, Bundle Checker and Wallet Analysis.">
   <link rel="icon" href="Icon16.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -547,7 +547,193 @@
       .hero h1 { font-size: 2.2rem; }
       .steps-grid { grid-template-columns: 1fr; }
     }
-  </style>
+  
+    /* ──────────────────────────────────────────────────────────
+       INTERACTIVE MINI DASHBOARD
+    ────────────────────────────────────────────────────────── */
+    .demo-section { padding: 60px 48px 72px; background: var(--bg-off); }
+    .demo-inner { max-width: 880px; margin: 0 auto; }
+    .demo-label { text-align:center; margin-bottom:32px; }
+    .demo-label .section-eyebrow { margin-bottom:10px; }
+    .demo-label h2 { font-family:var(--font-display); font-size:2rem; font-weight:800; color:var(--navy); line-height:1.2; margin:0 0 10px; }
+    .demo-label p { font-size:15px; color:var(--text-muted); }
+
+    .demo-win {
+      width:100%; max-width:880px; margin:0 auto;
+      background:#fff; border-radius:14px;
+      box-shadow:0 0 0 1px rgba(15,31,69,0.09), 0 4px 8px rgba(15,31,69,0.05), 0 24px 60px rgba(15,31,69,0.13), 0 40px 80px rgba(15,31,69,0.07);
+      overflow:hidden;
+    }
+    .demo-chrome { background:#f3f4f6; border-bottom:1px solid rgba(15,31,69,0.1); padding:10px 14px; display:flex; align-items:center; gap:8px; }
+    .demo-dots { display:flex; gap:5px; }
+    .demo-dot { width:11px; height:11px; border-radius:50%; }
+    .demo-dot.r{background:#ff5f57;} .demo-dot.y{background:#ffbd2e;} .demo-dot.g{background:#27c93f;}
+    .demo-urlbar { flex:1; background:#fff; border:1px solid rgba(15,31,69,0.12); border-radius:5px; padding:4px 10px; font-size:10.5px; color:var(--text-muted); }
+
+    .demo-body { display:flex; height:500px; }
+
+    /* Sidebar */
+    .demo-side { width:158px; background:var(--navy); flex-shrink:0; display:flex; flex-direction:column; position:relative; overflow:hidden; }
+    .demo-side::before { content:''; position:absolute; inset:0; background-image:radial-gradient(circle,rgba(255,255,255,0.06) 1px,transparent 1px); background-size:16px 16px; pointer-events:none; }
+    .demo-side>*{position:relative;z-index:1;}
+    .demo-side-hdr { padding:12px 10px 10px; border-bottom:1px solid rgba(255,255,255,0.08); }
+    .demo-brand { display:flex; align-items:center; gap:7px; }
+    .demo-brand img { width:20px; height:20px; border-radius:4px; }
+    .demo-brand-name { font-family:var(--font-display); font-size:10px; font-weight:700; color:#fff; line-height:1.2; }
+    .demo-brand-sub  { font-size:7.5px; font-weight:500; letter-spacing:.08em; text-transform:uppercase; color:rgba(255,255,255,0.3); }
+    .demo-nav { flex:1; padding:8px 6px; display:flex; flex-direction:column; gap:1px; overflow-y:auto; }
+    .demo-nav-lbl { font-size:7.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,0.28); padding:6px 6px 3px; }
+    .demo-nav-item { display:flex; align-items:center; gap:7px; padding:7px 8px; border-radius:6px; font-size:11px; font-weight:500; color:rgba(255,255,255,0.5); cursor:pointer; transition:all .15s; }
+    .demo-nav-item svg { width:13px; height:13px; flex-shrink:0; opacity:.7; }
+    .demo-nav-item:hover { background:rgba(255,255,255,0.07); color:rgba(255,255,255,0.8); }
+    .demo-nav-item.active { background:rgba(255,255,255,0.12); color:#fff; font-weight:600; }
+    .demo-nav-item.active svg { opacity:1; }
+    .demo-side-ftr { padding:8px 6px; border-top:1px solid rgba(255,255,255,0.08); display:flex; align-items:center; gap:5px; padding:6px 12px; font-size:10px; color:rgba(255,255,255,0.35); }
+    .demo-rpc-dot { width:5px; height:5px; border-radius:50%; background:#22c55e; }
+
+    /* Main area */
+    .demo-main { flex:1; background:#eef0f5; overflow:hidden; display:flex; flex-direction:column; }
+    .demo-panel { display:none; flex-direction:column; height:100%; overflow-y:auto; padding:14px 16px; box-sizing:border-box; gap:8px; }
+    .demo-panel.active { display:flex; }
+    .demo-panel::-webkit-scrollbar { width:3px; }
+    .demo-panel::-webkit-scrollbar-thumb { background:rgba(15,31,69,0.15); border-radius:2px; }
+
+    /* Panel header */
+    .dp-header { display:flex; align-items:center; justify-content:space-between; flex-shrink:0; margin-bottom:2px; }
+    .dp-title { font-family:var(--font-display); font-size:13px; font-weight:700; color:var(--text-dark); }
+    .dp-sub-count { font-size:9px; color:var(--text-muted); font-weight:400; margin-left:6px; }
+
+    /* Tabs */
+    .dp-tabs { display:flex; border-bottom:1px solid rgba(15,31,69,0.1); flex-shrink:0; }
+    .dp-tab { padding:6px 10px; font-size:10.5px; font-weight:500; color:var(--text-muted); cursor:pointer; border-bottom:2px solid transparent; transition:all .15s; white-space:nowrap; }
+    .dp-tab.active { color:var(--navy); font-weight:700; border-bottom-color:var(--navy); }
+    .dp-tab-badge { background:rgba(15,31,69,0.1); color:var(--navy); font-size:8px; font-weight:700; padding:1px 4px; border-radius:9px; }
+
+    /* Sub-panels */
+    .dp-sub { display:none; flex-direction:column; gap:8px; }
+    .dp-sub.active { display:flex; }
+
+    /* Fields */
+    .dp-field { display:flex; flex-direction:column; gap:4px; }
+    .dp-lbl { font-size:9px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text-muted); }
+    .dp-hint { display:inline-flex; align-items:center; justify-content:center; width:13px; height:13px; border-radius:50%; border:1px solid rgba(15,31,69,0.18); font-size:8px; color:var(--text-muted); cursor:default; vertical-align:middle; margin-left:2px; }
+    .dp-inp { background:#fff; border:1px solid rgba(15,31,69,0.1); border-radius:6px; padding:7px 10px; font-size:10.5px; color:var(--text-dark); width:100%; box-sizing:border-box; outline:none; }
+    .dp-inp-row { background:#fff; border:1px solid rgba(15,31,69,0.1); border-radius:6px; padding:7px 10px; font-size:10.5px; color:var(--text-dark); display:flex; align-items:center; justify-content:space-between; cursor:pointer; }
+    .dp-mono { font-family:monospace; font-size:9.5px; }
+
+    /* Wallet row */
+    .dp-wal-row { background:#fff; border:1px solid rgba(15,31,69,0.1); border-radius:6px; padding:7px 10px; display:flex; align-items:center; justify-content:space-between; cursor:pointer; }
+    .dp-wal-ic { width:22px; height:22px; border-radius:5px; display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; }
+    .dp-wal-name { font-size:10.5px; font-weight:600; color:var(--text-dark); }
+    .dp-wal-addr { font-size:9px; font-family:monospace; color:var(--text-muted); }
+    .dp-wal-sol  { font-size:10px; font-weight:700; color:var(--navy); white-space:nowrap; }
+
+    /* Mode buttons */
+    .dp-mode-row { display:flex; gap:5px; }
+    .dp-mode-btn { flex:1; padding:7px 6px; background:#fff; border:1px solid rgba(15,31,69,0.12); border-radius:6px; font-size:10px; font-weight:600; color:var(--text-dark); cursor:pointer; text-align:center; transition:all .15s; }
+    .dp-mode-btn.active { background:var(--navy); color:#fff; border-color:var(--navy); }
+    .dp-mode-btn:hover:not(.active) { background:rgba(15,31,69,0.04); }
+
+    /* Slider */
+    .dp-slider-row { display:flex; align-items:center; gap:8px; }
+    .dp-slider { flex:1; height:3px; background:rgba(15,31,69,0.15); border-radius:2px; appearance:none; outline:none; cursor:pointer; }
+    .dp-slider::-webkit-slider-thumb { appearance:none; width:14px; height:14px; border-radius:50%; background:var(--navy); cursor:pointer; }
+    .dp-slider-val { font-size:10px; font-weight:600; color:var(--text-muted); white-space:nowrap; min-width:30px; text-align:right; }
+
+    /* Toggles */
+    .dp-toggle-row { display:flex; align-items:center; gap:8px; }
+    .dp-toggle-lbl { font-size:10.5px; font-weight:500; color:var(--text-dark); }
+    .dp-toggle { width:32px; height:18px; background:rgba(15,31,69,0.15); border-radius:9px; position:relative; cursor:pointer; flex-shrink:0; transition:background .2s; }
+    .dp-toggle::after { content:''; position:absolute; width:12px; height:12px; background:#fff; border-radius:50%; top:3px; left:3px; box-shadow:0 1px 3px rgba(0,0,0,0.2); transition:left .2s; }
+    .dp-toggle.on { background:var(--navy); }
+    .dp-toggle.on::after { left:17px; }
+
+    /* Status bar */
+    .dp-status { background:#fff; border:1px solid rgba(15,31,69,0.08); border-radius:8px; padding:9px 12px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+    .dp-status-left { display:flex; align-items:center; gap:8px; }
+    .dp-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+    .dp-dot.stopped{background:#ef4444;} .dp-dot.running{background:#22c55e;animation:pulse-dot 1.8s ease-in-out infinite;}
+    .dp-status-text { font-size:10.5px; font-weight:600; color:var(--text-dark); }
+    .dp-status-sub  { font-size:9px; color:var(--text-muted); }
+
+    /* Exec buttons */
+    .dp-btn { background:var(--navy); border:none; border-radius:7px; padding:9px 12px; font-size:10.5px; font-weight:700; color:#fff; cursor:pointer; width:100%; font-family:var(--font-display); transition:opacity .15s; }
+    .dp-btn:hover { opacity:.85; }
+    .dp-btn.red { background:#dc2626; }
+    .dp-btn.ghost { background:rgba(15,31,69,0.07); color:var(--navy); }
+    .dp-btn-sm { background:var(--navy); border:none; border-radius:6px; padding:6px 12px; font-size:10px; font-weight:700; color:#fff; cursor:pointer; white-space:nowrap; flex-shrink:0; }
+    .dp-start-btn { background:var(--navy); border:none; border-radius:7px; padding:6px 14px; font-size:10px; font-weight:700; color:#fff; cursor:pointer; white-space:nowrap; }
+    .dp-start-btn.stop { background:#dc2626; }
+
+    /* Token list */
+    .dp-token-list { background:#fff; border:1px solid rgba(15,31,69,0.1); border-radius:6px; overflow-y:auto; max-height:90px; }
+    .dp-token-list::-webkit-scrollbar{width:2px;}
+    .dp-token-row { display:flex; align-items:center; gap:8px; padding:6px 10px; cursor:pointer; border-bottom:1px solid rgba(15,31,69,0.05); }
+    .dp-token-row:last-child{border-bottom:none;}
+    .dp-token-row:hover{background:rgba(15,31,69,0.03);}
+    .dp-token-row.sel{background:rgba(13,31,74,0.04);}
+    .dp-tcheck { width:13px; height:13px; border:1.5px solid rgba(15,31,69,0.2); border-radius:3px; flex-shrink:0; position:relative; transition:all .15s; }
+    .dp-tcheck.on{background:var(--navy);border-color:var(--navy);}
+    .dp-tcheck.on::after{content:'✓';position:absolute;color:#fff;font-size:8px;top:-1px;left:1px;}
+    .dp-tok-name{font-size:10.5px;font-weight:600;color:var(--text-dark);}
+    .dp-tok-addr{font-size:9px;font-family:monospace;color:var(--text-muted);}
+    .dp-tok-bal{font-size:9.5px;font-weight:600;color:var(--navy);white-space:nowrap;}
+
+    /* Stats grid */
+    .dp-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; flex-shrink:0; }
+    .dp-stat { background:#fff; border:1px solid rgba(15,31,69,0.08); border-radius:6px; padding:7px 8px; text-align:center; }
+    .dp-stat-val { font-size:11px; font-weight:700; color:var(--navy); font-family:var(--font-display); }
+    .dp-stat-lbl { font-size:7.5px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--text-muted); margin-top:1px; }
+
+    /* Nodes */
+    .dp-node { background:#fff; border:1px solid rgba(15,31,69,0.08); border-radius:7px; padding:8px 10px; display:flex; align-items:center; gap:7px; }
+    .dp-nbadge{font-size:7.5px;font-weight:700;padding:2px 5px;border-radius:4px;letter-spacing:.04em;flex-shrink:0;}
+    .dp-nbadge.ib{background:rgba(37,99,235,0.12);color:#2563eb;}
+    .dp-nbadge.bun{background:rgba(22,163,74,0.12);color:#16a34a;}
+    .dp-nname{font-size:10.5px;font-weight:600;color:var(--text-dark);flex:1;}
+    .dp-nsub{font-size:9px;color:var(--text-muted);}
+
+    /* Chips / tags */
+    .dp-chip{display:inline-flex;align-items:center;gap:4px;background:rgba(15,31,69,0.07);border:1px solid rgba(15,31,69,0.12);border-radius:20px;padding:3px 8px;font-size:10px;color:var(--navy);cursor:pointer;}
+    .dp-chip.ai{background:rgba(8,145,178,0.09);border-color:rgba(8,145,178,0.25);color:#0891b2;}
+    .dp-ai-hint{background:rgba(13,31,74,0.05);border:1px solid rgba(13,31,74,0.08);border-radius:6px;padding:7px 10px;font-size:9.5px;color:var(--text-muted);}
+
+    /* Grid layouts */
+    .dp-2col{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .dp-3col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;}
+
+    /* History rows */
+    .dp-hist{display:flex;align-items:center;gap:8px;padding:7px 10px;background:#fff;border:1px solid rgba(15,31,69,0.08);border-radius:6px;}
+    .dp-hist-tok{font-size:10.5px;font-weight:700;color:var(--navy);min-width:60px;}
+    .dp-hist-meta{font-size:9px;color:var(--text-muted);flex:1;}
+    .dp-hist-ok{font-size:10px;color:#16a34a;font-weight:700;}
+
+    /* Wallet list rows */
+    .dp-wal-list-row{display:flex;align-items:center;gap:8px;padding:6px 10px;background:#fff;border:1px solid rgba(15,31,69,0.08);border-radius:6px;}
+    .dp-wal-actions{display:flex;gap:3px;margin-left:auto;}
+    .dp-icon-btn{background:none;border:1px solid rgba(15,31,69,0.12);border-radius:4px;padding:2px 6px;font-size:10px;cursor:pointer;color:var(--text-muted);}
+    .dp-icon-btn.del{color:#ef4444;border-color:rgba(239,68,68,0.15);}
+    .dp-group-hdr{display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(15,31,69,0.05);border:1px solid rgba(15,31,69,0.08);border-radius:6px;cursor:pointer;font-size:10.5px;font-weight:600;color:var(--navy);}
+    .dp-group-count{margin-left:auto;background:rgba(15,31,69,0.1);border-radius:9px;padding:1px 6px;font-size:9px;font-weight:700;}
+    .dp-group-body{display:flex;flex-direction:column;gap:3px;}
+    .dp-group-body.hidden{display:none;}
+    .dp-divider{height:1px;background:rgba(15,31,69,0.08);margin:4px 0;}
+    .dp-add-section{padding-top:10px;border-top:1px solid rgba(15,31,69,0.08);display:flex;flex-direction:column;gap:8px;}
+
+    /* Mobile */
+    @media(max-width:760px){
+      .demo-section{padding:40px 16px 0;}
+      .demo-body{flex-direction:column;height:auto;}
+      .demo-side{width:100%!important;flex-direction:row;height:auto;}
+      .demo-nav{flex-direction:row;flex-wrap:wrap;overflow-x:auto;padding:6px;}
+      .demo-nav-item{padding:5px 7px;font-size:10px;gap:4px;}
+      .demo-side-hdr,.demo-side-ftr{display:none;}
+      .demo-main{min-height:480px;}
+      .demo-panel{padding:12px;}
+      .dp-stats{grid-template-columns:1fr 1fr;}
+      .dp-3col{grid-template-columns:1fr 1fr;}
+    }
+</style>
 </head>
 <body>
 
@@ -583,7 +769,7 @@
       <div class="eyebrow-line"></div>
     </div>
     <h1>Solana Dev<br>Tools<span class="cursor-blink"></span></h1>
-    <p class="hero-desc">Professional trading tools for Solana developers — built to actually get things done.</p>
+    <p class="hero-desc">Professional trading tools for Solana developers.</p>
     <div class="hero-social">
       <div class="social-pill">
         <div class="dot-live"></div>
@@ -591,7 +777,7 @@
       </div>
       <div class="social-pill">
         <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M5 8h6M8 5v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        5 Pro Tools
+        8 Pro Tools
       </div>
       <div class="social-pill">
         <svg viewBox="0 0 16 16" fill="none"><path d="M8 2L10 6H14L11 9L12 13L8 11L4 13L5 9L2 6H6L8 2Z" stroke="currentColor" stroke-width="1.4"/></svg>
@@ -609,202 +795,355 @@
 </section>
 
 <!-- EXTENSION SCREENSHOT -->
-<div class="screenshot-section">
-  <div class="screenshot-wrap">
-    <div class="screenshot-glow"></div>
-
-    <!-- Floating badges -->
-    <div class="info-float float-a">
-      <div class="float-icon" style="background:rgba(37,99,235,0.08);">
-        <svg viewBox="0 0 16 16" fill="none" style="color:#2563eb;"><path d="M2 12L6 8L9 11L14 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </div>
-      <div><div class="float-label">Volume Bot</div><div class="float-value">Running</div></div>
-    </div>
-    <div class="info-float float-b">
-      <div class="float-icon" style="background:rgba(34,197,94,0.08);">
-        <svg viewBox="0 0 16 16" fill="none" style="color:#16a34a;"><rect x="2" y="5" width="12" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M5 5V4a3 3 0 016 0v1" stroke="currentColor" stroke-width="1.5"/></svg>
-      </div>
-      <div><div class="float-label">Encryption</div><div class="float-value">AES-256</div></div>
-    </div>
-    <div class="info-float float-c">
-      <div class="float-icon" style="background:rgba(245,158,11,0.08);">
-        <svg viewBox="0 0 16 16" fill="none" style="color:#b45309;"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M8 5v3.5L10.5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-      </div>
-      <div><div class="float-label">Subscription</div><div class="float-value">Active Pro</div></div>
-    </div>
-    <div class="info-float float-d">
-      <div class="float-icon" style="background:rgba(139,92,246,0.08);">
-        <svg viewBox="0 0 16 16" fill="none" style="color:#7c3aed;"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-      </div>
-      <div><div class="float-label">Bundles</div><div class="float-value">0 Snipers</div></div>
+<section class="demo-section">
+  <div class="demo-inner">
+    <div class="demo-label">
+      <div class="section-eyebrow">Live Preview</div>
+      <h2>See it in action</h2>
+      <p>Click any tool in the sidebar to explore the full interface.</p>
     </div>
 
-    <!-- Extension window -->
-    <div class="ext-window">
-      <!-- Window chrome bar -->
-      <div class="window-chrome">
-        <div class="chrome-dots">
-          <div class="chrome-dot r"></div>
-          <div class="chrome-dot y"></div>
-          <div class="chrome-dot g"></div>
-        </div>
-        <div class="chrome-bar">chrome-extension://ultimatedevtools/popup.html</div>
+    <div class="demo-win">
+      <div class="demo-chrome">
+        <div class="demo-dots"><div class="demo-dot r"></div><div class="demo-dot y"></div><div class="demo-dot g"></div></div>
+        <div class="demo-urlbar">chrome-extension://solanadevtools/dashboard</div>
       </div>
+      <div class="demo-body">
 
-      <div class="ext-body">
-        <!-- Sidebar -->
-        <div class="ext-side">
-          <div class="ext-side-header">
-            <div class="ext-side-brand">
-              <img src="icon128.png" alt=""
-                   onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-              <div class="ext-side-brand-fb" style="display:none;">
-                <svg viewBox="0 0 16 16" fill="none" style="width:10px;height:10px;"><path d="M8 2L14 5.5V10.5L8 14L2 10.5V5.5L8 2Z" fill="white" opacity="0.8"/></svg>
-              </div>
-              <div>
-                <div class="ext-side-name">Solana<br>Dev Tools</div>
-                <div class="ext-side-sub">Professional Toolkit</div>
-              </div>
+        <!-- ── Sidebar ─────────────────────────────────────── -->
+        <div class="demo-side">
+          <div class="demo-side-hdr">
+            <div class="demo-brand">
+              <img src="icon48.png" alt="" onerror="this.style.display='none'">
+              <div><div class="demo-brand-name">Solana Dev Tools</div><div class="demo-brand-sub">Professional Toolkit</div></div>
             </div>
           </div>
-          <div class="ext-nav">
-            <div class="ext-nav-label">Tools</div>
-            <div class="ext-nav-item active">
-              <svg viewBox="0 0 16 16" fill="none"><path d="M2 10L6 6L9 9L14 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div class="demo-nav">
+            <div class="demo-nav-lbl">TOOLS</div>
+            <div class="demo-nav-item active" onclick="dpSwitch(this,'split')">
+              <svg viewBox="0 0 16 16" fill="none"><circle cx="3" cy="8" r="1.8" stroke="currentColor" stroke-width="1.3"/><circle cx="13" cy="4" r="1.8" stroke="currentColor" stroke-width="1.3"/><circle cx="13" cy="12" r="1.8" stroke="currentColor" stroke-width="1.3"/><path d="M5 8h2.5l2-4M7.5 8l2 4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
               Token Splitting
             </div>
-            <div class="ext-nav-item">
-              <svg viewBox="0 0 16 16" fill="none"><path d="M2 12L6 8L9 11L14 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            <div class="demo-nav-item" onclick="dpSwitch(this,'bundle')">
+              <svg viewBox="0 0 16 16" fill="none"><path d="M8 2l6 3.5V9c0 3-2.7 5.3-6 5.7C4.7 14.3 2 12 2 9V5.5L8 2Z" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 8l2 2 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Bundle
+            </div>
+            <div class="demo-nav-item" onclick="dpSwitch(this,'rotate')">
+              <svg viewBox="0 0 16 16" fill="none"><path d="M13 5A5 5 0 0 0 3 5v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M3 11a5 5 0 0 0 10 0v-2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M1.5 4l1.5 1.5L4.5 4M14.5 12L13 10.5 11.5 12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Rotate Wallets
+            </div>
+            <div class="demo-nav-item" onclick="dpSwitch(this,'vbot')">
+              <svg viewBox="0 0 16 16" fill="none"><rect x="2.5" y="5" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M8 2v3M6 11h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="5.5" cy="8.5" r="1" fill="currentColor"/><circle cx="10.5" cy="8.5" r="1" fill="currentColor"/></svg>
               AI Volume Bot
             </div>
-            <div class="ext-nav-item">
-              <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M4 8H2M14 8h-2M8 4V2M8 14v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-              Bundle Checker
-            </div>
-            <div class="ext-nav-item">
-              <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="5" width="12" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M5 5V4a3 3 0 016 0v1" stroke="currentColor" stroke-width="1.5"/></svg>
+            <div class="demo-nav-item" onclick="dpSwitch(this,'wallets')">
+              <svg viewBox="0 0 16 16" fill="none"><rect x="1.5" y="4" width="13" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 7.5h13" stroke="currentColor" stroke-width="1.2"/><circle cx="11.5" cy="10.5" r="1.2" fill="currentColor"/></svg>
               Wallets
             </div>
           </div>
-          <div class="ext-side-footer">
-            <div class="ext-rpc">
-              <div class="rpc-dot"></div>
-              RPC Online
-            </div>
-          </div>
+          <div class="demo-side-ftr"><div class="demo-rpc-dot"></div>RPC Online</div>
         </div>
 
-        <!-- Main content -->
-        <div class="ext-main">
-          <div class="ext-panel-title">Token Splitting</div>
-          <div class="ext-tabs">
-            <div class="ext-tab active">Split</div>
-            <div class="ext-tab">Auto</div>
-            <div class="ext-tab">History (9)</div>
-          </div>
-          <div class="ext-field">
-            <div class="ext-field-label">Source Wallet</div>
-            <div class="ext-wallet-row">
-              <div style="display:flex;align-items:center;gap:7px;">
-                <div class="ext-wallet-icon"></div>
-                <div>
-                  <div class="ext-wallet-name">MAIN</div>
+        <!-- ── Main ─────────────────────────────────────────── -->
+        <div class="demo-main">
+
+          <!-- ══ TOKEN SPLITTING ══ -->
+          <div class="demo-panel active" id="dp-split">
+            <div class="dp-header"><div class="dp-title">Token Splitting</div></div>
+            <div class="dp-tabs">
+              <div class="dp-tab active" onclick="dpTab(this,'dps-split')">Split</div>
+              <div class="dp-tab" onclick="dpTab(this,'dps-auto')">Auto</div>
+              <div class="dp-tab" onclick="dpTab(this,'dps-hist')">History</div>
+            </div>
+            <div class="dp-sub active" id="dps-split">
+              <div class="dp-field"><div class="dp-lbl">Source Wallet <span class="dp-hint">?</span></div>
+                <div class="dp-wal-row"><div style="display:flex;align-items:center;gap:8px"><div class="dp-wal-ic" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)"></div><div><div class="dp-wal-name">Dev Wallet</div><div class="dp-wal-addr">4xKm…r9Pz</div></div></div><div class="dp-wal-addr">›</div></div>
+              </div>
+              <div class="dp-field">
+                <div class="dp-lbl" style="display:flex;align-items:center;justify-content:space-between"><span>Token to Split <span class="dp-hint">?</span></span><span style="font-size:9.5px;color:var(--navy);font-weight:600;cursor:pointer;text-transform:none;letter-spacing:0">↻ Refresh</span></div>
+                <div class="dp-token-list">
+                  <div class="dp-token-row sel" onclick="dpPickTok(this)"><div class="dp-tcheck on"></div><div style="flex:1"><div class="dp-tok-name">PEPE</div><div class="dp-tok-addr">7xBz…mQ4k</div></div><div class="dp-tok-bal">2,450,000</div></div>
+                  <div class="dp-token-row" onclick="dpPickTok(this)"><div class="dp-tcheck"></div><div style="flex:1"><div class="dp-tok-name">BONK</div><div class="dp-tok-addr">DezX…Qr3G</div></div><div class="dp-tok-bal">890,500</div></div>
+                  <div class="dp-token-row" onclick="dpPickTok(this)"><div class="dp-tcheck"></div><div style="flex:1"><div class="dp-tok-name">WIF</div><div class="dp-tok-addr">EKpQ…3fw8</div></div><div class="dp-tok-bal">14,200</div></div>
                 </div>
               </div>
-              <div class="ext-wallet-addr">6gAY_swm3 &rsaquo;</div>
+              <div class="dp-field"><div class="dp-lbl">Send To</div><div class="dp-mode-row"><div class="dp-mode-btn active" onclick="dpMode(this)">Existing Wallets</div><div class="dp-mode-btn" onclick="dpMode(this)">Generate New</div></div></div>
+              <div class="dp-inp-row">4 wallets selected <span style="color:var(--text-muted)">›</span></div>
+              <div class="dp-field"><div class="dp-lbl">Deviation <strong id="sp-dev">±15%</strong> <span class="dp-hint">?</span></div><div class="dp-slider-row"><input type="range" class="dp-slider" value="15" min="0" max="50" oninput="document.getElementById('sp-dev').textContent='±'+this.value+'%'"><span class="dp-slider-val"></span></div></div>
+              <div class="dp-toggle-row"><div class="dp-toggle on" onclick="this.classList.toggle('on')"></div><span class="dp-toggle-lbl">Keep in Source Wallet</span><span class="dp-hint">?</span></div>
+              <button class="dp-btn" onclick="dpExec(this,'Execute Split','Splitting…')"><svg viewBox="0 0 16 16" fill="none" style="width:10px;height:10px;vertical-align:middle;margin-right:4px"><polygon points="3,2 13,8 3,14" fill="currentColor"/></svg>Execute Split</button>
+            </div>
+            <div class="dp-sub" id="dps-auto">
+              <div class="dp-status" id="dps-auto-sb"><div class="dp-status-left"><div class="dp-dot stopped"></div><div><div class="dp-status-text">Stopped</div></div></div><button class="dp-start-btn" onclick="dpToggle(this,'dps-auto-sb')">▶ Start</button></div>
+              <div class="dp-field"><div class="dp-lbl">Buying Wallet <span class="dp-hint">?</span></div><div class="dp-wal-row"><div style="display:flex;align-items:center;gap:8px"><div class="dp-wal-ic" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)"></div><div><div class="dp-wal-name">Dev Wallet</div><div class="dp-wal-addr">4xKm…r9Pz</div></div></div><div class="dp-wal-addr">›</div></div></div>
+              <div class="dp-field"><div class="dp-lbl">Token Filter <span class="dp-hint">?</span></div><input class="dp-inp" type="text" placeholder="Leave blank for any token…"></div>
+              <div class="dp-field"><div class="dp-lbl">Send To</div><div class="dp-mode-row"><div class="dp-mode-btn" onclick="dpMode(this)">Existing Wallets</div><div class="dp-mode-btn active" onclick="dpMode(this)">Generate New</div></div></div>
+              <div style="display:flex;align-items:center;gap:8px"><input class="dp-inp" type="number" value="2" style="width:60px;text-align:center"><span style="font-size:9.5px;color:var(--text-muted)">wallets to generate</span></div>
+              <div class="dp-field"><div class="dp-lbl">Deviation <strong id="sp-adev">±10%</strong></div><div class="dp-slider-row"><input type="range" class="dp-slider" value="10" min="0" max="50" oninput="document.getElementById('sp-adev').textContent='±'+this.value+'%'"><span class="dp-slider-val">±10%</span></div></div>
+              <div class="dp-toggle-row"><div class="dp-toggle on" onclick="this.classList.toggle('on')"></div><span class="dp-toggle-lbl">Keep in Source Wallet</span><span class="dp-hint">?</span></div>
+              <div class="dp-toggle-row"><div class="dp-toggle on" onclick="this.classList.toggle('on')"></div><span class="dp-toggle-lbl">One-Time Mode</span><span class="dp-hint">?</span></div>
+            </div>
+            <div class="dp-sub" id="dps-hist">
+              <div class="dp-hist"><span class="dp-hist-tok">PEPE</span><span class="dp-hist-meta">→ 4 wallets · 45m ago</span><span class="dp-hist-ok">✓</span></div>
+              <div class="dp-hist"><span class="dp-hist-tok">BONK</span><span class="dp-hist-meta">→ 6 wallets · 3h ago</span><span class="dp-hist-ok">✓</span></div>
+              <div class="dp-hist"><span class="dp-hist-tok">WIF</span><span class="dp-hist-meta">→ 3 wallets · 1d ago</span><span class="dp-hist-ok">✓</span></div>
             </div>
           </div>
-          <div class="ext-field">
-            <div class="ext-field-label">Token to Split</div>
-            <div class="ext-input" style="font-size:10px;color:var(--text-muted);justify-content:center;">
-              No tokens found. Hit ↺ Refresh to load.
-              <span style="margin-left:auto;">
-                <svg viewBox="0 0 16 16" fill="none" style="width:12px;height:12px;color:var(--text-muted);"><path d="M13.5 8A5.5 5.5 0 112.5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2.5 2v3h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                Refresh
-              </span>
+
+          <!-- ══ BUNDLE ══ -->
+          <div class="demo-panel" id="dp-bundle">
+            <div class="dp-header"><div class="dp-title">Bundle</div></div>
+            <div class="dp-tabs">
+              <div class="dp-tab active" onclick="dpTab(this,'dpb-check')">Check</div>
+              <div class="dp-tab" onclick="dpTab(this,'dpb-create')">Create</div>
+              <div class="dp-tab" onclick="dpTab(this,'dpb-auto')">Auto</div>
+              <div class="dp-tab" onclick="dpTab(this,'dpb-hist')">History</div>
+            </div>
+            <div class="dp-sub active" id="dpb-check">
+              <div class="dp-field"><div class="dp-lbl">Token Contract Address <span class="dp-hint">?</span></div><div style="display:flex;gap:6px"><input class="dp-inp" type="text" placeholder="Token mint address…" style="flex:1"><button class="dp-btn-sm" onclick="dpExec(this,'Analyze','…')">Analyze</button></div></div>
+              <div class="dp-field" style="margin-top:4px">
+                <div class="dp-lbl" style="display:flex;align-items:center;justify-content:space-between"><span>Wallet Connection Check <span class="dp-hint">?</span></span><span style="text-transform:none;letter-spacing:0;font-size:9px;color:var(--navy)">4 selected</span></div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:5px">
+                  <div class="dp-chip">💼 Sniper W1 ×</div><div class="dp-chip">💼 Sniper W2 ×</div><div class="dp-chip">💼 Bundle W1 ×</div><div class="dp-chip">💼 Bundle W2 ×</div>
+                </div>
+                <div class="dp-inp-row" style="margin-bottom:6px">4 wallets selected <span>›</span></div>
+                <button class="dp-btn" onclick="dpExec(this,'Check 4 Wallets','Checking…')">Check 4 Wallets</button>
+              </div>
+            </div>
+            <div class="dp-sub" id="dpb-create">
+              <div class="dp-stats"><div class="dp-stat"><div class="dp-stat-val">4</div><div class="dp-stat-lbl">WALLETS</div></div><div class="dp-stat"><div class="dp-stat-val">2.0</div><div class="dp-stat-lbl">TOTAL SOL</div></div><div class="dp-stat"><div class="dp-stat-val">Equal</div><div class="dp-stat-lbl">DISTRIB</div></div><div class="dp-stat"><div class="dp-stat-val">Off</div><div class="dp-stat-lbl">STAGGER</div></div></div>
+              <div class="dp-field"><div class="dp-lbl">Source Wallet <span class="dp-hint">?</span></div><div class="dp-wal-row"><div style="display:flex;align-items:center;gap:8px"><div class="dp-wal-ic" style="background:linear-gradient(135deg,#f59e0b,#ef4444);font-size:12px">🔥</div><div><div class="dp-wal-name">Funder</div><div class="dp-wal-addr">DQx7…Ey3Y</div></div></div><div class="dp-wal-addr">›</div></div></div>
+              <div class="dp-2col">
+                <div class="dp-field"><div class="dp-lbl">Wallet Count <span class="dp-hint">?</span></div><div style="display:flex;align-items:center;gap:6px"><input class="dp-inp" type="number" value="4" style="width:55px;text-align:center"><span style="font-size:9px;color:var(--text-muted)">max 50</span></div></div>
+                <div class="dp-field"><div class="dp-lbl">Total SOL <span class="dp-hint">?</span></div><input class="dp-inp" type="number" value="2.0"></div>
+              </div>
+              <div class="dp-field"><div class="dp-lbl">Distribution Mode <span class="dp-hint">?</span></div><div class="dp-mode-row"><div class="dp-mode-btn active" onclick="dpMode(this)">Equal Split</div><div class="dp-mode-btn" onclick="dpMode(this)">Random Spread</div></div></div>
+              <div class="dp-toggle-row"><div class="dp-toggle" onclick="this.classList.toggle('on')"></div><span class="dp-toggle-lbl">Stagger Wallet Funding</span><span class="dp-hint">?</span></div>
+              <div class="dp-toggle-row"><div class="dp-toggle on" onclick="this.classList.toggle('on')"></div><span class="dp-toggle-lbl">Save to Wallet Group</span><span class="dp-hint">?</span></div>
+              <button class="dp-btn" onclick="dpExec(this,'⚡ Create Bundle','Creating…')">⚡ Create Bundle</button>
+            </div>
+            <div class="dp-sub" id="dpb-auto">
+              <div class="dp-status" id="dpb-auto-sb"><div class="dp-status-left"><div class="dp-dot stopped"></div><div><div class="dp-status-text">Stopped</div><div class="dp-status-sub">Pump.fun · pump</div></div></div><button class="dp-start-btn" onclick="dpToggle(this,'dpb-auto-sb')">▶ Start</button></div>
+              <div class="dp-field"><div class="dp-lbl">Watch For <span class="dp-hint">?</span></div><div class="dp-mode-row" style="margin-bottom:5px"><div class="dp-mode-btn" onclick="dpMode(this)">Ticker</div><div class="dp-mode-btn active" onclick="dpMode(this)">Deployer Wallet</div></div><input class="dp-inp dp-mono" type="text" value="DQx7MNy5vkhREgb6S8…Ey3Y"></div>
+              <div class="dp-field"><div class="dp-lbl">Platform</div><div class="dp-mode-row"><div class="dp-mode-btn active" onclick="dpMode(this)">Pump.fun</div><div class="dp-mode-btn" onclick="dpMode(this)">Raydium</div><div class="dp-mode-btn" onclick="dpMode(this)">Any</div></div></div>
+              <div class="dp-field"><div class="dp-lbl">Execution Flow <span class="dp-hint">?</span></div>
+                <div class="dp-node"><span class="dp-nbadge ib">INSTA BUY</span><span class="dp-nname">Insta Buy 1</span><span class="dp-nsub">2 wallets · 0.5 SOL</span></div>
+                <div class="dp-node" style="margin-top:5px"><span class="dp-nbadge bun">BUNDLE</span><span class="dp-nname">Bundle Wallets</span><span class="dp-nsub">4 wallets · 2 SOL</span></div>
+              </div>
+              <button class="dp-btn" onclick="dpExecToggle(this,'dpb-auto-sb')">▶ Start Auto Bundle</button>
+            </div>
+            <div class="dp-sub" id="dpb-hist">
+              <div class="dp-hist"><span class="dp-hist-tok">GOAT</span><span class="dp-hist-meta">3 wallets · 0.5 SOL · 2h ago</span><span class="dp-hist-ok">✓</span></div>
+              <div class="dp-hist"><span class="dp-hist-tok">MOODENG</span><span class="dp-hist-meta">4 wallets · 1.2 SOL · 6h ago</span><span class="dp-hist-ok">✓</span></div>
+              <div class="dp-hist"><span class="dp-hist-tok">FWOG</span><span class="dp-hist-meta">2 wallets · 0.8 SOL · 1d ago</span><span class="dp-hist-ok">✓</span></div>
             </div>
           </div>
-          <div class="ext-field">
-            <div class="ext-field-label">Send To</div>
-            <div class="ext-tab-row">
-              <div class="ext-tab-btn active">Existing Wallets</div>
-              <div class="ext-tab-btn">Generate New</div>
+
+          <!-- ══ ROTATE WALLETS ══ -->
+          <div class="demo-panel" id="dp-rotate">
+            <div class="dp-header"><div class="dp-title">Rotate Wallets</div></div>
+            <div class="dp-tabs">
+              <div class="dp-tab active" onclick="dpTab(this,'dpr-rot')">Rotate</div>
+              <div class="dp-tab" onclick="dpTab(this,'dpr-dip')">Dip Buy</div>
+            </div>
+            <div class="dp-sub active" id="dpr-rot">
+              <div class="dp-field"><div class="dp-lbl">Source Wallet <span class="dp-hint">?</span></div><div class="dp-wal-row"><div style="display:flex;align-items:center;gap:8px"><div class="dp-wal-ic" style="background:linear-gradient(135deg,#f59e0b,#ef4444);font-size:12px">⭐</div><div><div class="dp-wal-name">Alpha Trader</div><div class="dp-wal-addr">7rQm…2kX</div></div></div><div class="dp-wal-addr">›</div></div></div>
+              <div class="dp-field">
+                <div class="dp-lbl" style="display:flex;align-items:center;justify-content:space-between"><span>Token to Rotate <span class="dp-hint">?</span></span><span style="text-transform:none;letter-spacing:0;font-size:9.5px;color:var(--navy);font-weight:600;cursor:pointer">↻ Refresh</span></div>
+                <div class="dp-token-list">
+                  <div class="dp-token-row sel" onclick="dpPickTok(this)"><div class="dp-tcheck on"></div><div style="flex:1"><div class="dp-tok-name">GOAT</div><div class="dp-tok-addr">CKfA…9xZw</div></div><div class="dp-tok-bal">3,812,500</div></div>
+                  <div class="dp-token-row" onclick="dpPickTok(this)"><div class="dp-tcheck"></div><div style="flex:1"><div class="dp-tok-name">MOODENG</div><div class="dp-tok-addr">ED5n…vk7R</div></div><div class="dp-tok-bal">128,000</div></div>
+                  <div class="dp-token-row" onclick="dpPickTok(this)"><div class="dp-tcheck"></div><div style="flex:1"><div class="dp-tok-name">FWOG</div><div class="dp-tok-addr">A8jx…3mPq</div></div><div class="dp-tok-bal">55,440</div></div>
+                </div>
+                <div style="font-size:9px;color:var(--text-muted);margin-top:6px;margin-bottom:2px">Or paste a mint address</div>
+                <input class="dp-inp" type="text" placeholder="Token mint address…">
+              </div>
+              <div class="dp-field"><div class="dp-lbl">Buy Wallets <span class="dp-hint">?</span></div><div class="dp-inp-row">Select buy wallets… <span style="color:var(--text-muted)">›</span></div></div>
+              <div class="dp-field"><div class="dp-lbl">Buy Amount <span class="dp-hint">?</span></div><div class="dp-mode-row"><div class="dp-mode-btn active" onclick="dpMode(this)">Match Sell Amount</div><div class="dp-mode-btn" onclick="dpMode(this)">Fixed Total</div></div></div>
+              <div class="dp-field"><div class="dp-lbl">Match Deviation <strong id="rw-match">-22%</strong></div><div class="dp-slider-row"><input type="range" class="dp-slider" value="-22" min="-50" max="50" oninput="var v=parseInt(this.value);document.getElementById('rw-match').textContent=(v>=0?'+':'')+v+'%'"><span class="dp-slider-val">-22%</span></div><div style="font-size:9px;color:var(--text-muted);margin-top:2px">Buy 22% less than sold</div></div>
+              <div class="dp-field"><div class="dp-lbl">Per-Wallet Spread <strong id="rw-spread">±37%</strong> <span class="dp-hint">?</span></div><div class="dp-slider-row"><input type="range" class="dp-slider" value="37" min="0" max="50" oninput="document.getElementById('rw-spread').textContent='±'+this.value+'%'"><span class="dp-slider-val">±37%</span></div></div>
+              <div class="dp-3col">
+                <div class="dp-field"><div class="dp-lbl">Slippage %</div><input class="dp-inp" type="number" value="20"></div>
+                <div class="dp-field"><div class="dp-lbl">Priority SOL</div><input class="dp-inp" type="number" value="0.001"></div>
+                <div class="dp-field"><div class="dp-lbl">Jito Tip SOL</div><input class="dp-inp" type="number" value="0.0005"></div>
+              </div>
+              <button class="dp-btn" onclick="dpExec(this,'⟳ Execute Rotation','Rotating…')">⟳ Execute Rotation</button>
+              <div class="dp-field"><div class="dp-lbl">Activity Log</div><div style="background:#fff;border:1px solid rgba(15,31,69,0.08);border-radius:6px;padding:10px;font-size:9.5px;color:var(--text-muted);text-align:center">No activity yet.</div></div>
+            </div>
+            <div class="dp-sub" id="dpr-dip">
+              <div class="dp-field"><div class="dp-lbl">Source Wallet <span class="dp-hint">?</span></div><div class="dp-wal-row"><div style="display:flex;align-items:center;gap:8px"><div class="dp-wal-ic" style="background:linear-gradient(135deg,#f59e0b,#ef4444);font-size:12px">⭐</div><div><div class="dp-wal-name">Alpha Trader</div><div class="dp-wal-addr">7rQm…2kX</div></div></div><div class="dp-wal-addr">›</div></div></div>
+              <div class="dp-field"><div class="dp-lbl">Token</div><div class="dp-inp dp-mono">GOAT — CKfA…9xZw</div></div>
+              <div class="dp-field"><div class="dp-lbl">Buy Wallets <span class="dp-hint">?</span></div><div class="dp-inp-row">3 wallets selected <span>›</span></div></div>
+              <div class="dp-field"><div class="dp-lbl">Total Buy Budget (SOL)</div><input class="dp-inp" type="number" value="2.0"></div>
+              <div class="dp-field"><div class="dp-lbl">Per-Wallet Deviation <strong id="dip-dev">±20%</strong> <span class="dp-hint">?</span></div><div class="dp-slider-row"><input type="range" class="dp-slider" value="20" min="0" max="50" oninput="document.getElementById('dip-dev').textContent='±'+this.value+'%'"><span class="dp-slider-val">±20%</span></div></div>
+              <div class="dp-3col">
+                <div class="dp-field"><div class="dp-lbl">Slippage %</div><input class="dp-inp" type="number" value="15"></div>
+                <div class="dp-field"><div class="dp-lbl">Priority SOL</div><input class="dp-inp" type="number" value="0.001"></div>
+                <div class="dp-field"><div class="dp-lbl">Jito Tip SOL</div><input class="dp-inp" type="number" value="0.0005"></div>
+              </div>
+              <button class="dp-btn red" onclick="dpExec(this,'↓ Execute Dip Buy','Executing…')">↓ Execute Dip Buy</button>
             </div>
           </div>
-          <div class="ext-input" style="font-size:10.5px;">1 wallet selected &rsaquo;</div>
-          <div class="ext-field">
-            <div class="ext-field-label">Deviation ±10%</div>
-            <div class="ext-slider-row">
-              <input type="range" class="ext-slider" value="10" min="0" max="50">
-              <span class="ext-slider-val">±10%</span>
+
+          <!-- ══ AI VOLUME BOT ══ -->
+          <div class="demo-panel" id="dp-vbot">
+            <div class="dp-header"><div class="dp-title">AI Volume Bot</div><button class="dp-start-btn" id="dp-vbot-btn" onclick="dpToggleBtn(this)">▶ Start</button></div>
+            <div class="dp-tabs">
+              <div class="dp-tab active" onclick="dpTab(this,'dpv-cfg')">Config</div>
+              <div class="dp-tab" onclick="dpTab(this,'dpv-con')">Console <span class="dp-tab-badge">26</span></div>
+              <div class="dp-tab" onclick="dpTab(this,'dpv-hist')">History (3)</div>
+            </div>
+            <div class="dp-sub active" id="dpv-cfg">
+              <div class="dp-stats"><div class="dp-stat"><div class="dp-stat-val">3</div><div class="dp-stat-lbl">CYCLES</div></div><div class="dp-stat"><div class="dp-stat-val">0.78</div><div class="dp-stat-lbl">VOLUME</div></div><div class="dp-stat"><div class="dp-stat-val">0.0004</div><div class="dp-stat-lbl">FEES SOL</div></div><div class="dp-stat"><div class="dp-stat-val">0</div><div class="dp-stat-lbl">FAILURES</div></div></div>
+              <div class="dp-field"><div class="dp-lbl">Target Coin CA <span class="dp-hint">?</span></div><input class="dp-inp dp-mono" type="text" value="2FNvYCegt…VqQiqpump"><div style="margin-top:4px"><span class="dp-chip ai">📈 Raydium · AI</span></div></div>
+              <div class="dp-field">
+                <div class="dp-lbl" style="display:flex;align-items:center;justify-content:space-between"><span>Interval (Seconds) <span class="dp-hint">?</span></span><div style="display:flex;align-items:center;gap:5px"><span style="font-size:9.5px;font-weight:700;color:var(--navy);text-transform:none;letter-spacing:0">AI</span><div class="dp-toggle on" onclick="this.classList.toggle('on')"></div></div></div>
+                <div class="dp-ai-hint">🤖 AI decides: 15–90s based on liquidity &amp; streaks</div>
+              </div>
+              <div class="dp-toggle-row" style="flex-direction:column;align-items:flex-start;gap:2px"><div style="display:flex;align-items:center;gap:7px"><div class="dp-toggle" onclick="this.classList.toggle('on')"></div><span class="dp-toggle-lbl">⚡ Aggressive Mode</span><span class="dp-hint">?</span></div><span style="font-size:9px;color:var(--text-muted);margin-left:39px">8–35s AI intervals for max volume</span></div>
+              <div class="dp-field">
+                <div class="dp-lbl" style="display:flex;align-items:center;justify-content:space-between"><span>SOL per Cycle (min – max) <span class="dp-hint">?</span></span><div style="display:flex;align-items:center;gap:5px"><span style="font-size:9.5px;font-weight:700;color:var(--navy);text-transform:none;letter-spacing:0">AI</span><div class="dp-toggle on" onclick="this.classList.toggle('on')"></div></div></div>
+                <div class="dp-ai-hint">🤖 AI decides size (up to 10 SOL) from liquidity &amp; balance</div>
+              </div>
+              <div class="dp-field"><div class="dp-lbl">Max Volume / Hour <span class="dp-hint">?</span></div><div style="display:flex;gap:5px"><input class="dp-inp" type="number" value="0" placeholder="0 (no cap)" style="flex:1"><span style="font-size:9.5px;color:var(--text-muted);align-self:center">SOL</span></div></div>
+              <div class="dp-toggle-row" style="flex-direction:column;align-items:flex-start;gap:2px"><div style="display:flex;align-items:center;gap:7px"><div class="dp-toggle on" onclick="this.classList.toggle('on')"></div><span class="dp-toggle-lbl">🔵 Anti-AFK Mode</span><span class="dp-hint">?</span></div><span style="font-size:9px;color:var(--text-muted);margin-left:39px">Auto keep-alive after 15 min idle</span></div>
+              <div class="dp-field"><div class="dp-lbl">Wallet Mode <span class="dp-hint">?</span></div><div class="dp-mode-row" style="margin-bottom:5px"><div class="dp-mode-btn active" onclick="dpMode(this)">Use Existing</div><div class="dp-mode-btn" onclick="dpMode(this)">Generate New</div></div><div class="dp-inp-row">1 wallet selected <span>›</span></div></div>
+            </div>
+            <div class="dp-sub" id="dpv-con">
+              <div style="background:#0f1f45;border-radius:7px;padding:10px;font-family:monospace;font-size:9px;display:flex;flex-direction:column;gap:4px;max-height:300px;overflow-y:auto">
+                <div><span style="color:#475569">[09:14:22]</span> <span style="color:#22c55e">✓ Cycle 3 — sold 0.31 SOL</span></div>
+                <div><span style="color:#475569">[09:14:05]</span> <span style="color:#94a3b8">Buying 0.27 SOL of GOAT</span></div>
+                <div><span style="color:#475569">[09:13:44]</span> <span style="color:#22c55e">✓ Cycle 2 — sold 0.29 SOL</span></div>
+                <div><span style="color:#475569">[09:13:21]</span> <span style="color:#94a3b8">Buying 0.24 SOL of GOAT</span></div>
+                <div><span style="color:#475569">[09:12:38]</span> <span style="color:#22c55e">▶ Bot started</span></div>
+              </div>
+            </div>
+            <div class="dp-sub" id="dpv-hist">
+              <div class="dp-hist"><span class="dp-hist-tok">GOAT</span><span class="dp-hist-meta">3 cycles · 0.78 SOL vol · 20m ago</span><span class="dp-hist-ok">✓</span></div>
+              <div class="dp-hist"><span class="dp-hist-tok">MOODENG</span><span class="dp-hist-meta">12 cycles · 2.4 SOL · 2h ago</span><span class="dp-hist-ok">✓</span></div>
+              <div class="dp-hist"><span class="dp-hist-tok">FWOG</span><span class="dp-hist-meta">8 cycles · 1.6 SOL · 1d ago</span><span class="dp-hist-ok">✓</span></div>
             </div>
           </div>
-          <div class="ext-toggle-row">
-            <div>
-              <div class="ext-toggle-label">Keep in Source Wallet</div>
-              <div class="ext-toggle-sub">Source sends everything</div>
+
+          <!-- ══ WALLETS ══ -->
+          <div class="demo-panel" id="dp-wallets">
+            <div class="dp-header"><div class="dp-title">Wallets <span class="dp-sub-count">8 wallets</span></div><button class="dp-icon-btn" title="Refresh">↻</button></div>
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <div class="dp-wal-list-row"><div class="dp-wal-ic" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)"></div><div style="flex:1;min-width:0"><div class="dp-wal-name">Dev Wallet</div><div class="dp-wal-addr">4xKm…r9Pz ⊕</div></div><div class="dp-wal-sol">3.821 SOL</div><div class="dp-wal-actions"><button class="dp-icon-btn">✏</button><button class="dp-icon-btn del">⊟</button></div></div>
+              <div class="dp-wal-list-row"><div class="dp-wal-ic" style="background:linear-gradient(135deg,#f59e0b,#ef4444);font-size:12px">⭐</div><div style="flex:1;min-width:0"><div class="dp-wal-name">Alpha Trader</div><div class="dp-wal-addr">7rQm…2kX ⊕</div></div><div class="dp-wal-sol">1.540 SOL</div><div class="dp-wal-actions"><button class="dp-icon-btn">✏</button><button class="dp-icon-btn del">⊟</button></div></div>
+              <div class="dp-wal-list-row"><div class="dp-wal-ic" style="background:linear-gradient(135deg,#06b6d4,#3b82f6)"></div><div style="flex:1;min-width:0"><div class="dp-wal-name">Volume Bot W1</div><div class="dp-wal-addr">5nTb…v2Yw ⊕</div></div><div class="dp-wal-sol">0.992 SOL</div><div class="dp-wal-actions"><button class="dp-icon-btn">✏</button><button class="dp-icon-btn del">⊟</button></div></div>
+              <div class="dp-wal-list-row"><div class="dp-wal-ic" style="background:linear-gradient(135deg,#f59e0b,#ef4444);font-size:12px">🔥</div><div style="flex:1;min-width:0"><div class="dp-wal-name">Funder</div><div class="dp-wal-addr">DQx7…Ey3Y ⊕</div></div><div class="dp-wal-sol">0.651 SOL</div><div class="dp-wal-actions"><button class="dp-icon-btn">✏</button><button class="dp-icon-btn del">⊟</button></div></div>
+              <div class="dp-group-hdr" onclick="this.nextElementSibling.classList.toggle('hidden')"><span>▾</span><span>📁 Snipe Bundle</span><span class="dp-group-count">4</span><button class="dp-icon-btn del" onclick="event.stopPropagation()" style="margin-left:auto">×</button></div>
+              <div class="dp-group-body">
+                <div class="dp-wal-list-row" style="padding-left:22px"><div class="dp-wal-ic" style="background:linear-gradient(135deg,#16a34a,#059669)"></div><div style="flex:1;min-width:0"><div class="dp-wal-name">Snipe W1</div><div class="dp-wal-addr">9xCn…v8Si ⊕</div></div><div class="dp-wal-sol">0.301 SOL</div><div class="dp-wal-actions"><button class="dp-icon-btn">✏</button><button class="dp-icon-btn del">⊟</button></div></div>
+                <div class="dp-wal-list-row" style="padding-left:22px"><div class="dp-wal-ic" style="background:linear-gradient(135deg,#16a34a,#059669)"></div><div style="flex:1;min-width:0"><div class="dp-wal-name">Snipe W2</div><div class="dp-wal-addr">3pDr…K3Tz ⊕</div></div><div class="dp-wal-sol">0.385 SOL</div><div class="dp-wal-actions"><button class="dp-icon-btn">✏</button><button class="dp-icon-btn del">⊟</button></div></div>
+                <div class="dp-wal-list-row" style="padding-left:22px"><div class="dp-wal-ic" style="background:linear-gradient(135deg,#16a34a,#059669)"></div><div style="flex:1;min-width:0"><div class="dp-wal-name">Snipe W3</div><div class="dp-wal-addr">8Svb…hfB ⊕</div></div><div class="dp-wal-sol">0.230 SOL</div><div class="dp-wal-actions"><button class="dp-icon-btn">✏</button><button class="dp-icon-btn del">⊟</button></div></div>
+                <div class="dp-wal-list-row" style="padding-left:22px"><div class="dp-wal-ic" style="background:linear-gradient(135deg,#16a34a,#059669)"></div><div style="flex:1;min-width:0"><div class="dp-wal-name">Snipe W4</div><div class="dp-wal-addr">GFhb…9YX ⊕</div></div><div class="dp-wal-sol">0.237 SOL</div><div class="dp-wal-actions"><button class="dp-icon-btn">✏</button><button class="dp-icon-btn del">⊟</button></div></div>
+              </div>
             </div>
-            <div class="mini-toggle"></div>
+            <div class="dp-add-section">
+              <div class="dp-lbl">Add Wallet</div>
+              <div class="dp-2col">
+                <div class="dp-field"><div class="dp-lbl" style="font-weight:500;text-transform:none;letter-spacing:0;font-size:10.5px">Name</div><input class="dp-inp" type="text" placeholder="e.g. Main, Dev…"></div>
+                <div class="dp-field"><div class="dp-lbl" style="font-weight:500;text-transform:none;letter-spacing:0;font-size:10.5px">Emoji</div><div class="dp-inp-row" style="cursor:pointer">💼</div></div>
+              </div>
+              <div class="dp-field"><div class="dp-lbl" style="font-weight:500;text-transform:none;letter-spacing:0;font-size:10.5px">Private Key (base58)</div><input class="dp-inp" type="password" placeholder="Paste private key to import…"></div>
+              <div style="display:flex;gap:8px">
+                <button class="dp-btn" style="flex:1" onclick="dpExec(this,'+ Import Key','Importing…')">+ Import Key</button>
+                <button class="dp-btn ghost" style="flex:0 0 auto" onclick="dpExec(this,'⚡ Generate','Generating…')">⚡ Generate</button>
+              </div>
+              <button class="dp-btn ghost" onclick="">📁 New Group</button>
+            </div>
           </div>
-          <button class="ext-btn-exec">
-            <svg viewBox="0 0 16 16" fill="none" style="width:12px;height:12px;"><path d="M8 2L14 5.5V10.5L8 14L2 10.5V5.5L8 2Z" fill="currentColor" opacity="0.8"/></svg>
-            Execute Split
-          </button>
-        </div>
-      </div>
-    </div>
+
+        </div><!-- end demo-main -->
+      </div><!-- end demo-body -->
+    </div><!-- end demo-win -->
   </div>
-</div>
+</section>
 
 <!-- TOOLS -->
 <section class="tools-section" id="tools">
   <div class="section-inner">
     <div class="reveal">
       <div class="section-eyebrow">Tools</div>
-      <h2 class="section-title">Five tools built for<br>serious Solana developers</h2>
+      <h2 class="section-title">Eight tools built for<br>serious Solana traders</h2>
       <p class="section-desc">Every tool is server-verified before execution. No client-side bypasses, no shortcuts.</p>
     </div>
     <div class="tools-grid">
+
       <div class="tool-card reveal reveal-d1" style="--tc:#2563eb;--ti:rgba(37,99,235,0.07);--tic:#2563eb;">
         <div class="tool-icon-wrap">
           <svg viewBox="0 0 24 24" fill="none"><path d="M3 17L7 13L10 16L15 11L21 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 12L7 8L10 11L15 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/></svg>
         </div>
-        <h3>AI Volume Bot</h3>
-        <p>Intelligent, randomised volume generation across any SPL token. Configure wallet count, SOL amounts, timing variance, and slippage with adaptive AI-driven patterns.</p>
-        <div class="tool-tags"><span class="tool-tag">AI-Driven</span><span class="tool-tag">SPL Tokens</span><span class="tool-tag">Randomised</span></div>
+        <h3>Volume Bot</h3>
+        <p>Generate natural-looking volume across any SPL token. Configure how many wallets run, how much SOL each spends, and how long between cycles. Randomised amounts and timing keep the activity looking organic rather than mechanical.</p>
+        <div class="tool-tags"><span class="tool-tag">Randomised</span><span class="tool-tag">SPL Tokens</span><span class="tool-tag">Multi-Wallet</span></div>
       </div>
-      <div class="tool-card reveal reveal-d2" style="--tc:#16a34a;--ti:rgba(34,197,94,0.07);--tic:#16a34a;">
+
+      <div class="tool-card reveal reveal-d2" style="--tc:#0891b2;--ti:rgba(8,145,178,0.07);--tic:#0891b2;">
         <div class="tool-icon-wrap">
-          <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/><path d="M14 17.5h7M17.5 14v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 3L20 7.5V12C20 16.4 16.4 20.4 12 21C7.6 20.4 4 16.4 4 12V7.5L12 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </div>
-        <h3>AI Market Maker</h3>
-        <p>Automated bid/ask spread management with configurable price bands, depth targets, and auto-rebalancing intervals. Sustain healthy liquidity without manual oversight.</p>
-        <div class="tool-tags"><span class="tool-tag">Orderbook</span><span class="tool-tag">Auto-Rebalance</span><span class="tool-tag">Liquidity</span></div>
+        <h3>Auto Bundle</h3>
+        <p>Set a total SOL budget and fire parallel Jito buys from multiple wallets the instant a token launches, each wallet gets a randomised share so activity looks independent. Add Bundle nodes to accumulate with dip-buying, spread purchases, or fast fills.</p>
+        <div class="tool-tags"><span class="tool-tag">Jito Bundles</span><span class="tool-tag">Wallet Rotation</span><span class="tool-tag">Dip Buying</span></div>
       </div>
-      <div class="tool-card reveal reveal-d3" style="--tc:#b45309;--ti:rgba(245,158,11,0.07);--tic:#b45309;">
+
+      <div class="tool-card reveal reveal-d3" style="--tc:#0d9488;--ti:rgba(20,184,166,0.07);--tic:#0d9488;">
+        <div class="tool-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M19 7A7 7 0 0 0 5 7v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M5 17a7 7 0 0 0 14 0v-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M3 6l2 1.5 1.5-2M20 18l-2-1.5-1.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <h3>Rotate Wallets</h3>
+        <p>Sell a token from one wallet and instantly buy it back across multiple wallets in the same Jito bundle with zero chart gap. Match the sell amount or set a fixed budget. Each buy wallet gets a randomised share. Includes a Dip Buy mode that sells to create a dip then buys back simultaneously.</p>
+        <div class="tool-tags"><span class="tool-tag">Atomic Bundle</span><span class="tool-tag">Dip Buy</span><span class="tool-tag">Deviation Control</span></div>
+      </div>
+
+            <div class="tool-card reveal reveal-d3" style="--tc:#16a34a;--ti:rgba(34,197,94,0.07);--tic:#16a34a;">
+        <div class="tool-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M7 16l-4-4 4-4M17 8l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8" opacity="0.4"/><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8" opacity="0.4"/></svg>
+        </div>
+        <h3>Bundle Creator</h3>
+        <p>Automatically creates fresh funded wallet bundles through SplitNow. Set a total SOL budget, choose equal or randomised distribution, add a stagger delay between wallets, and the tool handles wallet generation, funding, and grouping in one click. Full history of every bundle created with exportable private keys.</p>
+        <div class="tool-tags"><span class="tool-tag">SplitNow</span><span class="tool-tag">Auto-Fund</span><span class="tool-tag">History</span></div>
+      </div>
+
+      <div class="tool-card reveal reveal-d1" style="--tc:#b45309;--ti:rgba(245,158,11,0.07);--tic:#b45309;">
         <div class="tool-icon-wrap">
           <svg viewBox="0 0 24 24" fill="none"><path d="M8 12H16M12 8L16 12L12 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4" cy="12" r="2" stroke="currentColor" stroke-width="1.8"/><circle cx="20" cy="12" r="2" stroke="currentColor" stroke-width="1.8"/></svg>
         </div>
-        <h3>Advanced Token Splitter</h3>
-        <p>Distribute tokens across wallets with precision. Manual or auto-split mode. Configurable deviation, fee estimation, batch execution, and full history tracking.</p>
+        <h3>Token Splitter</h3>
+        <p>Send tokens from one wallet to many in a single operation. Manual mode lets you pick exactly which wallets receive what. Auto mode watches for incoming buys and splits automatically the moment they land, useful for distributing a snipe across your wallet stack without any manual steps.</p>
         <div class="tool-tags"><span class="tool-tag">Auto-Split</span><span class="tool-tag">Batch TX</span><span class="tool-tag">Deviation Control</span></div>
       </div>
-      <div class="tool-card reveal reveal-d1" style="--tc:#dc2626;--ti:rgba(239,68,68,0.07);--tic:#dc2626;">
+
+      <div class="tool-card reveal reveal-d2" style="--tc:#dc2626;--ti:rgba(239,68,68,0.07);--tic:#dc2626;">
         <div class="tool-icon-wrap">
           <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M16.5 16.5L21 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M8 11h6M11 8v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </div>
         <h3>Bundle Checker</h3>
-        <p>Detect coordinated transactions on pump.fun and other launchpads. Surface insider buys, sniper clusters, and suspicious launch patterns before you commit capital.</p>
+        <p>Paste any token address and see a full breakdown of how it was launched. Identifies coordinated buys, sniper clusters, insider wallets, and suspicious funding patterns on pump.fun and Raydium. Know exactly what you're buying before you commit.</p>
         <div class="tool-tags"><span class="tool-tag">Sniper Detection</span><span class="tool-tag">pump.fun</span><span class="tool-tag">Risk Analysis</span></div>
       </div>
-      <div class="tool-card reveal reveal-d2" style="--tc:#7c3aed;--ti:rgba(139,92,246,0.07);--tic:#7c3aed;">
+
+      <div class="tool-card reveal reveal-d3" style="--tc:#7c3aed;--ti:rgba(139,92,246,0.07);--tic:#7c3aed;">
         <div class="tool-icon-wrap">
           <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><circle cx="5" cy="7" r="2" stroke="currentColor" stroke-width="1.8"/><circle cx="19" cy="7" r="2" stroke="currentColor" stroke-width="1.8"/><circle cx="5" cy="17" r="2" stroke="currentColor" stroke-width="1.8"/><circle cx="19" cy="17" r="2" stroke="currentColor" stroke-width="1.8"/><path d="M7 8l3 2.5M14 13.5l3 2M7 16l3-2.5M14 10.5l3-2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
         </div>
         <h3>Connected Wallets</h3>
-        <p>Graph-based on-chain wallet relationship analysis. Trace funded clusters, identify developer wallets, and map wallet families linked by transaction history.</p>
+        <p>See how wallets are linked on-chain. Traces funding relationships to surface developer wallets, coordinated clusters, and wallet families connected by transaction history. Useful for due diligence on any token before buying.</p>
         <div class="tool-tags"><span class="tool-tag">Graph Analysis</span><span class="tool-tag">Dev Wallets</span><span class="tool-tag">On-Chain</span></div>
       </div>
+
+      <div class="tool-card reveal reveal-d1" style="--tc:#0f766e;--ti:rgba(20,184,166,0.07);--tic:#0f766e;">
+        <div class="tool-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none"><rect x="2" y="6" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M7 6V4a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M8 12h2M8 15h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </div>
+        <h3>Wallet Manager</h3>
+        <p>Store and organise all your wallets in one place with group folders, drag-and-drop ordering, and SOL balance tracking. Private keys are AES-256-GCM encrypted in your browser before anything leaves your device</p>
+        <div class="tool-tags"><span class="tool-tag">AES-256 Encrypted</span><span class="tool-tag">Groups</span><span class="tool-tag">Balance Tracking</span></div>
+      </div>
+
     </div>
   </div>
 </section>
@@ -817,9 +1156,9 @@
       <h2 class="section-title">Operational in minutes</h2>
     </div>
     <div class="steps-grid">
-      <div class="step-item"><div class="step-number">01</div><div class="step-title">Create Account</div><p class="step-desc">Register with your email or Google. No waitlist, no manual approval — access provisioned immediately.</p></div>
-      <div class="step-item"><div class="step-number">02</div><div class="step-title">Subscribe</div><p class="step-desc">Manual monthly renewal — no auto-charge. Pay with Phantom Wallet (SOL) or direct SOL transfer.</p></div>
-      <div class="step-item"><div class="step-number">03</div><div class="step-title">Install Extension</div><p class="step-desc">Install from the Chrome Web Store. Sign in once — your subscription and wallets sync instantly to the extension.</p></div>
+      <div class="step-item"><div class="step-number">01</div><div class="step-title">Create Account</div><p class="step-desc">Register with your email or Google. No waitlist or manual approval.</p></div>
+      <div class="step-item"><div class="step-number">02</div><div class="step-title">Subscribe</div><p class="step-desc">Manual monthly renewal. no auto-charge. Pay with Phantom Wallet (SOL) or direct SOL transfer.</p></div>
+      <div class="step-item"><div class="step-number">03</div><div class="step-title">Install Extension</div><p class="step-desc">Install from the Chrome Web Store. Sign in once, your subscription and wallets sync instantly to the extension.</p></div>
       <div class="step-item"><div class="step-number">04</div><div class="step-title">Execute</div><p class="step-desc">Every tool execution is verified server-side in real time. Your subscription status is confirmed before each run.</p></div>
     </div>
   </div>
@@ -838,12 +1177,12 @@
       <div class="pricing-card">
         <div class="pricing-eyebrow dark">Free Trial</div>
         <div class="pricing-price dark">$0 <span class="pricing-period dark">/ 5 days</span></div>
-        <p class="pricing-desc dark">With a valid promo code. Single-use, one per account — enforced with database-level row locking.</p>
+        <p class="pricing-desc dark">With a valid promo code. Single-use, one per account.</p>
         <ul class="pricing-features">
-          <li><div class="check-icon dark"><svg viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></div><span class="feat-text dark">All 5 tools</span></li>
+          <li><div class="check-icon dark"><svg viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></div><span class="feat-text dark">All professional tools</span></li>
           <li><div class="check-icon dark"><svg viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></div><span class="feat-text dark">Web + extension access</span></li>
           <li><div class="check-icon dark"><svg viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></div><span class="feat-text dark">Encrypted wallet storage</span></li>
-          <li><div class="check-icon" style="background:rgba(239,68,68,0.07);color:#dc2626;"><svg viewBox="0 0 10 10"><path d="M3 3l4 4M7 3L3 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></div><span class="feat-text dark" style="color:var(--text-muted);">No stacking</span></li>
+          <li><div class="check-icon" style="background:rgba(239,68,68,0.07);color:#dc2626;"><svg viewBox="0 0 10 10"><path d="M3 3l4 4M7 3L3 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></div><span class="feat-text dark" style="color:var(--text-muted);">Ask for a code</span></li>
         </ul>
         <div class="payment-methods-label dark">Redemption</div>
         <div class="payment-chips"><div class="pchip dark"><svg viewBox="0 0 16 16" fill="none" style="color:var(--navy);"><rect x="2" y="4" width="12" height="9" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M5 4V3a3 3 0 016 0v1" stroke="currentColor" stroke-width="1.4"/></svg>Promo Code</div></div>
@@ -853,9 +1192,9 @@
       <div class="pricing-card featured">
         <div class="pricing-eyebrow light">Pro Monthly</div>
         <div class="pricing-price light">$99 <span class="pricing-period light">/ month</span></div>
-        <p class="pricing-desc light">Manual renewal. No automatic charges — renew when you choose.</p>
+        <p class="pricing-desc light">Manual renewal. No automatic charges.</p>
         <ul class="pricing-features">
-          <li><div class="check-icon light"><svg viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></div><span class="feat-text light">All 5 professional tools</span></li>
+          <li><div class="check-icon light"><svg viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></div><span class="feat-text light">All professional tools</span></li>
           <li><div class="check-icon light"><svg viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></div><span class="feat-text light">AI Volume Bot + Market Maker</span></li>
           <li><div class="check-icon light"><svg viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></div><span class="feat-text light">Unlimited encrypted wallets</span></li>
           <li><div class="check-icon light"><svg viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></div><span class="feat-text light">Web dashboard + Chrome extension</span></li>
@@ -949,9 +1288,53 @@
   // Update nav if logged in
   try {
     if (localStorage.getItem('udt_token')) {
-      document.querySelector('.nav-right').innerHTML = '<a href="dashboard.html" class="btn-nav-solid">Open Dashboard &rarr;</a>';
+      document.querySelector('.nav-right').innerHTML = '<a href="dashboard.html" class="btn-nav-solid">Open Dashboard</a>';
     }
   } catch {}
 </script>
+
+<script>
+// Mini dashboard
+function dpSwitch(navEl, id) {
+  document.querySelectorAll('.demo-nav-item').forEach(function(el){ el.classList.remove('active'); });
+  navEl.classList.add('active');
+  document.querySelectorAll('.demo-panel').forEach(function(el){ el.classList.remove('active'); });
+  var p = document.getElementById('dp-'+id); if(p) p.classList.add('active');
+}
+function dpTab(tabEl, subId) {
+  var tabs = tabEl.parentElement.querySelectorAll('.dp-tab');
+  tabs.forEach(function(t){ t.classList.remove('active'); });
+  tabEl.classList.add('active');
+  var panel = tabEl.closest('.demo-panel');
+  if(!panel) return;
+  panel.querySelectorAll(':scope > .dp-sub').forEach(function(el){ el.classList.remove('active'); });
+  var t = document.getElementById(subId); if(t) t.classList.add('active');
+}
+function dpMode(el) {
+  el.parentElement.querySelectorAll('.dp-mode-btn').forEach(function(s){ s.classList.remove('active'); });
+  el.classList.add('active');
+}
+function dpPickTok(row) {
+  var list = row.closest('.dp-token-list');
+  list.querySelectorAll('.dp-token-row').forEach(function(r){ r.classList.remove('sel'); r.querySelector('.dp-tcheck').classList.remove('on'); });
+  row.classList.add('sel'); row.querySelector('.dp-tcheck').classList.add('on');
+}
+function dpToggle(btn, sbId) {
+  var sb = document.getElementById(sbId), dot = sb && sb.querySelector('.dp-dot'), txt = sb && sb.querySelector('.dp-status-text');
+  var running = btn.classList.contains('stop');
+  if(running){ btn.textContent='▶ Start'; btn.classList.remove('stop'); if(dot){ dot.classList.remove('running'); dot.classList.add('stopped'); } if(txt) txt.textContent='Stopped'; }
+  else{ btn.textContent='■ Stop'; btn.classList.add('stop'); if(dot){ dot.classList.remove('stopped'); dot.classList.add('running'); } if(txt) txt.textContent='Running…'; }
+}
+function dpToggleBtn(btn){ var r=btn.classList.contains('stop'); if(r){btn.textContent='▶ Start';btn.classList.remove('stop');}else{btn.textContent='■ Stop';btn.classList.add('stop');} }
+function dpExecToggle(btn, sbId) {
+  var sb = document.getElementById(sbId), dot = sb && sb.querySelector('.dp-dot'), txt = sb && sb.querySelector('.dp-status-text');
+  var running = btn.textContent.indexOf('Stop') > -1;
+  if(running){ btn.textContent='▶ Start Auto Bundle'; if(dot){dot.classList.remove('running');dot.classList.add('stopped');} if(txt)txt.textContent='Stopped'; }
+  else{ btn.textContent='■ Stop Auto Bundle'; if(dot){dot.classList.remove('stopped');dot.classList.add('running');} if(txt)txt.textContent='Running…'; }
+}
+function dpExec(btn, doneLabel, runLabel){ var orig=btn.textContent; btn.textContent=runLabel||'Running…'; btn.disabled=true; setTimeout(function(){ btn.textContent=doneLabel||orig; btn.disabled=false; }, 1400); }
+document.addEventListener('click', function(e){ if(e.target.classList.contains('dp-toggle')) e.target.classList.toggle('on'); });
+</script>
+
 </body>
 </html>

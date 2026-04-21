@@ -161,6 +161,9 @@ function buildBundleLanding() {
       <div class="bundle-tabs">
         <button class="tab ${tab==='check'  ?'active':''}" data-action="bundle-tab" data-tab="check">Check</button>
         <button class="tab ${tab==='create' ?'active':''}" data-action="bundle-tab" data-tab="create">Create</button>
+        <button class="tab ${tab==='auto'   ?'active':''}" data-action="bundle-tab" data-tab="auto">
+          Auto${(S.bundle && S.bundle.auto && S.bundle.auto.active) ? ' <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 0 2px var(--green-bg);vertical-align:middle;margin-left:3px;animation:pulse-dot 1.8s ease-in-out infinite"></span>' : ''}
+        </button>
         <button class="tab ${tab==='log'    ?'active':''}" data-action="bundle-tab" data-tab="log">
           Log${logCount ? ' <span class="nav-badge" style="background:var(--navy-ghost2);color:var(--navy);font-size:7px;padding:1px 4px">' + Math.min(logCount,99) + '</span>' : ''}
         </button>
@@ -174,6 +177,7 @@ function buildBundleLanding() {
       ${tab==='create' ? buildBundleCreateTab() : ''}
       ${tab==='log'    ? buildBundleLogTab()    : ''}
       ${tab==='history'? buildBundleHistoryTab(): ''}
+      ${tab==='auto'    ? (typeof buildAutoBundleTab === 'function' ? buildAutoBundleTab() : '') : ''}
     </div>`;
 }
 
@@ -530,8 +534,10 @@ function buildBundleCreateTab() {
 ═══════════════════════════════════════════ */
 function buildBundleLogTab() {
   const logs = (S.bundle||{}).runLog || [];
+  const abLogSection = (typeof buildAutoBundleLogSection === 'function') ? buildAutoBundleLogSection() : '';
   if (!logs.length) {
-    return `<div class="empty-state">
+    if (abLogSection) return abLogSection;
+  return `<div class="empty-state">
       <div class="empty-icon">&#128203;</div>
       <div class="empty-text">No activity yet.<br>Run a check or create a bundle to see logs here.</div>
     </div>`;
@@ -549,16 +555,13 @@ function buildBundleLogTab() {
         <button class="btn btn-ghost btn-sm" data-action="bundle-clear-log" style="font-size:9px;padding:2px 8px">Clear</button>
       </div>
       <div class="bundle-log-feed" id="bundle-log-feed">${rows}</div>
-    </div>`;
-}
-
-/* ════════════════════════════════════════════
-   HISTORY TAB
-═══════════════════════════════════════════ */
-function buildBundleHistoryTab() {
+    </div>
+    ${abLogSection}`;
+}function buildBundleHistoryTab() {
   const history = (S.bundle||{}).createHistory || [];
   if (!history.length) {
-    return `<div class="empty-state">
+    const abHistRows = (typeof buildAutoBundleHistoryRows === 'function') ? buildAutoBundleHistoryRows() : '';
+  return `<div class="empty-state">
       <div class="empty-icon">&#128230;</div>
       <div class="empty-text">No bundles created yet.<br>Switch to the Create tab to get started.</div>
     </div>`;

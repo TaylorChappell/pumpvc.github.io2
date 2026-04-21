@@ -1,0 +1,123 @@
+/* ═══════════════════════════════════════════
+   AUTO BUNDLE — popup.css additions
+   Append these to the end of popup.css
+═══════════════════════════════════════════ */
+
+/* ── Status card ─────────────────────────── */
+.ab-status-card {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border-md);
+  border-radius: var(--r);
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  transition: border-color 0.2s, background 0.2s;
+}
+.ab-status-card.ab-status-running {
+  background: var(--green-bg);
+  border-color: rgba(34,197,94,0.25);
+}
+.ab-status-left {
+  display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;
+}
+.ab-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.ab-dot.running {
+  background: var(--green);
+  box-shadow: 0 0 0 3px var(--green-bg);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+.ab-dot.stopped { background: var(--border-hi); }
+
+.ab-status-label {
+  font-size: 11px; font-weight: 600; color: var(--navy);
+}
+.ab-status-sub {
+  font-size: 9.5px; color: var(--text-muted);
+  font-family: var(--mono);
+  margin-top: 2px;
+}
+
+/* ── Advanced panel ──────────────────────── */
+.ab-advanced-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 0 2px;
+  cursor: pointer;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-dim);
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  user-select: none;
+}
+.ab-advanced-toggle:hover { color: var(--navy); }
+
+.ab-adv-chevron {
+  font-size: 14px; font-weight: 700; color: var(--text-muted);
+  transition: transform 0.2s;
+  display: inline-block;
+}
+.ab-adv-chevron.open { transform: rotate(90deg); }
+
+.ab-advanced-panel {
+  background: var(--surface2);
+  border: 1px solid var(--border-md);
+  border-radius: var(--r-sm);
+  padding: 12px 12px 10px;
+  margin-bottom: 4px;
+}
+
+/* ── Log feed ────────────────────────────── */
+.ab-log-feed {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: var(--r-sm);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+.ab-log-feed::-webkit-scrollbar { width: 3px; }
+.ab-log-feed::-webkit-scrollbar-thumb { background: #30363d; }
+
+.ab-log-line {
+  display: flex; align-items: baseline; gap: 6px;
+  padding: 3px 10px;
+  line-height: 1.5;
+  border-left: 2px solid transparent;
+}
+.ab-log-line:hover { background: rgba(255,255,255,0.03); }
+
+.ab-log-ts {
+  flex-shrink: 0; min-width: 58px;
+  color: #484f58; font-size: 8.5px;
+}
+.ab-log-icon {
+  flex-shrink: 0; width: 10px;
+  font-size: 9px;
+}
+.ab-log-msg { flex: 1; word-break: break-word; }
+
+.ab-log-info    { border-left-color: #1f6feb; }
+.ab-log-info    .ab-log-msg  { color: #8b949e; }
+.ab-log-info    .ab-log-icon { color: #1f6feb; }
+.ab-log-success { border-left-color: #238636; }
+.ab-log-success .ab-log-msg  { color: #3fb950; }
+.ab-log-success .ab-log-icon { color: #3fb950; }
+.ab-log-error   { border-left-color: #da3633; }
+.ab-log-error   .ab-log-msg  { color: #f85149; }
+.ab-log-error   .ab-log-icon { color: #f85149; }
+.ab-log-warn    { border-left-color: #d97706; }
+.ab-log-warn    .ab-log-msg  { color: #e3b341; }
+.ab-log-warn    .ab-log-icon { color: #e3b341; }
+
+.ab-log-empty {
+  padding: 18px 12px;
+  text-align: center;
+  color: #484f58;
+  font-family: var(--sans);
+  font-size: 10.5px;
+}
