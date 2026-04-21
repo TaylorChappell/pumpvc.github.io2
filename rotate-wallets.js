@@ -53,12 +53,6 @@ function initRotateState() {
   if (!Array.isArray(r._sourceTokens))       r._sourceTokens = [];
   if (typeof r._tokensLoading !== 'boolean') r._tokensLoading = false;
   if (typeof r._lastLoadedFor !== 'string')  r._lastLoadedFor = '';
-  if (typeof r.tab !== 'string')             r.tab = 'rotate';
-  if (typeof r.dipBuySOL !== 'number')       r.dipBuySOL = 2;
-  if (typeof r.dipWalletDevPct !== 'number') r.dipWalletDevPct = 15;
-  if (typeof r.dipSlippagePct !== 'number')  r.dipSlippagePct = 20;
-  if (typeof r.dipJitoTipSOL !== 'number')   r.dipJitoTipSOL = 0.0005;
-  if (typeof r.dipPrioritySOL !== 'number')  r.dipPrioritySOL = 0.001;
 }
 
 function _rShort(s){ if(!s) return ''; return s.length>14 ? s.slice(0,6)+'…'+s.slice(-4) : s; }
@@ -319,19 +313,14 @@ async function _rLoadTokens() {
 /* ── Main page ────────────────────────────────────────────────── */
 function buildRotatePage() {
   initRotateState();
-  const r = S.rotate;
-  const tab = r.tab || 'rotate';
 
   return (
     '<div class="tool-header">' +
       '<div class="tool-title-row"><span class="tool-title">Rotate Wallets</span></div>' +
-      '<div class="bundle-tabs">' +
-        '<button class="tab '+(tab==='rotate'?'active':'')+'" data-action="rot-tab" data-val="rotate">Rotate</button>' +
-        '<button class="tab '+(tab==='dipbuy'?'active':'')+'" data-action="rot-tab" data-val="dipbuy">Dip Buy</button>' +
-      '</div>' +
     '</div>' +
+
     '<div class="scroll-area" id="scroll-area">' +
-    (tab === 'rotate' ? _buildRotateForm() : _buildDipBuyForm()) +
+      _buildRotateForm() +
     '</div>'
   );
 }
@@ -445,104 +434,10 @@ function _buildRotateForm() {
   '</div>';
 }
 
-/* ── Dip Buy tab ──────────────────────────────────────────────── */
-function _buildDipBuyForm() {
-  const r = S.rotate;
-  const dis = r._running ? ' disabled' : '';
-
-  return '<div class="split-form">' +
-
-    '<div class="sf-row">' +
-      '<div class="sf-label">Source Wallet ' +
-        '<button class="help-q" data-action="show-help" data-title="Source Wallet" data-body="This wallet sells its entire token balance, creating a dip. The buy wallets immediately buy back into the dip in the same Jito bundle.">?</button>' +
-      '</div>' +
-      _rSrcPicker() +
-    '</div>' +
-
-    '<div class="sf-row">' +
-      '<div class="sf-label" style="display:flex;align-items:center">' +
-        '<span>Token to Sell</span>' +
-        '<button class="help-q" data-action="show-help" data-title="Token" data-body="Pick from your source wallet holdings or paste a mint address below.">?</button>' +
-        (r.sourceId ? '<button class="help-q" data-action="rot-refresh-tokens" title="Refresh token list" style="margin-left:auto;font-size:11px;width:auto;border-radius:4px;padding:1px 6px">↻ Refresh</button>' : '') +
-      '</div>' +
-      _rTokenList() +
-    '</div>' +
-
-    '<div class="sf-row" style="margin-top:6px">' +
-      '<div class="sf-label" style="font-size:10px;color:var(--text-muted);font-weight:500">Or paste a mint address</div>' +
-      '<input type="text" id="rot-mint" value="'+_rEsc(r.mint||'')+'" placeholder="Token mint address…" data-action="rot-field" data-field="mint"'+dis+'/>' +
-    '</div>' +
-
-    '<div class="sf-row">' +
-      '<div class="sf-label">Buy Wallets ' +
-        '<button class="help-q" data-action="show-help" data-title="Buy Wallets" data-body="These wallets buy into the dip. All buys fire in the same Jito bundle as the sell. Max '+ROTATE_MAX_TARGETS+' wallets.">?</button>' +
-      '</div>' +
-      _rTgtPicker() +
-    '</div>' +
-
-    '<div style="height:1px;background:var(--border-md);margin:10px 0 2px"></div>' +
-
-    '<div class="sf-row">' +
-      '<div class="sf-label">Total Buy Budget (SOL) ' +
-        '<button class="help-q" data-action="show-help" data-title="Total Buy Budget" data-body="Total SOL spread across all buy wallets after the sell. Each wallet gets a different portion based on the per-wallet deviation.">?</button>' +
-      '</div>' +
-      '<input type="number" id="dip-buysol" value="'+r.dipBuySOL+'" step="0.01" min="0.01" data-action="rot-field" data-field="dipBuySOL"'+dis+'/>' +
-    '</div>' +
-
-    '<div class="sf-row">' +
-      '<div class="sf-label">Per-Wallet Deviation <span style="color:var(--navy);font-weight:700" id="dip-spread-val">±'+r.dipWalletDevPct+'%</span> ' +
-        '<button class="help-q" data-action="show-help" data-title="Per-Wallet Deviation" data-body="Randomises each buy wallet share so they do not all buy the exact same amount. The total still equals the budget above.">?</button>' +
-      '</div>' +
-      '<div class="slider-row">' +
-        '<input type="range" id="dip-spread-slider" min="0" max="50" step="1" value="'+r.dipWalletDevPct+'" data-action="dip-spread-slider"'+dis+'/>' +
-        '<span class="slider-value" id="dip-spread-slider-lbl">±'+r.dipWalletDevPct+'%</span>' +
-      '</div>' +
-    '</div>' +
-
-    '<div style="height:1px;background:var(--border-md);margin:10px 0 2px"></div>' +
-
-    '<div class="ab-g3" style="margin-bottom:0">' +
-      '<div class="sf-row" style="margin-bottom:0"><div class="sf-label">Slippage %</div>' +
-        '<input type="number" id="dip-slip" value="'+r.dipSlippagePct+'" step="1" min="1" max="50" data-action="rot-field" data-field="dipSlippagePct"'+dis+'/>' +
-      '</div>' +
-      '<div class="sf-row" style="margin-bottom:0"><div class="sf-label">Priority (SOL)</div>' +
-        '<input type="number" id="dip-pri" value="'+r.dipPrioritySOL+'" step="0.001" min="0.0001" data-action="rot-field" data-field="dipPrioritySOL"'+dis+'/>' +
-      '</div>' +
-      '<div class="sf-row" style="margin-bottom:0"><div class="sf-label">Jito Tip (SOL)</div>' +
-        '<input type="number" id="dip-tip" value="'+r.dipJitoTipSOL+'" step="0.0001" min="0.0001" data-action="rot-field" data-field="dipJitoTipSOL"'+dis+'/>' +
-      '</div>' +
-    '</div>' +
-
-    '<div class="sf-row" style="margin-top:8px;margin-bottom:0">' +
-      '<div class="sf-label">Jito Region</div>' +
-      _rJitoRegionSelect(r.jitoRegion||'mainnet', dis) +
-    '</div>' +
-
-    '<button class="btn '+(r._running?'btn-ghost':'btn-primary')+' btn-full" style="margin:16px 0 10px" data-action="dip-execute"'+(r._running?' disabled':'')+'>' +
-      (r._running ? '<span class="spinner"></span>&nbsp;Executing…' : '↓ Execute Dip Buy') +
-    '</button>' +
-
-    '<div class="section-hdr">Activity Log</div>' +
-    '<div id="rotate-log" style="max-height:300px;overflow-y:auto;border:1px solid var(--border-md);border-radius:var(--r-sm);background:var(--surface)">' + _rLogsHTML() + '</div>' +
-
-  '</div>';
-}
-
 /* ── Action handler ───────────────────────────────────────────── */
 async function handleRotateAction(action, el) {
   initRotateState();
   const r = S.rotate;
-
-  if (action === 'rot-tab') { r.tab = el.dataset.val; await saveState(); render(); return; }
-
-  if (action === 'dip-spread-slider') {
-    r.dipWalletDevPct = parseInt(el.value);
-    const v = document.getElementById('dip-spread-val');       if (v) v.textContent = '±'+r.dipWalletDevPct+'%';
-    const l = document.getElementById('dip-spread-slider-lbl'); if (l) l.textContent = '±'+r.dipWalletDevPct+'%';
-    saveState(); return;
-  }
-
-  if (action === 'dip-execute') { await executeDipBuy(); return; }
 
   if (action === 'rot-pick-token') {
     r.mint = el.dataset.mint || '';
@@ -751,80 +646,6 @@ async function executeRotation() {
     });
 
   } catch (e) {
-    _rLog('✕ '+(e.message||String(e)), 'err');
-  } finally {
-    r._running = false;
-    await saveState();
-    render();
-  }
-}
-
-/* ── Dip Buy executor ─────────────────────────────────────────── */
-async function executeDipBuy() {
-  const r = S.rotate;
-
-  if (!r.mint || r.mint.length < 32)           { showToast('Enter a valid token address'); return; }
-  if (!r.sourceId)                              { showToast('Pick a source wallet'); return; }
-  if (!r.targetIds.length)                      { showToast('Pick at least one buy wallet'); return; }
-  if (r.targetIds.length > ROTATE_MAX_TARGETS) { showToast('Max '+ROTATE_MAX_TARGETS+' buy wallets'); return; }
-  if (!(r.dipBuySOL > 0))                      { showToast('Enter a buy budget'); return; }
-
-  const source = (S.savedWallets||[]).find(function(w){return w.id===r.sourceId;});
-  if (!source || !source.privateKey) { showToast('Source wallet missing private key'); return; }
-
-  const targets = r.targetIds
-    .map(function(id){return (S.savedWallets||[]).find(function(w){return w.id===id;});})
-    .filter(function(w){return w && w.privateKey;});
-  if (!targets.length) { showToast('Target wallets missing private keys'); return; }
-
-  r._running = true;
-  render();
-
-  try {
-    _rLog('Starting dip buy — selling source then buying back across '+targets.length+' wallet(s)', 'info');
-
-    const body = {
-      mint:            r.mint,
-      sourcePrivKey:   source.privateKey,
-      targetPrivKeys:  targets.map(function(w){return w.privateKey;}),
-      mode:            'dipbuy',
-      fixedSOL:        r.dipBuySOL,
-      perWalletDevPct: r.dipWalletDevPct,
-      slippagePct:     r.dipSlippagePct,
-      jitoTipSOL:      r.dipJitoTipSOL,
-      prioritySOL:     r.dipPrioritySOL,
-      jitoRegion:      r.jitoRegion || 'mainnet',   // FIX: was missing from original
-    };
-
-    const token = (S.auth && S.auth.token) || localStorage.getItem('udt_token') || '';
-    if (!token || typeof BACKEND === 'undefined') throw new Error('Not authenticated');
-
-    const httpRes = await fetch(BACKEND + '/api/rotate-wallets/execute', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify(body),
-    });
-
-    if (!httpRes.ok) {
-      const text = await httpRes.text().catch(function(){return '';});
-      const parsed = JSON.parse(text || 'null');
-      if (parsed && typeof parsed === 'object') { _rHandleResponse(parsed, null); return; }
-      throw new Error('Server error HTTP '+httpRes.status+(text?' — '+text.slice(0,120):''));
-    }
-
-    const resp = await httpRes.json().catch(function(){
-      return { ok:false, error:'Server returned invalid JSON' };
-    });
-
-    _rHandleResponse(resp, {
-      id: Math.random().toString(36).slice(2,10),
-      ts: Date.now(),
-      mint: r.mint,
-      mode: 'dipbuy',
-      boughtSOL: resp.boughtSOL || 0,
-    });
-
-  } catch(e) {
     _rLog('✕ '+(e.message||String(e)), 'err');
   } finally {
     r._running = false;
