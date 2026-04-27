@@ -902,6 +902,32 @@ async function runCreateBundle() {
   await bundleSleep(150);
   const generatedWallets = bundleBuildGeneratedWallets(walletCount);
 
+  // ── SAVE KEYS IMMEDIATELY before any network calls ───────────────────────
+  // If the SplitNow order later fails, keys are already persisted and visible
+  const earlyKeyRecord = {
+    id: uid(), ts: Date.now(),
+    wallets: generatedWallets.map(w => ({ publicKey: w.publicKey, privateKey: w.privateKey })),
+    status: 'pending',
+    note: 'Keys saved before bundle order — recover here if order fails',
+  };
+  if (!S.bundle.pendingKeys) S.bundle.pendingKeys = [];
+  S.bundle.pendingKeys.push(earlyKeyRecord);
+  bundleLog('\u2500\u2500 Generated wallet keys (saved \u2014 copy if order fails) \u2500\u2500', 'warn');
+  generatedWallets.forEach((w, i) => {
+    bundleLog('W' + (i + 1) + '  pub: ' + w.publicKey + '  priv: ' + w.privateKey, 'warn');
+  });
+  bundleLog('\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500', 'warn');
+  // Also persist to localStorage as a hard backup independent of S state
+  try {
+    const lsKey = 'bundle_pending_keys';
+    const existing = JSON.parse(localStorage.getItem(lsKey) || '[]');
+    existing.push(earlyKeyRecord);
+    // Keep last 10 records max
+    if (existing.length > 10) existing.splice(0, existing.length - 10);
+    localStorage.setItem(lsKey, JSON.stringify(existing));
+  } catch(e) { /* localStorage unavailable, log-feed backup is still active */ }
+  // ─────────────────────────────────────────────────────────────────────────
+
   setStep('Calculating distribution\u2026',18);
   const amounts = bundleDistributeSOL(totalSol,walletCount,distrib,minPer,maxPer);
   const splits = generatedWallets.map((w,i) => {
@@ -986,6 +1012,17 @@ async function runCreateBundle() {
   if (!S.bundle.createHistory) S.bundle.createHistory=[];
   S.bundle.createHistory.push(result);
   if (S.bundle.createHistory.length>20) S.bundle.createHistory=S.bundle.createHistory.slice(-20);
+  // Clean up pending key record now that bundle completed successfully
+  if (S.bundle.pendingKeys) {
+    S.bundle.pendingKeys = S.bundle.pendingKeys.filter(r => r.id !== earlyKeyRecord.id);
+  }
+  try {
+    const lsKey = 'bundle_pending_keys';
+    const existing = JSON.parse(localStorage.getItem(lsKey) || '[]');
+    const cleaned = existing.filter(r => r.id !== earlyKeyRecord.id);
+    if (cleaned.length === 0) localStorage.removeItem(lsKey);
+    else localStorage.setItem(lsKey, JSON.stringify(cleaned));
+  } catch(e) {}
 
   if (c.addToGroup) {
     const groupId=uid();
