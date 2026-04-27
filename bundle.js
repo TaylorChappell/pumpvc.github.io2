@@ -926,9 +926,38 @@ async function runCreateBundle() {
     if (existing.length > 10) existing.splice(0, existing.length - 10);
     localStorage.setItem(lsKey, JSON.stringify(existing));
   } catch(e) { /* localStorage unavailable, log-feed backup is still active */ }
-  // ─────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────
 
-  setStep('Calculating distribution\u2026',18);
+  // ── SAVE TO WALLETS TAB IMMEDIATELY (if addToGroup selected) ─────────────
+  // Wallets are created here with status pending. If the order fails the keys
+  // are already in the Wallets tab so they are never lost.
+  const earlyGroupId = c.addToGroup ? uid() : null;
+  const earlyWalletIds = [];
+  if (c.addToGroup) {
+    const earlyGroupName = (c.groupName?.trim() || 'Bundle ' + new Date().toLocaleDateString('en-GB'));
+    S.walletGroups = S.walletGroups || [];
+    S.walletGroups.push({ id: earlyGroupId, name: earlyGroupName, emoji: '⏳', collapsed: false });
+    S.savedWallets = S.savedWallets || [];
+    generatedWallets.forEach((w, i) => {
+      const wid = uid();
+      earlyWalletIds.push(wid);
+      S.savedWallets.push({
+        id: wid,
+        name: earlyGroupName + ' W' + (i + 1),
+        emoji: '⏳',
+        publicKey: w.publicKey,
+        privateKey: w.privateKey,
+        groupId: earlyGroupId,
+        bundleStatus: 'pending-funding',
+      });
+    });
+    if (typeof syncWalletsToServer === 'function') await syncWalletsToServer();
+    if (typeof renderWallets === 'function') renderWallets();
+    bundleLog('Wallets saved to group "' + earlyGroupName + '" — will update when funded', 'warn');
+  }
+  // ─────────────────────────────────────────
+
+    setStep('Calculating distribution\u2026',18);
   const amounts = bundleDistributeSOL(totalSol,walletCount,distrib,minPer,maxPer);
   const splits = generatedWallets.map((w,i) => {
     if (!w?.publicKey) throw new Error('Generated wallet '+(i+1)+' is missing a publicKey');
@@ -1025,12 +1054,25 @@ async function runCreateBundle() {
   } catch(e) {}
 
   if (c.addToGroup) {
-    const groupId=uid();
-    S.walletGroups=S.walletGroups||[];
-    S.walletGroups.push({id:groupId,name:result.groupName,emoji:'📦',collapsed:false});
-    wallets.forEach((w,i)=>S.savedWallets.push({id:uid(),name:result.groupName+' W'+(i+1),emoji:'💼',publicKey:w.publicKey,privateKey:w.privateKey,groupId}));
-    if (typeof syncWalletsToServer==='function') await syncWalletsToServer();
-    showToast('\u2713 '+wallets.length+' wallets saved to "'+result.groupName+'"');
+    if (earlyGroupId) {
+      // Update group emoji from ⏳ to 📦 now funding completed
+      const grp = (S.walletGroups||[]).find(g => g.id === earlyGroupId);
+      if (grp) grp.emoji = '📦';
+      // Update each wallet: set sol amount, update emoji, mark funded
+      earlyWalletIds.forEach((wid, i) => {
+        const w = (S.savedWallets||[]).find(sw => sw.id === wid);
+        if (w) { w.emoji = '👜'; w.sol = wallets[i]?.sol || null; w.bundleStatus = 'funded'; }
+      });
+    } else {
+      // Safety fallback
+      const groupId = uid();
+      S.walletGroups = S.walletGroups || [];
+      S.walletGroups.push({ id: groupId, name: result.groupName, emoji: '📦', collapsed: false });
+      wallets.forEach((w, i) => S.savedWallets.push({ id: uid(), name: result.groupName + ' W' + (i + 1), emoji: '👜', publicKey: w.publicKey, privateKey: w.privateKey, groupId }));
+    }
+    if (typeof syncWalletsToServer === 'function') await syncWalletsToServer();
+    if (typeof renderWallets === 'function') renderWallets();
+    showToast('✓ ' + wallets.length + ' wallets funded in "' + result.groupName + '"');
   }
 
   bundleLog('Bundle created \u2014 '+wallets.length+' wallets, '+result.totalSol+' SOL','ok');
