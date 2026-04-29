@@ -590,6 +590,36 @@ function attachWalletHandlers() {
 }
 
 // ── Wallet picker modal (for use in other tools) ──
+/* ── SOL balance refresh ─────────────────────────────────────────
+   Refreshes balances for a list of wallets if they haven't been
+   updated within the last 30 seconds. Fires silently and triggers
+   a re-render when any balance changes.
+─────────────────────────────────────────────────────────────── */
+const _SOL_REFRESH_TTL = 30000; // 30 s
+let _solRefreshLast = 0;
+
+async function wRefreshBalancesIfStale(wallets) {
+  const now = Date.now();
+  if (now - _solRefreshLast < _SOL_REFRESH_TTL) return;
+  _solRefreshLast = now;
+
+  const targets = (wallets || S.savedWallets || []).filter(w => w.publicKey);
+  if (!targets.length) return;
+
+  // Batch: fire all in parallel, update + re-render when any changes
+  let changed = false;
+  await Promise.all(targets.map(async w => {
+    try {
+      const bal = await wFetchSol(w.publicKey);
+      if (bal !== null && bal !== w.solBalance) {
+        const live = S.savedWallets?.find(x => x.id === w.id);
+        if (live) { live.solBalance = bal; changed = true; }
+      }
+    } catch {}
+  }));
+  if (changed) { saveState(); render(); }
+}
+
 function buildWalletPickerModal(onSelect, opts = {}) {
   const wallets = S.savedWallets || [];
   const groups  = S.walletGroups || [];
@@ -648,6 +678,9 @@ function buildWalletPickerModal(onSelect, opts = {}) {
   `;
 
   modal.style.display = 'flex';
+
+  // Refresh balances when picker opens (stale guard inside)
+  wRefreshBalancesIfStale(S.savedWallets || []);
 
   // Close
   document.getElementById('picker-close-btn').onclick = () => modal.style.display = 'none';

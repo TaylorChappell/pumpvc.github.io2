@@ -13,7 +13,7 @@ const RPC         = 'https://api.mainnet-beta.solana.com';
 let S = {
   activeTool: 'token-splitting',
   // Tool order & colors (persisted, synced to account)
-  toolOrder:  ['token-splitting', 'bundle-checker', 'rotate-wallets', 'volume-bot', 'wallets'],
+  toolOrder:  ['token-splitting', 'bundle-checker', 'rotate-wallets', 'volume-bot', 'market-maker', 'wallets'],
   toolColors: {}, // { toolId: '#hex' }  — empty = use default navy
   navEditMode: false,
 
@@ -107,6 +107,39 @@ let S = {
   walletPicker: { open: false, targetField: null },
 
   // ── Sniper Bot ──
+  marketMaker: {
+    targetCA:          '',
+    strategy:          'balanced',
+    spreadPct:         1.5,
+    depthSOL:          0.8,
+    intervalSeconds:   0,
+    aiMode:            true,
+    maxDailyVolSOL:    0,
+    walletMode:        'existing',
+    newWalletCount:    5,
+    sourceWalletId:    '',
+    selectedWalletIds: [],
+    generatedWallets:  [],
+    _tab:              'config',
+    _existOpen:        false,
+    _srcOpen:          false,
+    _genOpen:          false,
+    _fundTotal:        1.0,
+    active:            false,
+    log:               [],
+    history:           [],
+    stats:             { cycles: 0, volumeAdded: 0, makersPlaced: 0, feesPaid: 0, bundlesFailed: 0 },
+    ai:                { ok: 0, fail: 0 },
+    nextIn:            null,
+    _migStatus:        null,
+    _lastPrice:        null,
+    _volatility:       0,
+    _priceHistory:     [],
+    _lastSide:         'ask',
+    _curve:            null,
+    _lastBalFetch:     0,
+  },
+
   sniper: {
     enabled: false,
     activeTab: 'config',
@@ -439,6 +472,15 @@ const TOOL_DEFS = {
       <path d="M11.5 8l-1.5 1-1-1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`,
   },
+  'market-maker': {
+    label: 'Market Maker',
+    svg: `<svg class="nav-svg" width="13" height="13" viewBox="0 0 13 13" fill="none">
+      <path d="M1 9l3-3 2.5 2.5L9.5 4 12 6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M1 6l3-3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" opacity=".4"/>
+      <circle cx="12" cy="3" r="1.2" fill="currentColor"/>
+      <circle cx="1"  cy="9" r="1.2" fill="currentColor"/>
+    </svg>`,
+  },
   'wallets': {
     label: 'Wallets',
     svg: `<svg class="nav-svg" width="13" height="13" viewBox="0 0 13 13" fill="none">
@@ -669,6 +711,7 @@ function render() {
   if (S.activeTool === 'token-splitting')  main.innerHTML = buildSplitPage();
   else if (S.activeTool === 'bundle-checker') main.innerHTML = buildBundlePage();
   else if (S.activeTool === 'volume-bot')    main.innerHTML = buildVolumeBotPage();
+  else if (S.activeTool === 'market-maker')  main.innerHTML = (typeof buildMarketMakerPage==='function'?buildMarketMakerPage():'');
   else if (S.activeTool === 'rotate-wallets') main.innerHTML = (typeof buildRotatePage==='function'?buildRotatePage():'');
   else if (S.activeTool === 'wallets') main.innerHTML = buildWalletsPage();
   else if (S.activeTool === 'settings') main.innerHTML = buildSettingsPage();
@@ -679,7 +722,8 @@ function render() {
   if (S.activeTool === 'wallets') attachWalletHandlers();
 
   // Volume bot handlers
-  if (S.activeTool === 'volume-bot') attachVolumeBotHandlers();
+  if (S.activeTool === 'volume-bot')    attachVolumeBotHandlers();
+  if (S.activeTool === 'market-maker') { if (typeof attachMarketMakerHandlers==='function') attachMarketMakerHandlers(); }
 
   const sa = document.getElementById('scroll-area');
   const scrollVal = S.activeTool === 'token-splitting' ? S.split.scroll
@@ -1429,6 +1473,11 @@ function attachHandlers() {
       let changed = false;
       if (S.bundle._walletPickerOpen) { S.bundle._walletPickerOpen = false; changed = true; }
       if (S.bundle && S.bundle._abTgtOpen) { S.bundle._abTgtOpen = false; changed = true; }
+      const _mm = S.marketMaker;
+      if (_mm) {
+        if (_mm._existOpen) { _mm._existOpen = false; changed = true; }
+        if (_mm._srcOpen)   { _mm._srcOpen   = false; changed = true; }
+      }
       if (S.bundle && S.bundle._abSrcOpen && Object.values(S.bundle._abSrcOpen || {}).some(Boolean)) {
         S.bundle._abSrcOpen = {}; changed = true;
       }
@@ -2037,6 +2086,8 @@ async function handleClick(e) {
 
   } else if (a.startsWith('vb-')) {
     await handleVolumeBotAction(a, el);
+  } else if (a.startsWith('mm-')) {
+    if (typeof handleMarketMakerAction === 'function') await handleMarketMakerAction(a, el);
 
 
   } else if (a.startsWith('w-') || a.startsWith('wallets-')) {

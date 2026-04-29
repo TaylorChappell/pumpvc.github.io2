@@ -247,6 +247,52 @@
     .web-nav-item:hover .nav-svg, .web-nav-item.active .nav-svg { opacity:1; }
     .web-nav-item .nav-label { flex:1; }
 
+    /* ── Nav colour picker ── */
+    .nav-color-picker-overlay {
+      position: fixed; inset: 0; z-index: 999; pointer-events: none;
+    }
+    .nav-color-picker-box {
+      position: absolute; background: var(--surface); border: 1px solid var(--border-hi);
+      border-radius: 10px; box-shadow: 0 10px 32px rgba(13,31,74,0.22);
+      padding: 12px; width: 188px; pointer-events: all;
+      animation: _ncpIn 0.12s ease;
+    }
+    @keyframes _ncpIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:none; } }
+    .nav-cp-title { font-size: 9.5px; font-weight: 700; color: var(--navy); margin-bottom: 9px; letter-spacing: 0.03em; text-transform: uppercase; }
+    .nav-cp-swatches {
+      display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; margin-bottom: 9px;
+    }
+    .nav-cp-swatch {
+      width: 24px; height: 24px; border-radius: 6px; border: 2px solid transparent;
+      cursor: pointer; transition: transform 0.1s, border-color 0.1s; display: block;
+    }
+    .nav-cp-swatch:hover { transform: scale(1.18); }
+    .nav-cp-swatch.active { border-color: rgba(255,255,255,0.6); outline: 2px solid var(--navy); outline-offset: 1px; }
+    .nav-cp-row { display: flex; align-items: center; gap: 7px; margin-top: 4px; }
+    .nav-cp-custom { width: 30px; height: 26px; border: 1px solid var(--border-md); border-radius: 5px; padding: 2px; cursor: pointer; background: none; flex-shrink: 0; }
+    .nav-cp-custom-lbl { font-size: 9.5px; color: var(--text-muted); }
+    .nav-cp-reset { margin-top: 8px; width: 100%; font-size: 9px; font-weight: 600; font-family: var(--sans); color: var(--text-muted); background: var(--surface2); border: 1px solid var(--border-md); border-radius: 5px; padding: 4px 0; cursor: pointer; transition: all 0.12s; }
+    .nav-cp-reset:hover { background: var(--danger-bg); color: var(--danger); border-color: rgba(220,38,38,0.3); }
+    /* edit-mode colour dot on nav items */
+    .nav-item-color-dot {
+      width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; cursor: pointer;
+      border: 1.5px solid rgba(255,255,255,0.25); transition: transform 0.12s;
+      display: none;
+    }
+    .nav-list.edit-mode .nav-item-color-dot { display: block; }
+    .nav-item-color-dot:hover { transform: scale(1.35); }
+    /* edit-mode label input */
+    .nav-list.edit-mode .nav-item .nav-label[contenteditable="true"] {
+      outline: none; border-bottom: 1px dashed rgba(255,255,255,0.35);
+      caret-color: #fff; min-width: 20px;
+    }
+    /* tiny colour indicator dot in normal mode */
+    .nav-color-indicator {
+      width: 4px; height: 4px; border-radius: 50%; flex-shrink: 0; margin-left: auto;
+      display: none;
+    }
+    .nav-list:not(.edit-mode) .nav-color-indicator { display: block; }
+
     #web-bar {
       height:40px; background:var(--bg2); border-bottom:1px solid var(--border-md);
       display:flex; align-items:center; justify-content:space-between; padding:0 12px;
@@ -393,13 +439,17 @@
       <img src="icon128.png" alt="" onerror="this.style.display='none'">
       <span class="wb-name">Solana Dev Tools</span>
     </a>
-    <div class="wb-sep"></div>
-    <span class="wb-user" id="wb-user"></span>
+
   </div>
   <div class="wb-right">
     <div class="wb-sub loading" id="wb-sub"><span class="status-dot" id="wb-dot"></span><span id="wb-sub-txt">…</span></div>
     <button class="wb-btn primary" id="wb-subscribe-btn" style="display:none" onclick="openPayOverlay()">Subscribe</button>
-    <a href="/" class="wb-btn" style="text-decoration:none">← Home</a>
+    <a href="/" class="wb-btn" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0">
+        <path d="M3 12L12 3L21 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M5 10V20C5 20.55 5.45 21 6 21H10V16H14V21H18C18.55 21 19 20.55 19 20V10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Home</a>
     <button class="wb-btn" onclick="webSignOut()">Sign out</button>
   </div>
 </div>
@@ -551,6 +601,7 @@
 <script src="wallets.js"></script>
 <script src="popup.js"></script>
 <script src="volume-bot.js"></script>
+<script src="market-maker.js" onerror="console.error('FATAL: market-maker.js missing')"></script>
 <script src="wallet-tracker.js"></script>
 <script src="sniper.js"></script>
 <script src="api.js"></script>
@@ -619,8 +670,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   if (user.is_admin) document.getElementById('nav-admin-item').style.display = '';
-  const wbUser = document.getElementById('wb-user');
-  if (wbUser) wbUser.textContent = user.email || '';
+
   _updateSubChip();
 
   document.getElementById('boot-screen').classList.add('hidden');
@@ -762,6 +812,210 @@ function _updateSubChip() {
     txt.textContent = 'No subscription';
     if (btn) btn.style.display = '';
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   NAV LABEL COLOUR SYSTEM
+   • Edit button toggles edit mode on #nav-list
+   • Each nav item gets a colour-dot; clicking it opens a colour picker
+   • Colours + custom labels saved into S.navPrefs → synced to server
+═══════════════════════════════════════════════════════════════════════ */
+
+// Preset palette (text colours optimised for the dark sidebar)
+const NAV_COLOR_PRESETS = [
+  '#ffffff', '#94a3b8', '#60a5fa', '#34d399', '#f9a8d4',
+  '#fbbf24', '#f87171', '#c084fc', '#fb923c', '#a3e635',
+  '#67e8f9', '#818cf8',
+];
+
+let _navEditMode = false;
+let _navColorPickerTool = null; // tool key of the item whose picker is open
+
+function _navGetPrefs() {
+  if (!S.navPrefs) S.navPrefs = {};
+  return S.navPrefs;
+}
+
+function _navSave() {
+  if (typeof saveState === 'function') saveState();
+}
+
+function _navToggleEdit() {
+  _navEditMode = !_navEditMode;
+  const list = document.getElementById('nav-list');
+  const btn  = document.getElementById('nav-edit-toggle-btn');
+  if (!list || !btn) return;
+  list.classList.toggle('edit-mode', _navEditMode);
+  btn.textContent = _navEditMode ? 'Done' : 'Edit';
+  btn.style.color = _navEditMode ? 'var(--navy)' : '';
+  btn.style.background = _navEditMode ? 'var(--navy-ghost2)' : '';
+  btn.style.borderColor = _navEditMode ? 'var(--navy)' : '';
+  if (!_navEditMode) _navCloseColorPicker(); // close picker when leaving edit mode
+  // Re-apply colours now that dots need to reflect current colour
+  _navApplyColors();
+}
+
+// popup.js defines buildNavList() and loads before this script.
+// We wrap it: first inject nav items (popup.js), then apply saved colours.
+// Use IIFE to capture the reference before reassignment, avoiding hoisting issues.
+buildNavList = (function(_orig) {
+  return function buildNavList() {
+    if (typeof _orig === 'function') _orig();
+    _navApplyColors();
+  };
+})(typeof buildNavList === 'function' ? buildNavList : null);
+
+function _navApplyColors() {
+  const prefs = _navGetPrefs();
+  document.querySelectorAll('#nav-list .nav-item[data-tool]').forEach(item => {
+    const tool  = item.dataset.tool;
+    const color = prefs[tool]?.color || null;
+    const label = prefs[tool]?.label || null;
+
+    // Apply / restore label
+    const labelEl = item.querySelector('.nav-label');
+    if (labelEl) {
+      if (label) labelEl.textContent = label;
+      if (_navEditMode) {
+        labelEl.setAttribute('contenteditable', 'true');
+        labelEl.onblur = () => {
+          const v = labelEl.textContent.trim();
+          if (!S.navPrefs) S.navPrefs = {};
+          if (!S.navPrefs[tool]) S.navPrefs[tool] = {};
+          S.navPrefs[tool].label = v || null;
+          _navSave();
+        };
+      } else {
+        labelEl.removeAttribute('contenteditable');
+        labelEl.onblur = null;
+      }
+    }
+
+    // Apply / restore text colour
+    if (color) {
+      item.style.setProperty('--nav-item-color', color);
+      if (labelEl) labelEl.style.color = color;
+      item.querySelector('.nav-svg')?.style?.setProperty('color', color);
+    } else {
+      item.style.removeProperty('--nav-item-color');
+      if (labelEl) labelEl.style.color = '';
+      const svg = item.querySelector('.nav-svg');
+      if (svg) svg.style.color = '';
+    }
+
+    // Colour indicator dot (shows in normal mode when a custom colour is set)
+    let indDot = item.querySelector('.nav-color-indicator');
+    if (!indDot) {
+      indDot = document.createElement('span');
+      indDot.className = 'nav-color-indicator';
+      item.appendChild(indDot);
+    }
+    indDot.style.background = color || 'transparent';
+    indDot.style.display = color && !_navEditMode ? 'block' : 'none';
+
+    // Colour dot (shows in edit mode)
+    let dot = item.querySelector('.nav-item-color-dot');
+    if (!dot) {
+      dot = document.createElement('span');
+      dot.className = 'nav-item-color-dot';
+      dot.title = 'Change colour';
+      dot.addEventListener('click', e => {
+        e.stopPropagation();
+        _navOpenColorPicker(tool, dot, color);
+      });
+      item.appendChild(dot);
+    }
+    dot.style.background = color || 'rgba(255,255,255,0.18)';
+  });
+}
+
+function _navOpenColorPicker(tool, anchorEl, currentColor) {
+  _navCloseColorPicker();
+  _navColorPickerTool = tool;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'nav-color-picker-overlay';
+  overlay.id = '_nav-cp-overlay';
+
+  const box = document.createElement('div');
+  box.className = 'nav-color-picker-box';
+
+  // Position near the dot
+  const rect = anchorEl.getBoundingClientRect();
+  const top  = Math.min(rect.bottom + 6, window.innerHeight - 220);
+  const left = Math.min(rect.left - 60, window.innerWidth - 200);
+  box.style.top  = top  + 'px';
+  box.style.left = Math.max(8, left) + 'px';
+
+  // Title
+  const title = document.createElement('div');
+  title.className = 'nav-cp-title';
+  const labelEl = document.querySelector('#nav-list .nav-item[data-tool="'+tool+'"] .nav-label');
+  title.textContent = (labelEl?.textContent || tool) + ' colour';
+  box.appendChild(title);
+
+  // Swatches
+  const grid = document.createElement('div');
+  grid.className = 'nav-cp-swatches';
+  NAV_COLOR_PRESETS.forEach(hex => {
+    const s = document.createElement('button');
+    s.className = 'nav-cp-swatch' + (hex === currentColor ? ' active' : '');
+    s.style.background = hex;
+    s.title = hex;
+    s.onclick = () => { _navSetColor(tool, hex); _navCloseColorPicker(); };
+    grid.appendChild(s);
+  });
+  box.appendChild(grid);
+
+  // Custom colour row
+  const row = document.createElement('div');
+  row.className = 'nav-cp-row';
+  const inp = document.createElement('input');
+  inp.type = 'color';
+  inp.className = 'nav-cp-custom';
+  inp.value = currentColor || '#ffffff';
+  inp.title = 'Custom colour';
+  inp.oninput = () => _navSetColor(tool, inp.value);
+  const lbl = document.createElement('span');
+  lbl.className = 'nav-cp-custom-lbl';
+  lbl.textContent = 'Custom';
+  row.appendChild(inp);
+  row.appendChild(lbl);
+  box.appendChild(row);
+
+  // Reset button
+  const rst = document.createElement('button');
+  rst.className = 'nav-cp-reset';
+  rst.textContent = '↩ Reset to default';
+  rst.onclick = () => { _navSetColor(tool, null); _navCloseColorPicker(); };
+  box.appendChild(rst);
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  overlay.style.pointerEvents = 'all';
+
+  // Close on overlay click (outside box)
+  overlay.addEventListener('mousedown', e => {
+    if (!box.contains(e.target)) _navCloseColorPicker();
+  });
+  // Esc to close
+  const _escHandler = e => { if (e.key === 'Escape') _navCloseColorPicker(); };
+  document.addEventListener('keydown', _escHandler, { once: true });
+}
+
+function _navSetColor(tool, color) {
+  if (!S.navPrefs) S.navPrefs = {};
+  if (!S.navPrefs[tool]) S.navPrefs[tool] = {};
+  if (color) S.navPrefs[tool].color = color;
+  else delete S.navPrefs[tool].color;
+  _navApplyColors();
+  _navSave();
+}
+
+function _navCloseColorPicker() {
+  const el = document.getElementById('_nav-cp-overlay');
+  if (el) el.remove();
+  _navColorPickerTool = null;
 }
 
 async function checkServer() {

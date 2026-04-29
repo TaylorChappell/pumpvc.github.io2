@@ -107,6 +107,7 @@ function abNewBundle() {
     prioritySOL:0.001, slippagePct:15,
     strategy:'dip',
     dipPct:5,
+    dipTimeoutSec:0,
     _expanded:true,
   };
 }
@@ -164,6 +165,7 @@ function initAutoBundleState() {
       if(n.slippagePct==null)   n.slippagePct=15;
       if(n.strategy==null)      n.strategy='dip';
       if(n.dipPct==null)        n.dipPct=5;
+      if(n.dipTimeoutSec==null)  n.dipTimeoutSec=0;
     }
     if(n._expanded==null) n._expanded=false;
   });
@@ -599,13 +601,21 @@ async function _abRunBundle(node,mint){
       if(i>0&&peak!==null&&peak>0){
         var dropPct=(peak-(price||peak))/peak*100;
         if(dropPct<node.dipPct){
-          abLog('['+node.label+'] Waiting for dip ('+dropPct.toFixed(1)+'% < '+node.dipPct+'%)…','info');
-          var dl=Date.now()+45000;
-          while(Date.now()<dl&&a.active){
+          abLog('['+node.label+'] Waiting for '+node.dipPct+'% dip (now '+dropPct.toFixed(1)+'%)…','info');
+          // dipTimeoutSec=0 means wait forever; >0 means bail after that many seconds
+          var dipTimeout=Number(node.dipTimeoutSec)||0;
+          var dl=dipTimeout>0 ? Date.now()+dipTimeout*1000 : Infinity;
+          var timedOut=false;
+          while((dipTimeout===0||Date.now()<dl)&&a.active){
             await _abSleep(4000);
             var p2=await _abPrice(mint);
             if(p2!==null&&peak>0&&(peak-p2)/peak*100>=node.dipPct){if(p2>peak) peak=p2; break;}
             if(p2!==null&&p2>peak) peak=p2;
+            if(dipTimeout>0&&Date.now()>=dl){timedOut=true; break;}
+          }
+          if(timedOut){
+            abLog('['+node.label+'] Dip wait timed out after '+dipTimeout+'s — skipping this wallet','warn');
+            continue; // skip this wallet entirely instead of firing at market
           }
         }
       }
@@ -766,6 +776,7 @@ function _abSaveForm(){
       node.prioritySOL   =n('abn-'+node.id+'-pri', node.prioritySOL);
       node.slippagePct   =n('abn-'+node.id+'-slip',node.slippagePct);
       node.dipPct        =n('abn-'+node.id+'-dip', node.dipPct);
+      node.dipTimeoutSec =n('abn-'+node.id+'-diptimeout', node.dipTimeoutSec);
     }
   });
 }
@@ -978,9 +989,13 @@ function _abBundleCard(node,idx,running){
           }).join('')+
         '</div>'+
         (node.strategy==='dip'?
-          '<div class="ab-sub-row" style="margin-top:6px"><span class="ab-sub-lbl">Dip threshold:</span>'+
-            '<input type="number" id="abn-'+node.id+'-dip" value="'+node.dipPct+'" step="1" min="1" max="50" style="width:60px" data-nid="'+node.id+'" data-field="dipPct" oninput="_abSaveField(this)"'+dis+'/>'+
-            '<span class="ab-sub-lbl">% drop from recent high</span>'+
+          '<div class="ab-sub-row" style="margin-top:6px;gap:8px;align-items:center">'+
+            '<span class="ab-sub-lbl">Dip threshold:</span>'+
+            '<input type="number" id="abn-'+node.id+'-dip" value="'+node.dipPct+'" step="1" min="1" max="50" style="width:55px" data-nid="'+node.id+'" data-field="dipPct" oninput="_abSaveField(this)"'+dis+'/>'+
+            '<span style="font-size:12px;color:var(--muted,#888)">% drop from high</span>'+
+            '<span class="ab-sub-lbl" style="margin-left:8px">Timeout:</span>'+
+            '<input type="number" id="abn-'+node.id+'-diptimeout" value="'+(node.dipTimeoutSec||0)+'" step="10" min="0" max="3600" style="width:55px" data-nid="'+node.id+'" data-field="dipTimeoutSec" oninput="_abSaveField(this)"'+dis+'/>'+
+            '<span style="font-size:12px;color:var(--muted,#888)">s (0=∞)</span>'+
           '</div>':'')+
       '</div>'+
       '<div class="ab-g2" style="margin-bottom:0">'+
@@ -1037,6 +1052,8 @@ function _abMpkPicker(node, arr, dis) {
   var ungrouped = allW.filter(function(w){ return !w.groupId; });
   var openKey = 'ab-mpk-'+arr+'-'+node.id;
   var open    = !!(S.bundle._abMpkOpen && S.bundle._abMpkOpen[openKey]);
+  // Refresh balances when picker is open (stale guard inside)
+  if (open && typeof wRefreshBalancesIfStale === 'function') wRefreshBalancesIfStale(allW);
   var selSet  = new Set(selIds);
   var count   = selIds.length;
   var label = arr === 'rot'
