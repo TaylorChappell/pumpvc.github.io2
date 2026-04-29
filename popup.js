@@ -138,6 +138,11 @@ let S = {
     _lastSide:         'ask',
     _curve:            null,
     _lastBalFetch:     0,
+    aiThreshMode:      true,   // AI threshold mode default ON
+    _prices:           [],
+    _txHistory:        [],
+    _aiThresholds:     null,
+    _aiMarketState:    null,
   },
 
   sniper: {

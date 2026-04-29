@@ -226,6 +226,275 @@ function mmUpdatePnlBanner(pnl) {
 }
 
 // ─────────────────────────────────────────────
+// MARKET ANALYSIS ENGINE
+// ─────────────────────────────────────────────
+//
+// mmAnalyseMarket() — runs a full picture of the
+// current market state from all available data
+// and returns a MarketState object used by both
+// the AI threshold engine and the sell decision.
+//
+// Inputs used:
+//   mm._prices        — rolling 30-sample price history (8s poll)
+//   mm._txHistory     — recent tx timestamps from getSignaturesForAddress
+//   mm._curve         — bonding curve reserve data (Pump.fun only)
+//   mm._lastPrice     — latest price
+//   mm.stats          — realised PnL, trade count (how the session is going)
+//
+// Derived signals:
+//   trend             — 'up'|'down'|'sideways'
+//   momentum          — 0-1 normalised (how strong the direction is)
+//   volatility        — coefficient of variation of recent prices
+//   volumeAccel       — is tx rate accelerating or decelerating vs recent past?
+//   liquidityDepth    — SOL in bonding curve vs our position size (Pump only)
+//   priceAccel        — is price moving faster than normal (second derivative)
+//   sessionPerf       — our own recent PnL trend (are our trades working?)
+//   marketPhase       — 'accumulation'|'markup'|'distribution'|'markdown'
+//
+async function mmAnalyseMarket() {
+  const mm = mmS();
+  const prices    = mm._prices || [];
+  const lastPrice = mm._lastPrice || 0;
+
+  // ── 1. Trend direction ────────────────────────
+  // Use weighted linear regression on last 10 price samples.
+  // More recent samples get higher weight.
+  let trend = 'sideways', trendStrength = 0;
+  if (prices.length >= 4) {
+    const n = Math.min(prices.length, 10);
+    const pts = prices.slice(0, n);
+    let sumW = 0, sumWX = 0, sumWY = 0, sumWXY = 0, sumWX2 = 0;
+    pts.forEach((pt, i) => {
+      const w = n - i; // higher weight for more recent
+      const x = i;
+      const y = pt.p;
+      sumW   += w;
+      sumWX  += w * x;
+      sumWY  += w * y;
+      sumWXY += w * x * y;
+      sumWX2 += w * x * x;
+    });
+    const slope = (sumW * sumWXY - sumWX * sumWY) / (sumW * sumWX2 - sumWX * sumWX);
+    // Normalise slope as % of price per sample
+    const slopePct = lastPrice > 0 ? (slope / lastPrice) * 100 : 0;
+    trendStrength = Math.min(1, Math.abs(slopePct) / 0.5); // saturates at ±0.5%/sample
+    if      (slopePct >  0.05) trend = 'up';
+    else if (slopePct < -0.05) trend = 'down';
+    else                       trend = 'sideways';
+  }
+
+  // ── 2. Momentum (0-1) ─────────────────────────
+  // Fraction of recent samples that moved in the trend direction,
+  // weighted by the magnitude of each move.
+  let momentum = 0;
+  if (prices.length >= 3) {
+    const n   = Math.min(prices.length - 1, 8);
+    const pts = prices.slice(0, n + 1);
+    let aggScore = 0;
+    for (let i = 0; i < n; i++) {
+      const chg = pts[i].p - pts[i+1].p; // positive = price rose (newest first)
+      const mag = lastPrice > 0 ? Math.abs(chg) / lastPrice : 0;
+      const dir = chg > 0 ? 1 : -1;
+      aggScore += dir * Math.min(mag * 100, 1); // cap each sample at 1 unit
+    }
+    momentum = Math.min(1, Math.max(0, (aggScore / n + 1) / 2)); // normalise 0-1
+  }
+
+  // ── 3. Volatility (CoV) ───────────────────────
+  // Coefficient of variation of last 10 price samples.
+  let volatility = mm._volatility || 0;
+
+  // ── 4. Price acceleration (second derivative) ─
+  // Compare slope of first half vs second half of recent window.
+  // Positive = price moving faster recently (acceleration).
+  let priceAccel = 0;
+  if (prices.length >= 8) {
+    const n = Math.min(prices.length, 8);
+    const half = Math.floor(n / 2);
+    const recentHalf = prices.slice(0, half).map(x => x.p);
+    const olderHalf  = prices.slice(half, n).map(x => x.p);
+    const recentSlope = recentHalf.length > 1 ? (recentHalf[0] - recentHalf[recentHalf.length-1]) / recentHalf.length : 0;
+    const olderSlope  = olderHalf.length  > 1 ? (olderHalf[0]  - olderHalf[olderHalf.length-1])   / olderHalf.length  : 0;
+    priceAccel = lastPrice > 0 ? ((recentSlope - olderSlope) / lastPrice) * 100 : 0;
+  }
+
+  // ── 5. Volume / tx-rate acceleration ──────────
+  // Compare tx rate in last 60s vs last 60-120s.
+  // Positive = accelerating volume (more interest).
+  let volumeAccel = 0;
+  const txHistory = mm._txHistory || [];
+  if (txHistory.length >= 4) {
+    const now = Date.now() / 1000;
+    const recent = txHistory.filter(t => t > now - 60).length;
+    const older  = txHistory.filter(t => t > now - 120 && t <= now - 60).length;
+    // normalised: +1 = twice as many txs, -1 = half as many
+    volumeAccel = older > 0 ? (recent - older) / Math.max(older, 1) : 0;
+    volumeAccel = Math.max(-1, Math.min(1, volumeAccel));
+  }
+
+  // ── 6. Liquidity depth ratio ──────────────────
+  // How big is our average position size relative to the pool?
+  // Smaller ratio → we can exit easily (tight stop OK).
+  // Larger ratio → our sell will move price (wider stop, be careful).
+  let liquidityDepth = 1.0; // 1.0 = unknown / safe default
+  const cv = mm._curve;
+  if (cv && Number(cv.vs) > 0) {
+    const poolSolLam = Number(cv.vs);
+    const avgPos = ((parseFloat(mm.minSOL)||0.05) + (parseFloat(mm.maxSOL)||0.25)) / 2;
+    liquidityDepth = (avgPos * 1e9) / poolSolLam; // fraction of pool
+  }
+
+  // ── 7. Session performance ────────────────────
+  // Are our recent trades profitable? Use last 5 sell records.
+  let sessionPerf = 0; // -1 (losing) to +1 (winning)
+  const recentSells = (mm.history || []).filter(h => h.action === 'sell').slice(0, 5);
+  if (recentSells.length >= 2) {
+    const avgPnl = recentSells.reduce((s, h) => s + (h.pnl || 0), 0) / recentSells.length;
+    const avgCost = recentSells.reduce((s, h) => s + (h.solAmt || 0), 0) / recentSells.length;
+    sessionPerf = avgCost > 0 ? Math.max(-1, Math.min(1, avgPnl / (avgCost * 0.05))) : 0;
+  }
+
+  // ── 8. Market phase ───────────────────────────
+  // Wyckoff-inspired: classify current state from trend + momentum + volume accel.
+  let marketPhase = 'sideways';
+  if      (trend === 'up'   && volumeAccel > 0.2  && momentum > 0.6) marketPhase = 'markup';
+  else if (trend === 'up'   && volumeAccel < -0.2 && momentum < 0.5) marketPhase = 'distribution';
+  else if (trend === 'down' && volumeAccel > 0.2  && momentum < 0.4) marketPhase = 'markdown';
+  else if (trend === 'down' && volumeAccel < -0.1 && momentum > 0.4) marketPhase = 'accumulation';
+  else if (trend === 'up')                                             marketPhase = 'markup';
+  else if (trend === 'down')                                           marketPhase = 'markdown';
+
+  return {
+    trend, trendStrength, momentum, volatility,
+    priceAccel, volumeAccel, liquidityDepth,
+    sessionPerf, marketPhase,
+  };
+}
+
+// ─────────────────────────────────────────────
+// DYNAMIC THRESHOLD RESOLVER
+// ─────────────────────────────────────────────
+//
+// When AI threshold mode is ON, this replaces the
+// user's static inputs with live-computed values.
+//
+// Logic:
+//   • High volatility → tighter stop (losses escalate fast), wider TP (give room to run)
+//   • Low liquidity depth → tighter stop, earlier TP (hard to exit large pos)
+//   • Markup phase + volume accel → widen TP (let profits run on real pumps)
+//   • Distribution phase → cut TP early, tighten stop
+//   • Session losing → more conservative thresholds (the market is fighting us)
+//   • Session winning → slightly more aggressive TP (stay with what's working)
+//   • Price accelerating → bring TP closer (take what's on the table now)
+//
+function mmResolveThresholds(ms) {
+  // ms = MarketState object from mmAnalyseMarket()
+  const mm = mmS();
+
+  // Base thresholds (fallback to static if AI mode off)
+  if (!mm.aiThreshMode) {
+    return {
+      takeProfitPct: parseFloat(mm.takeProfitPct) || MM_AI.TAKE_PROFIT_PCT,
+      strongPumpPct: parseFloat(mm.strongPumpPct) || MM_AI.STRONG_PUMP_PCT,
+      stopLossPct:   parseFloat(mm.stopLossPct)   || MM_AI.STOP_LOSS_PCT,
+      softStopPct:   parseFloat(mm.softStopPct)   || MM_AI.SOFT_STOP_PCT,
+      partialSmall:  MM_AI.PARTIAL_SMALL,
+      partialLarge:  MM_AI.PARTIAL_LARGE,
+      pumpConfirm:   MM_AI.PUMP_CONFIRM,
+      dumpConfirm:   MM_AI.DUMP_CONFIRM,
+      minHold:       MM_AI.MIN_HOLD_BEFORE_AI,
+    };
+  }
+
+  const { trend, trendStrength, momentum, volatility,
+          priceAccel, volumeAccel, liquidityDepth,
+          sessionPerf, marketPhase } = ms;
+
+  // ── Take profit ────────────────────────────────
+  // Base: 3.5%. Wider when markup + volume accel. Tighter when distributing.
+  let tp = 3.5;
+  if (marketPhase === 'markup' && volumeAccel > 0.3)   tp = 2.5; // pump is real, TP earlier
+  if (marketPhase === 'markup' && volumeAccel > 0.6)   tp = 1.8; // strong pump, grab it fast
+  if (marketPhase === 'distribution')                   tp = 4.5; // distribution = wait for higher
+  if (volatility > 0.05)   tp *= 1.3;  // high vol → give more room before exiting
+  if (liquidityDepth > 0.1) tp *= 0.7; // large pos vs pool → exit earlier (impact risk)
+  if (priceAccel > 0.1)    tp *= 0.8;  // price already accelerating → grab now
+  if (sessionPerf < -0.5)  tp *= 0.75; // session losing → take what we can sooner
+  if (sessionPerf > 0.5)   tp *= 1.2;  // session winning → let profits run a bit more
+  tp = Math.max(1.0, Math.min(8.0, tp));
+
+  // ── Strong pump ────────────────────────────────
+  // Base: 7%. When a real markup is in progress and volume is accelerating,
+  // lower this (we've already been TP'd, strong pump means full exit earlier).
+  let sp = 7.0;
+  if (marketPhase === 'markup' && volumeAccel > 0.5) sp = 5.0;
+  if (marketPhase === 'markup' && volumeAccel > 0.8) sp = 3.5;
+  if (volatility > 0.06) sp *= 1.25; // high vol → don't declare strong pump prematurely
+  sp = Math.max(tp + 1.0, Math.min(20.0, sp));
+
+  // ── Stop loss ──────────────────────────────────
+  // Base: -6%. Tighter when volatile (losses can compound fast).
+  // Tighter when our position is large vs liquidity (exit before we can't).
+  // Wider when price is still trending up overall (might recover).
+  let sl = -6.0;
+  if (volatility > 0.05)     sl = -4.5; // volatile → tighter stop
+  if (volatility > 0.08)     sl = -3.0; // very volatile → very tight
+  if (liquidityDepth > 0.08) sl = Math.max(sl, -4.0); // big pos → tighter
+  if (trend === 'up' && trendStrength > 0.6) sl = Math.min(sl, -7.0); // strong uptrend → give room
+  if (marketPhase === 'markdown')            sl = Math.max(sl, -3.5); // clear downtrend → stop fast
+  if (sessionPerf < -0.5)                   sl = Math.max(sl, -4.0); // losing session → stricter
+  sl = Math.max(-15.0, Math.min(-1.0, sl));
+
+  // ── Soft stop ─────────────────────────────────
+  // Always halfway between 0 and stop loss, roughly.
+  let soft = sl / 2;
+  if (marketPhase === 'accumulation') soft = sl * 0.4; // accumulation → hold a bit longer before trimming
+  if (marketPhase === 'markdown')     soft = sl * 0.6; // markdown → trim faster
+  soft = Math.max(sl + 0.5, Math.min(-0.5, soft));
+
+  // ── Partial sell sizes ─────────────────────────
+  // On markup with volume: sell bigger chunks (real buyers will absorb it).
+  // On sideways/distribution: smaller trims.
+  let partSmall = 0.35, partLarge = 0.65;
+  if (marketPhase === 'markup'    && volumeAccel > 0.4) { partSmall = 0.45; partLarge = 0.75; }
+  if (marketPhase === 'distribution')                   { partSmall = 0.25; partLarge = 0.50; }
+  if (liquidityDepth > 0.1) { partSmall *= 0.7; partLarge *= 0.7; } // big pos → smaller chunks to avoid slippage
+
+  // ── Confirmation requirements ──────────────────
+  // High volume accel = real move, confirm faster.
+  // Low volume accel = could be noise, require more confirmation.
+  const pumpConfirm = volumeAccel > 0.5 ? 2 : volumeAccel > 0 ? 3 : 4;
+  const dumpConfirm = volumeAccel > 0.5 ? 2 : 3;
+
+  // ── Min hold ───────────────────────────────────
+  // High vol → extend min hold (avoid reacting to noise).
+  const minHold = volatility > 0.05 ? 40 : volatility > 0.03 ? 30 : 20;
+
+  const thresholds = {
+    takeProfitPct: parseFloat(tp.toFixed(2)),
+    strongPumpPct: parseFloat(sp.toFixed(2)),
+    stopLossPct:   parseFloat(sl.toFixed(2)),
+    softStopPct:   parseFloat(soft.toFixed(2)),
+    partialSmall:  parseFloat(partSmall.toFixed(3)),
+    partialLarge:  parseFloat(partLarge.toFixed(3)),
+    pumpConfirm, dumpConfirm, minHold,
+  };
+
+  // Cache on state so config tab can show live values
+  mmS()._aiThresholds = thresholds;
+  mmS()._aiMarketState = {
+    phase: marketPhase, trend,
+    vol:   (volatility * 100).toFixed(1) + '%',
+    volAccel: volumeAccel.toFixed(2),
+    momentum: momentum.toFixed(2),
+    depth: (liquidityDepth * 100).toFixed(2) + '%',
+    sessPerf: sessionPerf.toFixed(2),
+  };
+
+  return thresholds;
+}
+
+// ─────────────────────────────────────────────
 // AI SELL DECISION ENGINE
 // ─────────────────────────────────────────────
 //
@@ -235,10 +504,25 @@ function mmUpdatePnlBanner(pnl) {
 //
 // Returns: { action: 'hold'|'partial'|'full', pct: 0-1, reason: string }
 //
-function mmAiSellDecision(position) {
+// mmAiSellDecision now takes a pre-resolved thresholds object so the
+// same decision logic works with both manual and AI-computed thresholds.
+function mmAiSellDecision(position, thresholds) {
   const mm = mmS();
   const price = mm._lastPrice;
   if (!price || price <= 0) return { action: 'hold', pct: 0, reason: 'No price data' };
+
+  // Use resolved thresholds (AI or manual)
+  const T = thresholds || {
+    takeProfitPct: parseFloat(mm.takeProfitPct) || MM_AI.TAKE_PROFIT_PCT,
+    strongPumpPct: parseFloat(mm.strongPumpPct) || MM_AI.STRONG_PUMP_PCT,
+    stopLossPct:   parseFloat(mm.stopLossPct)   || MM_AI.STOP_LOSS_PCT,
+    softStopPct:   parseFloat(mm.softStopPct)   || MM_AI.SOFT_STOP_PCT,
+    partialSmall:  MM_AI.PARTIAL_SMALL,
+    partialLarge:  MM_AI.PARTIAL_LARGE,
+    pumpConfirm:   MM_AI.PUMP_CONFIRM,
+    dumpConfirm:   MM_AI.DUMP_CONFIRM,
+    minHold:       MM_AI.MIN_HOLD_BEFORE_AI,
+  };
 
   const heldSec     = (Date.now() - position.boughtAt) / 1000;
   const entryPrice  = position.avgEntryPrice;
@@ -248,90 +532,75 @@ function mmAiSellDecision(position) {
   const downStreak  = mm._downStreak || 0;
   const volatility  = mm._volatility || 0;
 
-  // Never sell before minimum hold time (avoid micro-candle noise)
-  if (heldSec < MM_AI.MIN_HOLD_BEFORE_AI) {
-    return { action: 'hold', pct: 0, reason: `Too early (${heldSec.toFixed(0)}s < ${MM_AI.MIN_HOLD_BEFORE_AI}s min)` };
+  // ── Min hold gate ─────────────────────────────
+  if (heldSec < T.minHold) {
+    return { action: 'hold', pct: 0, reason: `Too early (${heldSec.toFixed(0)}s < ${T.minHold}s)` };
   }
 
-  // ── RESIDUAL CLOSE: if we've already sold most of it, just close ──
+  // ── Residual close ────────────────────────────
   if (remainPct < MM_AI.RESIDUAL_CLOSE) {
     return { action: 'full', pct: 1.0, reason: `Residual close (${(remainPct*100).toFixed(0)}% left)` };
   }
 
-  // ── STOP LOSS: cut losses early to minimise damage ──
-  if (pricePctChg <= MM_AI.STOP_LOSS_PCT) {
-    return { action: 'full', pct: 1.0, reason: `Stop-loss: ${pricePctChg.toFixed(2)}% ≤ ${MM_AI.STOP_LOSS_PCT}%` };
+  // ── Stop loss ─────────────────────────────────
+  if (pricePctChg <= T.stopLossPct) {
+    return { action: 'full', pct: 1.0, reason: `Stop-loss: ${pricePctChg.toFixed(2)}% ≤ ${T.stopLossPct}%` };
   }
 
-  // ── DUMP DETECTION: price falling fast, reduce exposure ──
-  if (downStreak >= MM_AI.DUMP_CONFIRM && pricePctChg <= MM_AI.SOFT_STOP_PCT) {
+  // ── Dump detection ────────────────────────────
+  if (downStreak >= T.dumpConfirm && pricePctChg <= T.softStopPct) {
     return {
-      action: 'partial',
-      pct: MM_AI.PARTIAL_LARGE,
-      reason: `Dump detected (${downStreak} drops, ${pricePctChg.toFixed(2)}%)`,
+      action: 'partial', pct: T.partialLarge,
+      reason: `Dump (${downStreak} drops, ${pricePctChg.toFixed(2)}%)`,
     };
   }
 
-  // ── SOFT STOP: down but not at hard stop yet, trim ──
-  if (pricePctChg <= MM_AI.SOFT_STOP_PCT) {
+  // ── Soft stop ─────────────────────────────────
+  if (pricePctChg <= T.softStopPct) {
     return {
-      action: 'partial',
-      pct: MM_AI.PARTIAL_SMALL,
-      reason: `Soft stop: ${pricePctChg.toFixed(2)}% ≤ ${MM_AI.SOFT_STOP_PCT}%`,
+      action: 'partial', pct: T.partialSmall,
+      reason: `Soft stop: ${pricePctChg.toFixed(2)}% ≤ ${T.softStopPct}%`,
     };
   }
 
-  // ── STRONG PUMP: price up significantly, sell most ──
-  if (pricePctChg >= MM_AI.STRONG_PUMP_PCT) {
-    // If streak confirms the pump is real, take heavy profit
-    if (upStreak >= MM_AI.PUMP_CONFIRM) {
+  // ── Strong pump ───────────────────────────────
+  if (pricePctChg >= T.strongPumpPct) {
+    if (upStreak >= T.pumpConfirm) {
       return {
-        action: 'partial',
-        pct: MM_AI.PARTIAL_LARGE,
-        reason: `Strong pump: +${pricePctChg.toFixed(2)}%, ${upStreak} consecutive ups`,
+        action: 'partial', pct: T.partialLarge,
+        reason: `Strong pump: +${pricePctChg.toFixed(2)}%, ${upStreak} ups`,
       };
     }
-    // Pump but no streak confirmation — lighter trim
     return {
-      action: 'partial',
-      pct: MM_AI.PARTIAL_SMALL,
-      reason: `Pump: +${pricePctChg.toFixed(2)}% (no streak yet)`,
+      action: 'partial', pct: T.partialSmall,
+      reason: `Pump: +${pricePctChg.toFixed(2)}% (confirming…)`,
     };
   }
 
-  // ── TAKE PROFIT: moderate gain with confirmed momentum ──
-  if (pricePctChg >= MM_AI.TAKE_PROFIT_PCT && upStreak >= 2) {
+  // ── Take profit ───────────────────────────────
+  if (pricePctChg >= T.takeProfitPct && upStreak >= 2) {
     return {
-      action: 'partial',
-      pct: MM_AI.PARTIAL_SMALL,
-      reason: `Take profit: +${pricePctChg.toFixed(2)}%, streak ${upStreak}`,
+      action: 'partial', pct: T.partialSmall,
+      reason: `TP: +${pricePctChg.toFixed(2)}%, streak ${upStreak}`,
     };
   }
 
-  // ── TIME-BASED EXIT: max hold exceeded, sell if not in heavy loss ──
-  const strategy  = mmS().strategy || 'swing';
-  const maxHold   = MM_HOLD[strategy]?.max || 480;
+  // ── Time-based exit ───────────────────────────
+  const strategy = mmS().strategy || 'swing';
+  const maxHold  = MM_HOLD[strategy]?.max || 480;
   if (heldSec >= maxHold) {
     if (pricePctChg >= -1.5) {
-      // At or near entry price — just close
-      return {
-        action: 'full',
-        pct: 1.0,
-        reason: `Max hold (${heldSec.toFixed(0)}s), price ${pricePctChg.toFixed(2)}%`,
-      };
+      return { action: 'full', pct: 1.0, reason: `Max hold (${heldSec.toFixed(0)}s), ${pricePctChg.toFixed(2)}%` };
     }
-    // In loss but not at stop — sell partially to reduce exposure
     return {
-      action: 'partial',
-      pct: MM_AI.PARTIAL_SMALL,
-      reason: `Max hold, still down ${pricePctChg.toFixed(2)}% — trimming`,
+      action: 'partial', pct: T.partialSmall,
+      reason: `Max hold, trimming (${pricePctChg.toFixed(2)}%)`,
     };
   }
 
-  // ── HIGH VOLATILITY HOLD: volatile but no clear signal ──
-  // On very high volatility, widen the bands slightly to avoid whipsawing
+  // ── High vol with open gain → hold ───────────
   if (volatility > 0.04 && pricePctChg > 0) {
-    return { action: 'hold', pct: 0, reason: `High vol (${(volatility*100).toFixed(1)}%), holding gain` };
+    return { action: 'hold', pct: 0, reason: `High vol ${(volatility*100).toFixed(1)}%, holding gain` };
   }
 
   return { action: 'hold', pct: 0, reason: `Holding (${pricePctChg.toFixed(2)}%, ${heldSec.toFixed(0)}s)` };
@@ -351,27 +620,74 @@ async function mmPriceLoop() {
 
   try {
     const mig   = mm._migStatus === 'raydium';
+
+    // Update tx history for volume analysis (lightweight — just timestamps)
+    try {
+      const sigs = await vbRpc('getSignaturesForAddress', [mm.targetCA, { limit: 20 }]);
+      if (sigs?.length) {
+        mm._txHistory = sigs.map(s => s.blockTime || 0).filter(Boolean);
+      }
+    } catch {}
+
+    // Fetch latest price
     const price = await mmFetchPrice(mm.targetCA, mig);
     if (price) mmRecordPrice(price);
+
+    // Run full market analysis
+    const marketState = await mmAnalyseMarket();
+
+    // Resolve thresholds: AI-computed if aiThreshMode, manual otherwise
+    const thresholds = mmResolveThresholds(marketState);
+
+    // Log AI state summary periodically (every ~5th poll = ~40s)
+    mm._pollCount = (mm._pollCount || 0) + 1;
+    if (mm._pollCount % 5 === 0 && mm.aiThreshMode) {
+      const ms = mm._aiMarketState || {};
+      mmLog(
+        `📡 Market: ${ms.phase||'?'} · vol ${ms.vol||'?'} · accel ${ms.volAccel||'?'} · ` +
+        `mom ${ms.momentum||'?'} · sess ${ms.sessPerf||'?'} → ` +
+        `TP ${thresholds.takeProfitPct}% | SL ${thresholds.stopLossPct}% | ` +
+        `Soft ${thresholds.softStopPct}%`,
+        'info'
+      );
+    }
 
     // Run AI sell check on every open position
     for (const pos of [...MM.openPositions]) {
       if (!MM.running) break;
-      const decision = mmAiSellDecision(pos);
-
-      if (decision.action === 'hold') {
-        // Optionally log at trace level (not flooding console)
-        continue;
-      }
+      const decision = mmAiSellDecision(pos, thresholds);
+      if (decision.action === 'hold') continue;
 
       mmLog(
         `🤖 AI: ${decision.action.toUpperCase()} ${(decision.pct*100).toFixed(0)}%` +
         ` [${short(pos.wallet.publicKey)}] — ${decision.reason}`,
         decision.action === 'full' ? 'warn' : 'info'
       );
-
       await mmExecuteSell(pos, decision.pct, decision.reason, mig);
     }
+
+    // Refresh config tab display if open (shows live AI thresholds)
+    if (S.activeTool === 'market-maker' && mm._tab === 'config') {
+      mmStatUpdate();
+      // Update just the live threshold readouts without a full re-render
+      const ms = mm._aiMarketState || {};
+      const el = document.getElementById('mm-ai-state-live');
+      if (el) {
+        el.innerHTML = mm.aiThreshMode
+          ? `<span class="mm-ai-badge">${ms.phase||'?'}</span> ` +
+            `vol <b>${ms.vol||'?'}</b> · accel <b>${ms.volAccel||'?'}</b> · ` +
+            `mom <b>${ms.momentum||'?'}</b> · depth <b>${ms.depth||'?'}</b>`
+          : `AI threshold mode off — using manual values`;
+      }
+      ['tp','sl','soft','sp'].forEach(k => {
+        const e2 = document.getElementById(`mm-live-thresh-${k}`);
+        if (!e2) return;
+        const v = k==='tp'?thresholds.takeProfitPct:k==='sl'?thresholds.stopLossPct:k==='soft'?thresholds.softStopPct:thresholds.strongPumpPct;
+        e2.textContent = (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+        e2.style.color = v >= 0 ? 'var(--green-dim)' : 'var(--danger)';
+      });
+    }
+
   } catch (e) {
     mmLog(`⚠ Price loop error: ${e.message}`, 'warn');
   }
@@ -834,10 +1150,13 @@ async function mmStart() {
   if (!mm.targetCA || mm.targetCA.length < 32) { showToast('Enter a valid token CA first'); return; }
   if (!mmActiveWallets().length) { showToast('No eligible wallets (need ≥0.05 SOL)'); return; }
   mmLog('📈 AI Market Maker starting…', 'info');
-  mm.active = true;
-  mm.ai     = { ok: 0, fail: 0 };
+  mm.active       = true;
+  mm.aiThreshMode = mm.aiThreshMode !== undefined ? mm.aiThreshMode : true; // default ON
+  mm.ai           = { ok: 0, fail: 0 };
   mm.stats  = mm.stats || { totalTrades: 0, feesPaid: 0, realisedPnl: 0 };
-  mm._prices = [];
+  mm._prices    = [];
+  mm._txHistory = [];
+  mm._pollCount = 0;
   MM.running       = true;
   MM.stopReq       = false;
   MM.idx           = 0;
@@ -911,6 +1230,12 @@ async function mmRefundAll() {
   const s = document.createElement('style');
   s.id = 'mm-injected-css';
   s.textContent = `
+/* AI market state badge */
+.mm-ai-badge {
+  display:inline-block; padding:1px 6px; border-radius:10px;
+  font-size:8px; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
+  background:var(--navy-ghost2); color:var(--navy); margin-right:3px;
+}
 /* History table — 8 cols */
 .mm-hist-hdr, .mm-hist-row {
   display:grid;
@@ -1104,26 +1429,80 @@ function buildMmConfig() {
         </div>
       </div>
 
-      <!-- AI sell thresholds (advanced) -->
+      <!-- AI Threshold Mode + manual fallback -->
       <div class="field">
-        <div class="field-label">AI Sell Thresholds
-          <button class="help-q" data-action="show-help" data-title="AI Sell Thresholds"
-            data-body="Take Profit: start trimming when price is up this % from your entry. Strong Pump: sell aggressively above this. Stop Loss: cut the full position at this loss. Soft Stop: start reducing exposure at this loss.">?</button>
+        <div class="field-label">Exit Thresholds
+          <button class="help-q" data-action="show-help" data-title="Exit Thresholds"
+            data-body="AI Mode: thresholds are dynamically computed from on-chain volume, price momentum, liquidity depth, market phase (markup/distribution/markdown), and how well your own session is performing. Manual: fixed values you control.">?</button>
         </div>
-        <div class="mm-ai-grid">
-          <div class="field"><div class="field-label" style="font-size:8.5px">Take Profit %</div>
-            <input type="number" min="0.5" max="50" step="0.5" value="${parseFloat(mm.takeProfitPct||MM_AI.TAKE_PROFIT_PCT).toFixed(1)}" data-mm-field="takeProfitPct" placeholder="${MM_AI.TAKE_PROFIT_PCT}"/>
+
+        <!-- AI mode toggle row -->
+        <div class="sf-toggle-row" style="margin-bottom:8px">
+          <div class="sf-toggle-left">
+            <div class="field-label" style="margin-bottom:0">
+              🤖 AI Threshold Mode
+              ${mm.aiThreshMode ? '<span class="vb-mode-pill vb-pill-ai" style="margin-left:5px">ACTIVE</span>' : ''}
+            </div>
+            <div class="sf-toggle-hint">Adjusts TP/SL/Soft based on volume, phase, liquidity</div>
           </div>
-          <div class="field"><div class="field-label" style="font-size:8.5px">Strong Pump %</div>
-            <input type="number" min="1" max="100" step="1" value="${parseFloat(mm.strongPumpPct||MM_AI.STRONG_PUMP_PCT).toFixed(1)}" data-mm-field="strongPumpPct" placeholder="${MM_AI.STRONG_PUMP_PCT}"/>
-          </div>
-          <div class="field"><div class="field-label" style="font-size:8.5px">Stop Loss %</div>
-            <input type="number" min="-50" max="0" step="0.5" value="${parseFloat(mm.stopLossPct||MM_AI.STOP_LOSS_PCT).toFixed(1)}" data-mm-field="stopLossPct" placeholder="${MM_AI.STOP_LOSS_PCT}"/>
-          </div>
-          <div class="field"><div class="field-label" style="font-size:8.5px">Soft Stop %</div>
-            <input type="number" min="-20" max="0" step="0.5" value="${parseFloat(mm.softStopPct||MM_AI.SOFT_STOP_PCT).toFixed(1)}" data-mm-field="softStopPct" placeholder="${MM_AI.SOFT_STOP_PCT}"/>
+          <div class="sf-toggle-right">
+            <div class="toggle ${mm.aiThreshMode ? 'on' : ''}" data-action="mm-toggle-ai-thresh"></div>
           </div>
         </div>
+
+        ${mm.aiThreshMode ? `
+          <!-- Live AI state readout -->
+          <div style="background:var(--surface);border:1px solid var(--border-md);border-radius:var(--r-sm);padding:7px 10px;margin-bottom:8px">
+            <div style="font-size:9px;color:var(--text-muted);margin-bottom:5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase">Live Market State</div>
+            <div id="mm-ai-state-live" style="font-size:9px;color:var(--text-mid);line-height:1.6">
+              ${(() => {
+                const ms = mm._aiMarketState || {};
+                return ms.phase
+                  ? `<span class="mm-ai-badge">${ms.phase}</span> vol <b>${ms.vol}</b> · accel <b>${ms.volAccel}</b> · mom <b>${ms.momentum}</b> · depth <b>${ms.depth}</b>`
+                  : 'Waiting for first price poll…';
+              })()}
+            </div>
+          </div>
+          <!-- Live computed thresholds (read-only) -->
+          <div class="mm-ai-grid">
+            ${(function() {
+              const labels = ['Take Profit','Stop Loss','Soft Stop','Strong Pump'];
+              const keys   = ['tp','sl','soft','sp'];
+              const T      = mm._aiThresholds || {};
+              const defs   = [MM_AI.TAKE_PROFIT_PCT, MM_AI.STOP_LOSS_PCT, MM_AI.SOFT_STOP_PCT, MM_AI.STRONG_PUMP_PCT];
+              const vals   = [T.takeProfitPct, T.stopLossPct, T.softStopPct, T.strongPumpPct];
+              return keys.map(function(k, i) {
+                const val = vals[i] != null ? vals[i] : defs[i];
+                const col = val >= 0 ? 'var(--green-dim)' : 'var(--danger)';
+                const fmt = (val >= 0 ? '+' : '') + val.toFixed(2) + '%';
+                const dim = vals[i] == null ? 'opacity:.4;' : '';
+                return '<div class="field" style="text-align:center">'
+                  + '<div class="field-label" style="font-size:8px;justify-content:center">' + labels[i] + '</div>'
+                  + '<div id="mm-live-thresh-' + k + '" style="font-size:13px;font-weight:700;font-family:var(--mono);color:' + col + ';' + dim + '">' + fmt + '</div>'
+                  + '</div>';
+              }).join('');
+            })()}
+          </div>
+          <div style="font-size:8.5px;color:var(--text-muted);margin-top:4px">
+            Thresholds update every ~40s as market data arrives. Phase: markup→wider TP, markdown→tighter SL.
+          </div>
+        ` : `
+          <!-- Manual threshold inputs -->
+          <div class="mm-ai-grid">
+            <div class="field"><div class="field-label" style="font-size:8.5px">Take Profit %</div>
+              <input type="number" min="0.5" max="50" step="0.5" value="${parseFloat(mm.takeProfitPct||MM_AI.TAKE_PROFIT_PCT).toFixed(1)}" data-mm-field="takeProfitPct"/>
+            </div>
+            <div class="field"><div class="field-label" style="font-size:8.5px">Strong Pump %</div>
+              <input type="number" min="1" max="100" step="1" value="${parseFloat(mm.strongPumpPct||MM_AI.STRONG_PUMP_PCT).toFixed(1)}" data-mm-field="strongPumpPct"/>
+            </div>
+            <div class="field"><div class="field-label" style="font-size:8.5px">Stop Loss %</div>
+              <input type="number" min="-50" max="0" step="0.5" value="${parseFloat(mm.stopLossPct||MM_AI.STOP_LOSS_PCT).toFixed(1)}" data-mm-field="stopLossPct"/>
+            </div>
+            <div class="field"><div class="field-label" style="font-size:8.5px">Soft Stop %</div>
+              <input type="number" min="-20" max="0" step="0.5" value="${parseFloat(mm.softStopPct||MM_AI.SOFT_STOP_PCT).toFixed(1)}" data-mm-field="softStopPct"/>
+            </div>
+          </div>
+        `}
       </div>
 
       <div class="vb-divider"></div>
@@ -1261,6 +1640,7 @@ async function handleMarketMakerAction(a, el) {
   if(a==='mm-stop'){await mmStop();return;}
   if(a==='mm-sell-all'){await mmManualSellAll();return;}
   if(a==='mm-strategy'){mm.strategy=el.dataset.strategy;await saveState();render();return;}
+  if(a==='mm-toggle-ai-thresh'){mm.aiThreshMode=!mm.aiThreshMode;await saveState();render();return;}
   if(a==='mm-mode'){mm.walletMode=el.dataset.mode;await saveState();render();return;}
   if(a==='mm-exist-toggle'){mm._existOpen=!mm._existOpen;await saveState();render();return;}
   if(a==='mm-sel-w'){const id=el.dataset.wid,ids=mm.selectedWalletIds=mm.selectedWalletIds||[];const i=ids.indexOf(id);i>-1?ids.splice(i,1):ids.push(id);await saveState();render();return;}
