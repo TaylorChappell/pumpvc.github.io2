@@ -364,6 +364,9 @@ async function mmAnalyseMarket() {
   else if (trend === 'up')                                             marketPhase = 'markup';
   else if (trend === 'down')                                           marketPhase = 'markdown';
 
+  // Cache trendStrength on mm for use in buy cycle (mmRunCycle accesses mm directly)
+  mmS()._aiTrendStrength = trendStrength;
+
   return {
     trend, trendStrength, momentum, volatility,
     priceAccel, volumeAccel, liquidityDepth,
@@ -483,12 +486,19 @@ function mmResolveThresholds(ms) {
   // Cache on state so config tab can show live values
   mmS()._aiThresholds = thresholds;
   mmS()._aiMarketState = {
-    phase: marketPhase, trend,
-    vol:   (volatility * 100).toFixed(1) + '%',
+    phase:    marketPhase,
+    trend,
+    vol:      (volatility * 100).toFixed(1) + '%',
     volAccel: volumeAccel.toFixed(2),
     momentum: momentum.toFixed(2),
-    depth: (liquidityDepth * 100).toFixed(2) + '%',
+    depth:    (liquidityDepth * 100).toFixed(2) + '%',
     sessPerf: sessionPerf.toFixed(2),
+    // Raw floats for buy-sizing engine
+    _momentum:      momentum,
+    _volumeAccel:   volumeAccel,
+    _volatility:    volatility,
+    _liquidityDepth: liquidityDepth,
+    _sessionPerf:   sessionPerf,
   };
 
   return thresholds;
@@ -774,6 +784,127 @@ function mmRecord(walletPub, action, solAmt, fees, tokAmt, path, pnlDelta) {
 }
 
 // ─────────────────────────────────────────────
+// AI BUY SIZING ENGINE
+// ─────────────────────────────────────────────
+//
+// Decides exactly how much SOL to spend on a buy.
+//
+// Inputs considered:
+//   wallet.publicKey  → live on-chain balance
+//   mm.minSOL/maxSOL  → user range (or 0/0 = full AI)
+//   mm.aiSizeMode     → whether to use full AI sizing
+//   mm._aiMarketState → current phase, vol, momentum, etc.
+//   MM.openPositions  → current total exposure
+//   mm.stats          → session performance
+//
+// Sizing philosophy:
+//   1. Hard ceiling: never leave wallet with < 0.015 SOL
+//      (fees for future sells + ATA rent)
+//   2. AI conviction score (0–1) maps to a fraction of
+//      usable balance: high conviction = larger bite
+//   3. Conviction is driven by: market phase, volume
+//      acceleration, momentum, session perf, position count
+//   4. If user set manual min/max: AI picks within that range
+//      using the same conviction score (respects their limits)
+//   5. ±6% final jitter to avoid identically-sized buys
+//
+function mmSizeBuy(bal, marketState) {
+  const mm        = mmS();
+  const RESERVE   = 0.015 + VB_TIP_SOL; // never go below this
+  const spendable = Math.max(0, bal - RESERVE);
+  if (spendable <= 0) return 0;
+
+  const ms = marketState || {};
+  const {
+    marketPhase  = 'sideways',
+    momentum     = 0.5,
+    volumeAccel  = 0,
+    volatility   = 0,
+    sessionPerf  = 0,
+    trendStrength = 0,
+    liquidityDepth = 0,
+  } = ms;
+
+  // ── 1. Base conviction score (0–1) ──────────
+  // Start neutral at 0.5, then adjust each factor.
+  let conviction = 0.5;
+
+  // Market phase has the biggest impact
+  switch (marketPhase) {
+    case 'markup':       conviction += 0.20; break; // clear uptrend — go bigger
+    case 'accumulation': conviction += 0.12; break; // dip buying opportunity
+    case 'distribution': conviction -= 0.15; break; // smart money selling — go smaller
+    case 'markdown':     conviction -= 0.25; break; // downtrend — minimise exposure
+    default:             break;                      // sideways — neutral
+  }
+
+  // Volume acceleration: real buyers = higher conviction
+  // Range: -1 (volume collapsing) to +1 (volume surging)
+  conviction += volumeAccel * 0.15;
+
+  // Momentum: how strong and consistent the price move is
+  // Range: 0-1 where 1 = strongly trending in one direction
+  // High momentum in markup = add more, high momentum in markdown already penalised above
+  conviction += (momentum - 0.5) * 0.12;
+
+  // Trend strength: how steep the regression slope is
+  // Only adds conviction if trend is upward (phase already handles downward)
+  if (marketPhase === 'markup' || marketPhase === 'accumulation') {
+    conviction += trendStrength * 0.08;
+  }
+
+  // Volatility penalty: high vol = uncertain, go smaller regardless of phase
+  // CoV > 5% is high vol for a memecoin on an 8s poll interval
+  conviction -= Math.min(0.20, volatility * 3);
+
+  // Session performance: reward good sessions, cut size on bad ones
+  // Range: -1 (losing) to +1 (winning), scaled ±10%
+  conviction += sessionPerf * 0.10;
+
+  // Position count penalty: already holding bags reduces conviction for adding more
+  // Each open position beyond the first reduces conviction slightly
+  const openCount = MM.openPositions.length;
+  conviction -= openCount * 0.08; // -8% per open position
+
+  // Liquidity depth: if we're already a large fraction of the pool, shrink
+  if (liquidityDepth > 0.05) conviction -= 0.12;
+  if (liquidityDepth > 0.10) conviction -= 0.12; // cumulative
+
+  // Clamp conviction to [0.05, 0.95] — never go to 0 or 100%
+  conviction = Math.max(0.05, Math.min(0.95, conviction));
+
+  // ── 2. Map conviction to SOL amount ─────────
+  const aiMode = mm.aiSizeMode !== false; // default true
+
+  let sol;
+  if (aiMode && (!mm.minSOL && !mm.maxSOL)) {
+    // Full AI mode: no user constraints — use conviction × spendable
+    // Min floor: 0.01 SOL. Max ceiling: 90% of spendable.
+    const minFloor = 0.01;
+    const maxCeil  = spendable * 0.90;
+    sol = minFloor + conviction * (maxCeil - minFloor);
+  } else {
+    // Bounded mode: user set min/max — AI picks within that range
+    const minS = parseFloat(mm.minSOL) || 0.01;
+    const maxS = parseFloat(mm.maxSOL) || spendable * 0.50;
+    const clampedMax = Math.min(maxS, spendable * 0.95);
+    const clampedMin = Math.min(minS, clampedMax);
+    sol = clampedMin + conviction * (clampedMax - clampedMin);
+  }
+
+  // Hard cap: never use more than 92% of spendable balance
+  sol = Math.min(sol, spendable * 0.92);
+
+  // ±6% final jitter so consecutive buys aren't identical
+  sol = mmJitter(sol, 6);
+
+  // Final floor
+  sol = Math.max(0.005, sol);
+
+  return parseFloat(sol.toFixed(6));
+}
+
+// ─────────────────────────────────────────────
 // SEND BUY (standalone — tokens stay in wallet)
 // ─────────────────────────────────────────────
 async function mmSendBuy(wallet, sol, mint, migrated) {
@@ -1048,15 +1179,55 @@ async function mmRunCycle() {
   MM.idx++;
 
   const bal = await vbFetchBal(wallet.publicKey) ?? 0;
-  if (bal < 0.01) { mmLog(`⚠ ${short(wallet.publicKey)} balance too low`, 'warn'); mmSched(activity); return; }
+  if (bal < 0.015 + VB_TIP_SOL) {
+    mmLog(`⚠ ${short(wallet.publicKey)} balance too low (${bal.toFixed(4)} SOL)`, 'warn');
+    mmSched(activity); return;
+  }
 
-  // Size the buy
-  const minS = parseFloat(mm.minSOL) || 0.05;
-  const maxS = parseFloat(mm.maxSOL) || 0.25;
-  let sol    = minS + Math.random() * (maxS - minS);
-  sol        = mmJitter(sol, 8);
-  sol        = Math.min(sol, bal * 0.8 - VB_TIP_SOL);
-  if (sol < 0.01) { mmLog('⚠ Buy size too small', 'warn'); mmSched(activity); return; }
+  // AI buy sizing — uses market state, balance, conviction score
+  const marketState = mm._aiMarketState
+    ? { marketPhase:    mm._aiMarketState.phase                    || 'sideways',
+        momentum:       mm._aiMarketState._momentum                || 0.5,
+        volumeAccel:    mm._aiMarketState._volumeAccel             || 0,
+        volatility:     mm._aiMarketState._volatility              || mm._volatility || 0,
+        sessionPerf:    mm._aiMarketState._sessionPerf             || 0,
+        liquidityDepth: mm._aiMarketState._liquidityDepth          || 0,
+        trendStrength:  mm._aiTrendStrength                        || 0 }
+    : {};
+  const sol = mmSizeBuy(bal, marketState);
+  if (sol < 0.005) {
+    mmLog(`⚠ AI sized buy to ${sol.toFixed(5)} SOL — skipping (${
+      mm._aiMarketState?.phase || 'no market data yet'
+    })`, 'warn');
+    mmSched(activity); return;
+  }
+  // Store for UI display + derive conviction for log
+  const _convEst = marketState.marketPhase
+    ? (function() {
+        let c = 0.5;
+        const ph = marketState.marketPhase;
+        if (ph==='markup')       c += 0.20;
+        else if (ph==='accumulation') c += 0.12;
+        else if (ph==='distribution') c -= 0.15;
+        else if (ph==='markdown') c -= 0.25;
+        c += (marketState.volumeAccel||0) * 0.15;
+        c += ((marketState.momentum||0.5) - 0.5) * 0.12;
+        c -= Math.min(0.20, (marketState.volatility||0) * 3);
+        c += (marketState.sessionPerf||0) * 0.10;
+        c -= MM.openPositions.length * 0.08;
+        return Math.max(0.05, Math.min(0.95, c));
+      })()
+    : null;
+  mm._lastBuySize    = sol;
+  mm._lastConviction = _convEst;
+  mmLog(
+    `💡 AI size: ${sol.toFixed(4)} SOL` +
+    ` (conviction ${_convEst != null ? (_convEst*100).toFixed(0)+'%' : '?'})` +
+    ` · phase: ${mm._aiMarketState?.phase||'?'}` +
+    ` · volAccel: ${mm._aiMarketState?.volAccel||'?'}` +
+    ` · bal: ${bal.toFixed(4)} SOL`,
+    'info'
+  );
 
   // Fetch entry price for P&L tracking
   const entryPrice = mm._lastPrice || await mmFetchPrice(mm.targetCA, mig.migrated) || 0;
@@ -1152,6 +1323,7 @@ async function mmStart() {
   mmLog('📈 AI Market Maker starting…', 'info');
   mm.active       = true;
   mm.aiThreshMode = mm.aiThreshMode !== undefined ? mm.aiThreshMode : true; // default ON
+  if (mm.aiSizeMode === undefined) mm.aiSizeMode = true; // default ON
   mm.ai           = { ok: 0, fail: 0 };
   mm.stats  = mm.stats || { totalTrades: 0, feesPaid: 0, realisedPnl: 0 };
   mm._prices    = [];
@@ -1413,20 +1585,62 @@ function buildMmConfig() {
         </div>
       </div>
 
-      <!-- Buy size -->
+      <!-- Buy size (AI or bounded) -->
       <div class="field">
-        <div class="field-label">Buy Size (SOL)
+        <div class="field-label">Buy Size
           <button class="help-q" data-action="show-help" data-title="Buy Size"
-            data-body="Random size per buy, uniformly drawn between min and max with ±8% jitter. Never exceeds 80% of wallet balance.">?</button>
+            data-body="Full AI: the bot decides how much to spend per buy based on market phase, volume acceleration, momentum, volatility, open position count, and wallet balance. It can use the full balance up to a safe reserve. Bounded: AI still picks intelligently but stays between your min and max.">?</button>
         </div>
-        <div class="mm-sol-row">
-          <div class="field"><div class="field-label">Min</div>
-            <input type="number" min="0.01" max="100" step="0.01" placeholder="0.05" value="${parseFloat(mm.minSOL||0.05).toFixed(3)}" data-mm-field="minSOL"/>
+
+        <!-- AI size mode toggle -->
+        <div class="sf-toggle-row" style="margin-bottom:8px">
+          <div class="sf-toggle-left">
+            <div class="field-label" style="margin-bottom:0">
+              🤖 Full AI Sizing
+              ${mm.aiSizeMode !== false ? '<span class="vb-mode-pill vb-pill-ai" style="margin-left:5px">ACTIVE</span>' : ''}
+            </div>
+            <div class="sf-toggle-hint">${mm.aiSizeMode !== false
+              ? 'Uses conviction score × balance. No fixed limits.'
+              : 'AI picks within your min–max range.'}</div>
           </div>
-          <div class="field"><div class="field-label">Max</div>
-            <input type="number" min="0.01" max="100" step="0.05" placeholder="0.25" value="${parseFloat(mm.maxSOL||0.25).toFixed(3)}" data-mm-field="maxSOL"/>
+          <div class="sf-toggle-right">
+            <div class="toggle ${mm.aiSizeMode !== false ? 'on' : ''}" data-action="mm-toggle-ai-size"></div>
           </div>
         </div>
+
+        ${mm.aiSizeMode !== false ? `
+          <!-- Full AI mode: show last computed size and conviction -->
+          <div style="background:var(--surface);border:1px solid var(--border-md);border-radius:var(--r-sm);padding:7px 10px">
+            <div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;font-weight:600;letter-spacing:.04em;text-transform:uppercase">Last computed buy</div>
+            <div style="font-size:9.5px;color:var(--text-mid);line-height:1.6">
+              ${mm._lastBuySize != null
+                ? '<span style="font-family:var(--mono);font-weight:700;color:var(--navy)">' + mm._lastBuySize.toFixed(4) + ' SOL</span>'
+                  + ' &nbsp;·&nbsp; conviction <b>' + (mm._lastConviction != null ? (mm._lastConviction * 100).toFixed(0) + '%' : '?') + '</b>'
+                  + (mm._aiMarketState?.phase ? ' &nbsp;·&nbsp; phase <b>' + mm._aiMarketState.phase + '</b>' : '')
+                : '<span style="color:var(--text-muted)">Will show after first buy…</span>'}
+            </div>
+          </div>
+          <div style="font-size:8.5px;color:var(--text-muted);margin-top:4px;line-height:1.5">
+            Reserve: 0.015 SOL + tip always kept back. Max single buy: 92% of spendable.
+          </div>
+        ` : `
+          <!-- Bounded mode: show min/max inputs -->
+          <div class="mm-sol-row">
+            <div class="field"><div class="field-label">Min SOL</div>
+              <input type="number" min="0.005" max="100" step="0.01" placeholder="0.05"
+                value="${mm.minSOL != null ? parseFloat(mm.minSOL).toFixed(3) : ''}"
+                data-mm-field="minSOL"/>
+            </div>
+            <div class="field"><div class="field-label">Max SOL</div>
+              <input type="number" min="0.005" max="100" step="0.05" placeholder="0.50"
+                value="${mm.maxSOL != null ? parseFloat(mm.maxSOL).toFixed(3) : ''}"
+                data-mm-field="maxSOL"/>
+            </div>
+          </div>
+          <div style="font-size:8.5px;color:var(--text-muted);margin-top:2px">
+            AI conviction score picks within this range. Leave blank to let AI decide the range from balance.
+          </div>
+        `}
       </div>
 
       <!-- AI Threshold Mode + manual fallback -->
@@ -1641,6 +1855,7 @@ async function handleMarketMakerAction(a, el) {
   if(a==='mm-sell-all'){await mmManualSellAll();return;}
   if(a==='mm-strategy'){mm.strategy=el.dataset.strategy;await saveState();render();return;}
   if(a==='mm-toggle-ai-thresh'){mm.aiThreshMode=!mm.aiThreshMode;await saveState();render();return;}
+  if(a==='mm-toggle-ai-size'){mm.aiSizeMode=mm.aiSizeMode===false?true:false;await saveState();render();return;}
   if(a==='mm-mode'){mm.walletMode=el.dataset.mode;await saveState();render();return;}
   if(a==='mm-exist-toggle'){mm._existOpen=!mm._existOpen;await saveState();render();return;}
   if(a==='mm-sel-w'){const id=el.dataset.wid,ids=mm.selectedWalletIds=mm.selectedWalletIds||[];const i=ids.indexOf(id);i>-1?ids.splice(i,1):ids.push(id);await saveState();render();return;}

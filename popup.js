@@ -139,6 +139,7 @@ let S = {
     _curve:            null,
     _lastBalFetch:     0,
     aiThreshMode:      true,   // AI threshold mode default ON
+    aiSizeMode:        true,   // AI buy sizing default ON
     _prices:           [],
     _txHistory:        [],
     _aiThresholds:     null,
