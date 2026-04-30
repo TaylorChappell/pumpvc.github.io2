@@ -1338,15 +1338,46 @@ async function mmStart() {
   // Start price polling loop
   MM.priceTimer = setInterval(mmPriceLoop, MM_PRICE_POLL_MS);
 
+  // Connect to server SSE stream for log mirroring
+  const _sseToken = localStorage.getItem('udt_token');
+  if (_sseToken) {
+    try {
+      // Tell server the session started
+      fetch(
+        (typeof BACKEND !== 'undefined' ? BACKEND : '') + '/api/market-maker/start',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _sseToken },
+          body: JSON.stringify({
+            targetCA:        mm.targetCA,
+            strategy:        mm.strategy        || 'swing',
+            aiMode:          mm.aiThreshMode    !== false,
+            intervalSeconds: mm.intervalSeconds || 0,
+          }),
+        }
+      ).catch(() => {}); // fire-and-forget, non-blocking
+      setTimeout(() => _mmConnectSSE(_sseToken), 500);
+    } catch {}
+  }
+
   await mmRunCycle();
 }
 
 async function mmStop(reason) {
   MM.running  = false;
   MM.stopReq  = true;
-  if (MM.cycleTimer)  { clearTimeout(MM.cycleTimer);   MM.cycleTimer = null; }
-  if (MM.priceTimer)  { clearInterval(MM.priceTimer);  MM.priceTimer = null; }
-  if (_mmCdInterval)  { clearInterval(_mmCdInterval);  _mmCdInterval = null; }
+  if (MM.cycleTimer)   { clearTimeout(MM.cycleTimer);   MM.cycleTimer = null; }
+  if (MM.priceTimer)   { clearInterval(MM.priceTimer);  MM.priceTimer = null; }
+  if (_mmCdInterval)   { clearInterval(_mmCdInterval);  _mmCdInterval = null; }
+  if (_mmSseSource)    { try { _mmSseSource.close(); } catch {} _mmSseSource = null; }
+  // Tell server to stop its status-poll loop
+  const _stopToken = localStorage.getItem('udt_token');
+  if (_stopToken) {
+    fetch(
+      (typeof BACKEND !== 'undefined' ? BACKEND : '') + '/api/market-maker/stop',
+      { method: 'POST', headers: { 'Authorization': 'Bearer ' + _stopToken } }
+    ).catch(() => {});
+  }
   const mm = mmS();
   mm.active = false;
   mm.nextIn = null;
@@ -1826,6 +1857,73 @@ function buildMmHistory() {
     <div class="mm-hist-hdr"><span>Time</span><span>Wallet</span><span>Act</span><span>SOL</span><span>Tokens</span><span>Fees</span><span>Path</span><span>PnL</span></div>
     ${hist.map(h=>{const t=new Date(h.ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),pnl=h.pnl||0,sign=pnl>=0?'+':'';return`<div class="mm-hist-row"><span class="vb-hist-time">${t}</span><span class="vb-hist-wallet link" data-action="copy" data-copy="${h.wallet}">${short(h.wallet)}</span><span class="mm-act-${h.action}">${(h.action||'buy').toUpperCase()}</span><span class="vb-hist-sol">${parseFloat(h.solAmt||0).toFixed(4)}</span><span style="font-family:var(--mono);font-size:8.5px">${h.tokAmt?(h.tokAmt).toLocaleString():'—'}</span><span class="vb-hist-fees">${parseFloat(h.fees||0).toFixed(6)}</span><span style="font-size:8.5px">${h.path||'Pump'}</span><span class="${h.action==='sell'?(pnl>=0?'mm-pnl-pos':'mm-pnl-neg'):''}">${h.action==='sell'?sign+pnl.toFixed(5):'—'}</span></div>`;}).join('')}
   </div>`;
+}
+
+// ─────────────────────────────────────────────
+// SERVER STATUS + SSE RECONNECT
+// Lets the dashboard reconnect to a running
+// market-maker session after page refresh.
+// ─────────────────────────────────────────────
+let _mmSseSource = null;
+
+async function mmCheckServerStatus() {
+  try {
+    const token = localStorage.getItem('udt_token');
+    if (!token) return;
+    const r = await fetch(
+      (typeof BACKEND !== 'undefined' ? BACKEND : '') + '/api/market-maker/status',
+      { headers: { 'Authorization': 'Bearer ' + token } }
+    );
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d.active) {
+      mmLog('🔌 Reconnected to running Market Maker session', 'info');
+      mmS()._migStatus = d.migStatus || null;
+      mmS()._lastPrice = d.lastPrice || null;
+      if (d.stats) mmS().stats = { ...mmS().stats, ...d.stats };
+      _mmConnectSSE(token);
+      if (S.activeTool === 'market-maker') render();
+    }
+  } catch (e) {
+    // Silently ignore — server may not have this route yet
+  }
+}
+
+function _mmConnectSSE(token) {
+  if (_mmSseSource) { try { _mmSseSource.close(); } catch {} _mmSseSource = null; }
+  const base = typeof BACKEND !== 'undefined' ? BACKEND : '';
+  const src  = new EventSource(`${base}/api/market-maker/events?token=${encodeURIComponent(token || localStorage.getItem('udt_token') || '')}`);
+  _mmSseSource = src;
+
+  src.onmessage = (e) => {
+    try {
+      const d = JSON.parse(e.data);
+      if (d.type === 'log') {
+        mmLog(`[server] ${d.msg}`, d.level || 'info');
+      } else if (d.type === 'status') {
+        const mm = mmS();
+        if (d.migStatus) mm._migStatus = d.migStatus;
+        if (d.lastPrice) mm._lastPrice = d.lastPrice;
+        if (d.stats)     mm.stats = { ...mm.stats, ...d.stats };
+        mmStatUpdate(); mmUpdateMigBadge();
+      } else if (d.type === 'stopped') {
+        mmLog('🛑 Server: Market Maker stopped', 'warn');
+        if (_mmSseSource) { _mmSseSource.close(); _mmSseSource = null; }
+      }
+    } catch {}
+  };
+
+  src.onerror = () => {
+    // SSE disconnected — reconnect after 10s if still running
+    if (_mmSseSource) { try { _mmSseSource.close(); } catch {} _mmSseSource = null; }
+    const mm = mmS();
+    if (mm.active) {
+      setTimeout(() => {
+        const tok = localStorage.getItem('udt_token');
+        if (tok && mmS().active) _mmConnectSSE(tok);
+      }, 10_000);
+    }
+  };
 }
 
 // ─────────────────────────────────────────────

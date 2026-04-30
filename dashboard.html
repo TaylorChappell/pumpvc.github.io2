@@ -601,7 +601,6 @@
 <script src="wallets.js"></script>
 <script src="popup.js"></script>
 <script src="volume-bot.js"></script>
-<script src="market-maker.js" onerror="console.error('FATAL: market-maker.js missing')"></script>
 <script src="wallet-tracker.js"></script>
 <script src="sniper.js"></script>
 <script src="api.js"></script>
@@ -695,11 +694,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   const _origVbJupFetch = window.vbJupFetch;
   if (typeof _origVbJupFetch === 'function') {
     window.vbJupFetch = async function(url, opts) {
+      // Redirect Jupiter API calls through our server proxy
+      const isProxied = url.includes('api.jup.ag/swap') || url.includes('quote-api.jup.ag');
       url = url
         .replace('https://api.jup.ag/swap/v1/quote', BACKEND + '/api/proxy/jupiter/quote')
         .replace('https://api.jup.ag/swap/v1/swap',  BACKEND + '/api/proxy/jupiter/swap')
         .replace('https://quote-api.jup.ag/v6/quote', BACKEND + '/api/proxy/jupiter/quote')
         .replace('https://quote-api.jup.ag/v6/swap',  BACKEND + '/api/proxy/jupiter/swap');
+      // Inject auth header when hitting our proxy (it requires Bearer token)
+      if (isProxied) {
+        const _tok = localStorage.getItem('udt_token');
+        if (_tok) {
+          opts = opts ? { ...opts } : {};
+          opts.headers = { 'Authorization': 'Bearer ' + _tok, ...(opts.headers || {}) };
+        }
+      }
       return _origVbJupFetch(url, opts);
     };
   }
@@ -709,6 +718,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   checkServer();
   setInterval(checkServer, 30000);
   if (typeof buildNavList === 'function') buildNavList();
+
+  // Reconnect market-maker SSE if it was running before page refresh
+  if (typeof mmCheckServerStatus === 'function') {
+    setTimeout(() => mmCheckServerStatus(), 1500);
+  }
 
   // Check if auto-bundle bot is already running server-side (survives page refresh)
   if (typeof abCheckServerStatus === 'function') {
